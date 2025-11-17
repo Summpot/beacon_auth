@@ -6,7 +6,7 @@ members = [
 
 [workspace.dependencies]
 # Web Framework
-actix-web = "4.11"
+actix-web = "4.12"
 actix-cors = "0.7"
 actix-files = "0.6"
 actix-web-rust-embed-responder = "2.3"
@@ -47,7 +47,7 @@ uuid = { version = "1.10", features = ["v4", "serde"] }
 urlencoding = "2.1"
 
 # HTTP Client
-reqwest = { version = "0.12", features = ["json"] }
+reqwest = { version = "0.12", features = ["json", "rustls-tls"] }
 
 # Build Tools
 which = "8.0"
