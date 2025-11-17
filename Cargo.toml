@@ -12,8 +12,8 @@ actix-files = "0.6"
 actix-web-rust-embed-responder = "2.3"
 
 # Database
-sea-orm = { version = "1.1", features = ["sqlx-sqlite", "runtime-tokio-rustls", "macros"] }
-sea-orm-migration = { version = "1.1", features = ["sqlx-sqlite", "runtime-tokio-rustls"] }
+sea-orm = { version = "1.1", features = ["sqlx-sqlite", "sqlx-postgres", "runtime-tokio-rustls", "macros"] }
+sea-orm-migration = { version = "1.1", features = ["sqlx-sqlite", "sqlx-postgres", "runtime-tokio-rustls"] }
 
 # JWT & Crypto
 jsonwebtoken = { version = "10.2", default-features = false, features = ["rust_crypto"] }
@@ -47,7 +47,7 @@ uuid = { version = "1.10", features = ["v4", "serde"] }
 urlencoding = "2.1"
 
 # HTTP Client
-reqwest = { version = "0.12", features = ["json", "rustls-tls"] }
+reqwest = { version = "0.12", default-features = false, features = ["charset", "http2", "system-proxy", "json", "rustls-tls"] }
 
 # Build Tools
 which = "8.0"
