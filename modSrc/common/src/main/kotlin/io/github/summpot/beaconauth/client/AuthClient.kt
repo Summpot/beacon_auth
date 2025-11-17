@@ -276,9 +276,9 @@ object AuthClient {
         try {
             val minecraft = Minecraft.getInstance()
             minecraft.execute {
-                val window = minecraft.window
-                // Request focus on the Minecraft window
-                window.setFocus(true)
+                // Request focus on the Minecraft window using GLFW
+                val windowHandle = minecraft.window.window
+                org.lwjgl.glfw.GLFW.glfwRequestWindowAttention(windowHandle)
                 logger.info("Successfully requested focus for Minecraft window")
             }
         } catch (e: Exception) {

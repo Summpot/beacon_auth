@@ -125,7 +125,7 @@ This repository contains three projects with two different "root" concepts.
     * **Must** find a free port in the `38123-38133` range using `NetUtils.findAvailablePort()` and save it.
     * Receives `RequestClientLoginPacket` (S2C), then calls `startLoginProcess()`.
     * `startLoginProcess()`: Generates PKCE challenge/verifier via `PKCEUtils`, sends `RequestLoginUrlPacket` (C2S) with `challenge` and `boundPort`.
-    * `HttpHandler` at `/auth-callback`: Receives callback with `?jwt=...` query param, attempts to focus the Minecraft window using `window.setFocus(true)`, parses JWT, sends `VerifyAuthPacket` (C2S) with JWT and verifier. Returns an **i18n-translated** HTML "Success" page using `TranslationHelper.translate()`.
+    * `HttpHandler` at `/auth-callback`: Receives callback with `?jwt=...` query param, attempts to focus the Minecraft window using `GLFW.glfwRequestWindowAttention()`, parses JWT, sends `VerifyAuthPacket` (C2S) with JWT and verifier. Returns an **i18n-translated** HTML "Success" page using `TranslationHelper.translate()`.
 * **`AuthServer.kt` (Server-Side):**
     * **State:** Must maintain a `MutableSet<UUID>` of `authenticatedPlayers` (thread-safe).
     * **Auto-Login:** **Must** hook the `PlayerJoinEvent` via `AuthEventHandler`. If player UUID is not in the `authenticatedPlayers` set, send `RequestClientLoginPacket` (S2C) to trigger login flow.

@@ -57,5 +57,12 @@ urlencoding = { workspace = true }
 # HTTP Client
 reqwest = { workspace = true }
 
+# OpenSSL - use vendored for musl targets to avoid cross-compilation issues
+openssl = { version = "0.10", features = ["vendored"], optional = true }
+
 [build-dependencies]
 which = { workspace = true }
+
+[features]
+default = []
+vendored-openssl = ["openssl/vendored"]

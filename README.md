@@ -102,6 +102,10 @@ chmod +x beacon
 - [Rust](https://www.rust-lang.org/) 1.70 or later
 - [Node.js](https://nodejs.org/) 20 or later
 - [pnpm](https://pnpm.io/) 9 or later
+- OpenSSL development headers (Linux only):
+  - Ubuntu/Debian: `sudo apt-get install libssl-dev pkg-config`
+  - Fedora: `sudo dnf install openssl-devel pkgconf`
+  - Arch Linux: `sudo pacman -S openssl pkgconf`
 
 #### Build Steps
 
@@ -115,6 +119,9 @@ pnpm install
 
 # Build the project
 cargo build --workspace --release
+
+# For musl targets (optional, for static linking)
+cargo build --workspace --release --features vendored-openssl
 
 # The binary will be at target/release/beacon
 ```

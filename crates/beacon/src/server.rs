@@ -196,8 +196,6 @@ async fn run_control_listener(
     socket_path: std::path::PathBuf,
     db: sea_orm::DatabaseConnection,
 ) -> anyhow::Result<()> {
-    use std::path::Path;
-
     // Remove old socket if exists
     if socket_path.exists() {
         std::fs::remove_file(&socket_path)?;
@@ -341,6 +339,11 @@ mod tests {
             cors_origins: "http://localhost:3000, http://example.com".to_string(),
             jwt_expiration: 3600,
             log_level: "info".to_string(),
+            github_client_id: None,
+            github_client_secret: None,
+            google_client_id: None,
+            google_client_secret: None,
+            oauth_redirect_base: "http://localhost:8080".to_string(),
         };
 
         let origins = config.cors_origin_list();
