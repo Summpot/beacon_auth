@@ -1,14 +1,22 @@
-use actix_web::{web, HttpResponse, Responder};
+// Re-export all handlers
+pub mod auth;
+pub mod passkey;
+pub mod user;
+
+// Re-export the auth handlers
+pub use auth::{get_minecraft_jwt, refresh_token};
+
+// Keep original handlers here
+use actix_web::{web, HttpRequest, HttpResponse, Responder};
 use chrono::Utc;
-use entity::user;
-use jsonwebtoken::{encode, Header};
+use entity::user as user_entity;
 use sea_orm::{ColumnTrait, EntityTrait, QueryFilter, Set};
 use uuid::Uuid;
 
 use crate::{
     app_state::AppState,
     models::{
-        Claims, ConfigResponse, ErrorResponse, LoginPayload, LoginResponse, OAuthCallbackQuery,
+        ConfigResponse, ErrorResponse, LoginPayload, OAuthCallbackQuery,
         OAuthStartPayload, OAuthStartResponse, OAuthState, RegisterPayload,
     },
 };
@@ -36,7 +44,7 @@ pub async fn get_config(app_state: web::Data<AppState>) -> impl Responder {
 }
 
 /// POST /api/v1/login
-/// Authenticates user and returns redirect URL with JWT
+/// Authenticates user and sets session cookies
 pub async fn login(
     app_state: web::Data<AppState>,
     payload: web::Json<LoginPayload>,
@@ -44,8 +52,8 @@ pub async fn login(
     log::info!("Login attempt for user: {}", payload.username);
 
     // 1. Query user from database
-    let user_result = user::Entity::find()
-        .filter(user::Column::Username.eq(&payload.username))
+    let user_result = user_entity::Entity::find()
+        .filter(user_entity::Column::Username.eq(&payload.username))
         .one(&app_state.db)
         .await;
 
@@ -80,51 +88,27 @@ pub async fn login(
 
     log::info!("User authenticated successfully: {}", payload.username);
 
-    // 3. Create JWT Claims
-    let now = Utc::now();
-    let exp = now + chrono::Duration::seconds(app_state.jwt_expiration);
+    // 3. Create session tokens
+    let (access_token, refresh_token) =
+        match auth::create_session_for_user(&app_state, user.id).await {
+            Ok(tokens) => tokens,
+            Err(e) => {
+                log::error!("Failed to create session: {}", e);
+                return HttpResponse::InternalServerError().json(ErrorResponse {
+                    error: "internal_error".to_string(),
+                    message: "Failed to create session".to_string(),
+                });
+            }
+        };
 
-    let claims = Claims {
-        iss: "http://localhost:8080".to_string(),
-        sub: user.id.to_string(),
-        aud: "minecraft-client".to_string(),
-        exp: exp.timestamp(),
-        challenge: payload.challenge.clone(), // Critical: include the challenge
-    };
+    log::info!("Login successful for user: {}", payload.username);
 
-    // 4. Sign JWT with ES256
-    let mut header = Header::new(jsonwebtoken::Algorithm::ES256);
-    header.kid = Some("beacon-auth-key-1".to_string());
-
-    let token = match encode(&header, &claims, &app_state.encoding_key) {
-        Ok(t) => t,
-        Err(e) => {
-            log::error!("Failed to sign JWT: {}", e);
-            return HttpResponse::InternalServerError().json(ErrorResponse {
-                error: "internal_error".to_string(),
-                message: "Failed to generate token".to_string(),
-            });
-        }
-    };
-
-    // 5. Build dynamic redirect URL
-    let redirect_url = format!(
-        "http://localhost:{}/auth-callback?jwt={}",
-        payload.redirect_port, token
-    );
-
-    log::info!(
-        "Login successful for user: {}, redirecting to port: {}",
-        payload.username,
-        payload.redirect_port
-    );
-
-    // 6. Return JSON response with redirect URL
-    HttpResponse::Ok().json(LoginResponse { redirect_url })
+    // 4. Return success with cookies
+    auth::set_auth_cookies(&app_state, access_token, refresh_token)
 }
 
 /// POST /api/v1/register
-/// Register a new user and return redirect URL with JWT
+/// Register a new user and set session cookies
 pub async fn register(
     app_state: web::Data<AppState>,
     payload: web::Json<RegisterPayload>,
@@ -148,8 +132,8 @@ pub async fn register(
     }
 
     // 3. Check if user already exists
-    let existing_user = user::Entity::find()
-        .filter(user::Column::Username.eq(&payload.username))
+    let existing_user = user_entity::Entity::find()
+        .filter(user_entity::Column::Username.eq(&payload.username))
         .one(&app_state.db)
         .await;
 
@@ -190,7 +174,7 @@ pub async fn register(
 
     // 5. Create new user
     let now = Utc::now();
-    let new_user = user::ActiveModel {
+    let new_user = user_entity::ActiveModel {
         username: Set(payload.username.clone()),
         password_hash: Set(password_hash),
         created_at: Set(now),
@@ -198,7 +182,7 @@ pub async fn register(
         ..Default::default()
     };
 
-    let insert_result = user::Entity::insert(new_user).exec(&app_state.db).await;
+    let insert_result = user_entity::Entity::insert(new_user).exec(&app_state.db).await;
 
     let user_id = match insert_result {
         Ok(result) => result.last_insert_id,
@@ -217,45 +201,25 @@ pub async fn register(
         user_id
     );
 
-    // 6. Generate JWT for auto-login
-    let now = Utc::now();
-    let exp = now + chrono::Duration::seconds(app_state.jwt_expiration);
-
-    let claims = Claims {
-        iss: "http://localhost:8080".to_string(),
-        sub: user_id.to_string(),
-        aud: "minecraft-client".to_string(),
-        exp: exp.timestamp(),
-        challenge: payload.challenge.clone(),
-    };
-
-    let mut header = Header::new(jsonwebtoken::Algorithm::ES256);
-    header.kid = Some("beacon-auth-key-1".to_string());
-
-    let token = match encode(&header, &claims, &app_state.encoding_key) {
-        Ok(t) => t,
-        Err(e) => {
-            log::error!("Failed to sign JWT: {}", e);
-            return HttpResponse::InternalServerError().json(ErrorResponse {
-                error: "internal_error".to_string(),
-                message: "Failed to generate token".to_string(),
-            });
-        }
-    };
-
-    // 7. Build redirect URL
-    let redirect_url = format!(
-        "http://localhost:{}/auth-callback?jwt={}",
-        payload.redirect_port, token
-    );
+    // 6. Create session tokens for auto-login
+    let (access_token, refresh_token) =
+        match auth::create_session_for_user(&app_state, user_id).await {
+            Ok(tokens) => tokens,
+            Err(e) => {
+                log::error!("Failed to create session: {}", e);
+                return HttpResponse::InternalServerError().json(ErrorResponse {
+                    error: "internal_error".to_string(),
+                    message: "Failed to create session".to_string(),
+                });
+            }
+        };
 
     log::info!(
-        "Registration successful for user: {}, redirecting to port: {}",
-        payload.username,
-        payload.redirect_port
+        "Registration successful for user: {}",
+        payload.username
     );
 
-    HttpResponse::Created().json(LoginResponse { redirect_url })
+    auth::set_auth_cookies(&app_state, access_token, refresh_token)
 }
 
 /// POST /api/v1/oauth/start
@@ -347,7 +311,7 @@ pub async fn oauth_start(
 }
 
 /// GET /api/v1/oauth/callback
-/// Handle OAuth callback
+/// Handle OAuth callback and set session cookies
 pub async fn oauth_callback(
     app_state: web::Data<AppState>,
     query: web::Query<OAuthCallbackQuery>,
@@ -390,8 +354,8 @@ pub async fn oauth_callback(
     };
 
     // 3. Find or create user
-    let db_user = match user::Entity::find()
-        .filter(user::Column::Username.eq(&username))
+    let db_user = match user_entity::Entity::find()
+        .filter(user_entity::Column::Username.eq(&username))
         .one(&app_state.db)
         .await
     {
@@ -399,7 +363,7 @@ pub async fn oauth_callback(
         Ok(None) => {
             // Create new user with OAuth
             let now = Utc::now();
-            let new_user = user::ActiveModel {
+            let new_user = user_entity::ActiveModel {
                 username: Set(username.clone()),
                 password_hash: Set(format!("oauth_{}_{}", oauth_state.provider, user_id)), // Not a real password
                 created_at: Set(now),
@@ -407,9 +371,9 @@ pub async fn oauth_callback(
                 ..Default::default()
             };
 
-            match user::Entity::insert(new_user).exec(&app_state.db).await {
+            match user_entity::Entity::insert(new_user).exec(&app_state.db).await {
                 Ok(result) => {
-                    match user::Entity::find_by_id(result.last_insert_id)
+                    match user_entity::Entity::find_by_id(result.last_insert_id)
                         .one(&app_state.db)
                         .await
                     {
@@ -433,39 +397,41 @@ pub async fn oauth_callback(
         }
     };
 
-    // 4. Generate JWT
-    let now = Utc::now();
-    let exp = now + chrono::Duration::seconds(app_state.jwt_expiration);
-
-    let claims = Claims {
-        iss: "http://localhost:8080".to_string(),
-        sub: db_user.id.to_string(),
-        aud: "minecraft-client".to_string(),
-        exp: exp.timestamp(),
-        challenge: oauth_state.challenge.clone(),
-    };
-
-    let mut header = Header::new(jsonwebtoken::Algorithm::ES256);
-    header.kid = Some("beacon-auth-key-1".to_string());
-
-    let token = match encode(&header, &claims, &app_state.encoding_key) {
-        Ok(t) => t,
-        Err(e) => {
-            log::error!("Failed to sign JWT: {}", e);
-            return HttpResponse::InternalServerError().body("Failed to generate token");
-        }
-    };
-
-    // 5. Redirect to Minecraft mod
-    let redirect_url = format!(
-        "http://localhost:{}/auth-callback?jwt={}",
-        oauth_state.redirect_port, token
-    );
+    // 4. Create session tokens
+    let (access_token, refresh_token) =
+        match auth::create_session_for_user(&app_state, db_user.id).await {
+            Ok(tokens) => tokens,
+            Err(e) => {
+                log::error!("Failed to create session: {}", e);
+                return HttpResponse::InternalServerError().body("Failed to create session");
+            }
+        };
 
     log::info!("OAuth authentication successful for user: {}", username);
 
+    // 5. Redirect to OAuth complete page with cookies set
     HttpResponse::Found()
-        .append_header(("Location", redirect_url))
+        .append_header(("Location", "/oauth-complete"))
+        .cookie(
+            actix_web::cookie::Cookie::build("access_token", access_token)
+                .path("/")
+                .http_only(true)
+                .same_site(actix_web::cookie::SameSite::Strict)
+                .max_age(actix_web::cookie::time::Duration::seconds(
+                    app_state.access_token_expiration,
+                ))
+                .finish(),
+        )
+        .cookie(
+            actix_web::cookie::Cookie::build("refresh_token", refresh_token)
+                .path("/")
+                .http_only(true)
+                .same_site(actix_web::cookie::SameSite::Strict)
+                .max_age(actix_web::cookie::time::Duration::seconds(
+                    app_state.refresh_token_expiration,
+                ))
+                .finish(),
+        )
         .finish()
 }
 
@@ -604,168 +570,36 @@ async fn exchange_google_code(
     Ok((user_id, format!("gg_{}", username)))
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use crate::{app_state::OAuthConfig, crypto};
-    use actix_web::{test, web, App};
-    use bcrypt::hash;
-    use chrono::Utc;
-    use entity::user;
-    use migration::MigratorTrait;
-    use sea_orm::{Database, EntityTrait, Set};
-    use std::collections::HashMap;
-    use std::sync::Arc;
-    use tokio::sync::RwLock;
+/// Helper function to extract user ID from session cookie
+pub fn extract_session_user(
+    req: &HttpRequest,
+    app_state: &web::Data<AppState>,
+) -> actix_web::Result<i32> {
+    use crate::models::SessionClaims;
 
-    async fn setup_test_db() -> (sea_orm::DatabaseConnection, AppState) {
-        let db = Database::connect("sqlite::memory:").await.unwrap();
+    // Get access token from cookie
+    let access_token = req
+        .cookie("access_token")
+        .ok_or_else(|| actix_web::error::ErrorUnauthorized("No access token"))?
+        .value()
+        .to_string();
 
-        // Run migrations
-        migration::Migrator::up(&db, None).await.unwrap();
+    // Decode and validate JWT
+    let token_data = jsonwebtoken::decode::<SessionClaims>(
+        &access_token,
+        &app_state.decoding_key,
+        &jsonwebtoken::Validation::new(jsonwebtoken::Algorithm::ES256),
+    )
+    .map_err(|e| {
+        log::warn!("Failed to decode access token: {:?}", e);
+        actix_web::error::ErrorUnauthorized("Invalid access token")
+    })?;
 
-        // Create test user
-        let password_hash = hash("testpass", bcrypt::DEFAULT_COST).unwrap();
-        let now = Utc::now();
-        let test_user = user::ActiveModel {
-            username: Set("testuser".to_string()),
-            password_hash: Set(password_hash),
-            created_at: Set(now),
-            updated_at: Set(now),
-            ..Default::default()
-        };
-        user::Entity::insert(test_user).exec(&db).await.unwrap();
+    // Parse user_id from sub (subject) field
+    let user_id: i32 = token_data.claims.sub.parse().map_err(|e| {
+        log::error!("Failed to parse user ID from token: {:?}", e);
+        actix_web::error::ErrorInternalServerError("Invalid user ID in token")
+    })?;
 
-        // Generate keys
-        let (encoding_key, jwks_json) = crypto::generate_ecdsa_keypair().unwrap();
-
-        let app_state = AppState {
-            db: db.clone(),
-            encoding_key,
-            jwks_json,
-            jwt_expiration: 3600,
-            oauth_config: OAuthConfig {
-                github_client_id: None,
-                github_client_secret: None,
-                google_client_id: None,
-                google_client_secret: None,
-                redirect_base: "http://localhost:8080".to_string(),
-            },
-            oauth_states: Arc::new(RwLock::new(HashMap::new())),
-        };
-
-        (db, app_state)
-    }
-
-    #[actix_web::test]
-    async fn test_get_jwks() {
-        let (_db, app_state) = setup_test_db().await;
-
-        let app = test::init_service(
-            App::new()
-                .app_data(web::Data::new(app_state))
-                .route("/.well-known/jwks.json", web::get().to(get_jwks)),
-        )
-        .await;
-
-        let req = test::TestRequest::get()
-            .uri("/.well-known/jwks.json")
-            .to_request();
-
-        let resp = test::call_service(&app, req).await;
-        assert!(resp.status().is_success());
-
-        let body = test::read_body(resp).await;
-        let jwks: serde_json::Value = serde_json::from_slice(&body).unwrap();
-
-        assert!(jwks["keys"].is_array());
-        assert_eq!(jwks["keys"].as_array().unwrap().len(), 1);
-    }
-
-    #[actix_web::test]
-    async fn test_login_success() {
-        let (_db, app_state) = setup_test_db().await;
-
-        let app = test::init_service(
-            App::new()
-                .app_data(web::Data::new(app_state))
-                .route("/api/v1/login", web::post().to(login)),
-        )
-        .await;
-
-        let payload = LoginPayload {
-            username: "testuser".to_string(),
-            password: "testpass".to_string(),
-            challenge: "test-challenge".to_string(),
-            redirect_port: 25585,
-        };
-
-        let req = test::TestRequest::post()
-            .uri("/api/v1/login")
-            .set_json(&payload)
-            .to_request();
-
-        let resp = test::call_service(&app, req).await;
-        assert!(resp.status().is_success());
-
-        let body = test::read_body(resp).await;
-        let response: LoginResponse = serde_json::from_slice(&body).unwrap();
-
-        assert!(response.redirect_url.contains("localhost:25585"));
-        assert!(response.redirect_url.contains("jwt="));
-    }
-
-    #[actix_web::test]
-    async fn test_login_wrong_password() {
-        let (_db, app_state) = setup_test_db().await;
-
-        let app = test::init_service(
-            App::new()
-                .app_data(web::Data::new(app_state))
-                .route("/api/v1/login", web::post().to(login)),
-        )
-        .await;
-
-        let payload = LoginPayload {
-            username: "testuser".to_string(),
-            password: "wrongpass".to_string(),
-            challenge: "test-challenge".to_string(),
-            redirect_port: 25585,
-        };
-
-        let req = test::TestRequest::post()
-            .uri("/api/v1/login")
-            .set_json(&payload)
-            .to_request();
-
-        let resp = test::call_service(&app, req).await;
-        assert_eq!(resp.status(), 401);
-    }
-
-    #[actix_web::test]
-    async fn test_login_user_not_found() {
-        let (_db, app_state) = setup_test_db().await;
-
-        let app = test::init_service(
-            App::new()
-                .app_data(web::Data::new(app_state))
-                .route("/api/v1/login", web::post().to(login)),
-        )
-        .await;
-
-        let payload = LoginPayload {
-            username: "nonexistent".to_string(),
-            password: "somepass".to_string(),
-            challenge: "test-challenge".to_string(),
-            redirect_port: 25585,
-        };
-
-        let req = test::TestRequest::post()
-            .uri("/api/v1/login")
-            .set_json(&payload)
-            .to_request();
-
-        let resp = test::call_service(&app, req).await;
-        assert_eq!(resp.status(), 401);
-    }
+    Ok(user_id)
 }

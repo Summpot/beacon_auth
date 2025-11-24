@@ -23,10 +23,23 @@ This repository contains three projects with two different "root" concepts.
 * **[NEW] Language:** 
     * **User Communication:** When responding to users, use the **same language as the user's request** for better understanding.
     * **Code Output:** All code content (comments, documentation, commit messages, console logs) **must** be written in **English** for consistency.
+* **[CRITICAL] Git Change Synchronization:**
+    * **Before summarizing completed changes**, you **MUST** read git changes using `get_changed_files` tool.
+    * **After reviewing git changes**, update this instruction file (`.github/copilot-instructions.md`) to reflect any new patterns, endpoints, architecture changes, or workflows discovered in the changes.
+    * This ensures the instruction file stays synchronized with actual implementation.
 * **[CRITICAL] Code Verification:** 
     * **After modifying any Rust code**, you **MUST** run `cargo check --workspace` to verify compilation before completing your task.
     * **After modifying any Kotlin/Mod code**, you **SHOULD** run `./gradlew build` (from `modSrc/`) to verify compilation when feasible.
     * Never consider a code modification complete without verification.
+* **[CRITICAL] Database Migrations:**
+    * **Always assume migrations have been applied successfully** unless the error specifically indicates a migration failure.
+    * **Do NOT manually run migrations** (e.g., `cargo run -- migrate`) during development or debugging, unless you are explicitly testing the migration system itself.
+    * The application **automatically runs migrations on startup** via `migration::Migrator::up(&db, None)` in the `serve` command.
+    * If database errors occur, investigate the **schema definition** (entities and migrations) rather than attempting to re-run migrations.
+* **[CRITICAL] Library Usage Research:**
+    * **Before using any external library**, you **MUST** use the **DeepWiki MCP server** to query the correct usage patterns, API methods, and best practices.
+    * Query format: Use `mcp_cognitionai_d_ask_question` with the repo name (e.g., `"moka-rs/moka"`, `"actix/actix-web"`) and a specific question about usage.
+    * This ensures you're using the latest API correctly and avoiding deprecated or incorrect patterns.
 * **[CRITICAL] Project Synchronization:**
     * **After making major changes** to the project (new features, architecture changes, API modifications, build system updates), you **MUST** synchronize documentation:
         * Update this **instruction file** (`.github/copilot-instructions.md`) with new patterns, endpoints, or workflows.
@@ -43,8 +56,11 @@ This repository contains three projects with two different "root" concepts.
 ## Project 1: Frontend (Root - `src/`, `package.json`, etc.)
 * **Tech Stack:** React (Hooks), Rsbuild, `pnpm`, `tailwind`, `@tanstack/react-router`, `react-hook-form`.
 * **Routing & State:** **`@tanstack/react-router`** is the *only* tool for routing and URL search parameter management.
-    * The index route (`/`) **must** use `validateSearch` to parse and require `challenge` (string) and `redirect_port` (number).
+    * The login route (`/login`) **must** use `validateSearch` to parse and require `challenge` (string) and `redirect_port` (number).
     * The component **must** use the `useSearch()` hook to retrieve these values.
+    * The index route (`/`) is the **home page** (dashboard), accessible only to authenticated users. Shows user info and links to settings.
+    * The `/settings` route is the **profile settings page** where users can change password, register passkeys, and manage existing passkeys.
+    * The `/oauth-complete` route is a **processing page** that completes OAuth authentication by generating Minecraft JWT and redirecting to the mod.
 * **Forms:** **`react-hook-form`** must be used for the login and registration forms.
 * **Styling:** **`tailwind`** must be used for all styling.
 * **Configuration Fetching:**
@@ -58,27 +74,41 @@ This repository contains three projects with two different "root" concepts.
 * **Login Flow (Standard):**
     * The login form `onSubmit` handler must:
         * Get `username`, `password` (from `react-hook-form`) and `challenge`, `redirect_port` (from `useSearch()`).
-        * `fetch` `POST /api/v1/login` with all 4 values in a JSON body.
+        * **Step 1**: `fetch` `POST /api/v1/login` with `{ username, password }` and `credentials: 'include'`. This sets `HttpOnly` session cookies (`access_token`, `refresh_token`).
+        * **Step 2**: `fetch` `POST /api/v1/minecraft-jwt` with `{ challenge, redirect_port, profile_url }` and `credentials: 'include'`. The `profile_url` is `window.location.origin + '/profile'`. This generates the Minecraft JWT using the session.
         * On 200 OK, parse the `{"redirectUrl": "..."}` JSON response.
         * **Execute `window.location.href = data.redirectUrl;`** to trigger the redirect back to the Mod.
+    * **Auto-Login**: On mount, check for valid session by calling `POST /api/v1/minecraft-jwt` with saved challenge/redirect_port. If successful, auto-redirect immediately without showing login UI.
 * **Login Flow (OAuth):**
     * The "Login with..." buttons must:
         * Get `challenge` and `redirect_port` from `useSearch()`.
+        * Save `challenge` and `redirect_port` to `sessionStorage` with keys `minecraft_challenge` and `minecraft_redirect_port`.
         * `fetch` `POST /api/v1/oauth/start` with `{ provider, challenge, redirect_port }`.
         * On 200 OK, parse the `{"authorizationUrl": "..."}` JSON response.
         * **Execute `window.location.href = data.authorizationUrl;`** to redirect to the OAuth provider.
+    * **OAuth Callback Flow**:
+        * The backend `/api/v1/oauth/callback` endpoint sets session cookies and redirects to `/oauth-complete`.
+        * The `/oauth-complete` page retrieves `challenge` and `redirect_port` from `sessionStorage` (keys: `minecraft_challenge`, `minecraft_redirect_port`).
+        * Calls `POST /api/v1/minecraft-jwt` with these values, `profile_url: window.location.origin + '/profile'`, and `credentials: 'include'` (cookies already set by OAuth callback).
+        * Cleans up sessionStorage by removing the saved keys.
+        * Redirects to Minecraft with the JWT via the `redirectUrl` response.
 * **Registration Flow:**
     * The register form must `fetch` `POST /api/v1/register`.
-    * On 201 Created, it must use the `router` from `TanStack Router` to navigate back to the login page (`/`).
+    * On 201 Created, session cookies are automatically set.
+    * Navigate to login page or auto-generate Minecraft JWT if challenge/redirect_port available.
 
 ---
 
 ## Project 2: Backend (Root - `crates/`, `Cargo.toml`)
-* **Tech Stack:** Rust, Actix-web, Sea-ORM, `jsonwebtoken`, `p256`, `ecdsa`, `clap`, `rust-embed`, `actix-files`, `which`, `reqwest`, `bcrypt`.
+* **Tech Stack:** Rust, Actix-web, Sea-ORM, `jsonwebtoken`, `p256`, `ecdsa`, `clap`, `rust-embed`, `actix-files`, `which`, `reqwest`, `bcrypt`, `webauthn-rs` (for passkey support).
 * **Project Structure:** This is a **virtual Cargo workspace** defined in the **root `Cargo.toml`**. All Rust code lives in the `crates/` directory:
     * `crates/beacon/` - Main auth server binary (`beacon`)
     * `crates/entity/` - Sea-ORM entity definitions
     * `crates/migration/` - Database migration definitions
+* **Database Schema Conventions:**
+    * **Table names MUST use plural form** (e.g., `users`, `passkeys`, `refresh_tokens`).
+    * Entity structs use singular names (e.g., `User`, `Passkey`, `RefreshToken`) but map to plural table names.
+    * All timestamps should use `chrono::DateTime<Utc>` and be named with `_at` suffix (e.g., `created_at`, `updated_at`).
 * **Application:** The `beacon` crate is a **CLI application** using `clap`. The `main` function parses commands (`serve`, `migrate`, `create-user`, `list-users`, `delete-user`).
 * **`build.rs` (in `crates/beacon`):**
     * **Must** have a `[build-dependencies]` section that includes `which`.
@@ -93,10 +123,21 @@ This repository contains three projects with two different "root" concepts.
         * **Release (`cfg(not(debug_assertions)`)**: Must serve files from memory using `rust-embed` and `rust-embed-actix-web`.
 * **API Endpoints:**
     * **`GET /api/v1/config`**: Returns JSON with available authentication providers: `{ "database_auth": bool, "github_oauth": bool, "google_oauth": bool }`. Used by frontend to conditionally show login options.
-    * **`POST /api/v1/login`**: Receives JSON `{ username, password, challenge, redirect_port }`. Verifies password (`bcrypt`). On success, creates `ES256` JWT (embedding `challenge` claim) and returns JSON: `{ "redirectUrl": "http://localhost:{redirect_port}/auth-callback?jwt=..." }`.
-    * **`POST /api/v1/register`**: Receives JSON `{ username, password, challenge, redirect_port }`. Validates input, hashes password with bcrypt, creates user in Sea-ORM. Auto-logs in user by generating JWT. Returns 201 Created with JSON: `{ "redirectUrl": "..." }`.
-    * **`POST /api/v1/oauth/start`**: Receives JSON `{ provider, challenge, redirect_port }`. Generates UUID state token, stores OAuth state in memory (using `RwLock<HashMap>`). Returns JSON: `{ "authorizationUrl": "..." }`.
-    * **`GET /api/v1/oauth/callback`**: Receives query params `?code=...&state=...`. Validates state token, exchanges code for OAuth user info (GitHub/Google), finds or creates user in database. Creates the final *Minecraft `ES256` JWT*. Returns an **HTTP 302 Redirect** back to the Mod's `localhost` URL: `http://localhost:{port}/auth-callback?jwt=...`.
+    * **`POST /api/v1/login`**: Receives JSON `{ username, password }`. Verifies password (`bcrypt`). On success, creates `access_token` (ES256 JWT, 15 min expiry) and `refresh_token` (random SHA-256 hashed, stored in DB with family_id for rotation tracking, 30 day expiry). Sets `HttpOnly` cookies. Returns `{ "success": true }`.
+    * **`POST /api/v1/register`**: Receives JSON `{ username, password }`. Validates input (min 6 chars password), hashes password with bcrypt, creates user in Sea-ORM. Auto-logs in user by creating session tokens and setting cookies. Returns 201 Created with `{ "success": true }`.
+    * **`POST /api/v1/refresh`**: Receives `refresh_token` from cookie. Validates refresh token from database by SHA-256 hash lookup, checks expiration and revocation. Generates new `access_token` and sets cookie. Used to extend session without re-login.
+    * **`POST /api/v1/minecraft-jwt`**: **[Authenticated]** Receives JSON `{ challenge, redirect_port, profile_url }`. Verifies `access_token` cookie. Creates Minecraft-specific `ES256` JWT with `challenge` claim (audience: `minecraft-client`, 1 hour expiry). Returns `{ "redirectUrl": "http://localhost:{port}/auth-callback?jwt={token}&profile_url={encoded_url}" }` where `profile_url` is URL-encoded.
+    * **`POST /api/v1/oauth/start`**: Receives JSON `{ provider, challenge, redirect_port }`. Generates UUID state token, stores OAuth state in memory (using `Arc<RwLock<HashMap>>`). Returns JSON: `{ "authorizationUrl": "..." }`.
+    * **`GET /api/v1/oauth/callback`**: Receives query params `?code=...&state=...`. Validates state token, exchanges code for OAuth user info (GitHub/Google), finds or creates user in database (username format: `gh_{login}` or `gg_{email_prefix}`, password_hash: `oauth_{provider}_{id}`). Creates session tokens (`access_token`, `refresh_token`) and sets cookies. Returns **HTTP 302 Redirect** to `/oauth-complete` page.
+    * **`GET /api/v1/user/me`**: **[Authenticated]** Returns current user info: `{ id, username }`. Verifies `access_token` cookie.
+    * **`POST /api/v1/user/change-password`**: **[Authenticated]** Receives `{ current_password, new_password }`. Verifies current password, validates new password (min 6 chars), hashes and updates in database. Returns `{ "success": true }`.
+    * **`POST /api/v1/logout`**: **[Authenticated]** Revokes all refresh tokens for the authenticated user. Clears `access_token` and `refresh_token` cookies. Returns `{ "success": true }`.
+    * **`POST /api/v1/passkey/register/start`**: **[Authenticated]** Receives `{ name }`. Starts WebAuthn passkey registration using `webauthn-rs`. Returns `{ "creation_options": CreationChallengeResponse }`. Stores registration state in moka cache (5-min TTL).
+    * **`POST /api/v1/passkey/register/finish`**: **[Authenticated]** Receives `{ credential, name }`. Completes passkey registration, stores credential in database. Returns `{ "success": true, "passkey_id": int }`.
+    * **`POST /api/v1/passkey/auth/start`**: Receives optional `{ username }`. Starts passkey authentication. Returns `{ "request_options": RequestChallengeResponse }`. Stores auth state in moka cache (5-min TTL, keyed by challenge).
+    * **`POST /api/v1/passkey/auth/finish`**: Receives `{ credential }`. Completes passkey auth, updates credential counter and last_used_at. Creates session tokens and returns them as cookies. Returns `{ "success": true, "username": str }`.
+    * **`GET /api/v1/passkey/list`**: **[Authenticated]** Returns `{ "passkeys": [{ id, name, created_at, last_used_at }, ...] }`.
+    * **`DELETE /api/v1/passkey/{id}`**: **[Authenticated]** Deletes the specified passkey if owned by authenticated user. Returns `{ "success": true }`.
 
 ---
 
@@ -125,7 +166,14 @@ This repository contains three projects with two different "root" concepts.
     * **Must** find a free port in the `38123-38133` range using `NetUtils.findAvailablePort()` and save it.
     * Receives `RequestClientLoginPacket` (S2C), then calls `startLoginProcess()`.
     * `startLoginProcess()`: Generates PKCE challenge/verifier via `PKCEUtils`, sends `RequestLoginUrlPacket` (C2S) with `challenge` and `boundPort`.
-    * `HttpHandler` at `/auth-callback`: Receives callback with `?jwt=...` query param, attempts to focus the Minecraft window using `GLFW.glfwRequestWindowAttention()`, parses JWT, sends `VerifyAuthPacket` (C2S) with JWT and verifier. Returns an **i18n-translated** HTML "Success" page using `TranslationHelper.translate()`.
+    * `HttpHandler` at `/auth-callback`: 
+        * Receives callback with `?jwt=...&profile_url=...` query params (both URL-encoded).
+        * Parses query parameters to extract `jwt` and `profile_url` using `URLDecoder.decode()`.
+        * Attempts to focus the Minecraft window using **safe** GLFW functions (`glfwRestoreWindow()` if minimized, `glfwRequestWindowAttention()` for taskbar flash).
+        * Parses JWT, sends `VerifyAuthPacket` (C2S) with JWT and verifier.
+        * Returns an **HTTP 302 Redirect** to `{profile_url}?status=success&message=...` (or error with appropriate message).
+        * **CRITICAL**: The `profile_url` is provided by the backend, **NOT** read from `ServerConfig`. This ensures proper client-server separation.
+    * **Window Focus Behavior**: Window focus attempts are **best-effort only**. Due to OS-level security restrictions (especially on Windows), the window focus request **will fail** when the browser has focus. The most reliable behavior is taskbar icon flashing via `glfwRequestWindowAttention()`. **DO NOT** use `glfwFocusWindow()` or `glfwShowWindow()` as these can cause input capture issues, trapping the user's cursor. This is an OS limitation, not a bug.
 * **`AuthServer.kt` (Server-Side):**
     * **State:** Must maintain a `MutableSet<UUID>` of `authenticatedPlayers` (thread-safe).
     * **Auto-Login:** **Must** hook the `PlayerJoinEvent` via `AuthEventHandler`. If player UUID is not in the `authenticatedPlayers` set, send `RequestClientLoginPacket` (S2C) to trigger login flow.

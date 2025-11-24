@@ -9,14 +9,32 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from './routes/__root'
+import { Route as SettingsRouteImport } from './routes/settings'
 import { Route as RegisterRouteImport } from './routes/register'
+import { Route as ProfileRouteImport } from './routes/profile'
+import { Route as OauthCompleteRouteImport } from './routes/oauth-complete'
 import { Route as LoginRouteImport } from './routes/login'
 import { Route as ErrorRouteImport } from './routes/error'
 import { Route as IndexRouteImport } from './routes/index'
 
+const SettingsRoute = SettingsRouteImport.update({
+  id: '/settings',
+  path: '/settings',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const RegisterRoute = RegisterRouteImport.update({
   id: '/register',
   path: '/register',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ProfileRoute = ProfileRouteImport.update({
+  id: '/profile',
+  path: '/profile',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const OauthCompleteRoute = OauthCompleteRouteImport.update({
+  id: '/oauth-complete',
+  path: '/oauth-complete',
   getParentRoute: () => rootRouteImport,
 } as any)
 const LoginRoute = LoginRouteImport.update({
@@ -39,43 +57,98 @@ export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/error': typeof ErrorRoute
   '/login': typeof LoginRoute
+  '/oauth-complete': typeof OauthCompleteRoute
+  '/profile': typeof ProfileRoute
   '/register': typeof RegisterRoute
+  '/settings': typeof SettingsRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/error': typeof ErrorRoute
   '/login': typeof LoginRoute
+  '/oauth-complete': typeof OauthCompleteRoute
+  '/profile': typeof ProfileRoute
   '/register': typeof RegisterRoute
+  '/settings': typeof SettingsRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/error': typeof ErrorRoute
   '/login': typeof LoginRoute
+  '/oauth-complete': typeof OauthCompleteRoute
+  '/profile': typeof ProfileRoute
   '/register': typeof RegisterRoute
+  '/settings': typeof SettingsRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/error' | '/login' | '/register'
+  fullPaths:
+    | '/'
+    | '/error'
+    | '/login'
+    | '/oauth-complete'
+    | '/profile'
+    | '/register'
+    | '/settings'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/error' | '/login' | '/register'
-  id: '__root__' | '/' | '/error' | '/login' | '/register'
+  to:
+    | '/'
+    | '/error'
+    | '/login'
+    | '/oauth-complete'
+    | '/profile'
+    | '/register'
+    | '/settings'
+  id:
+    | '__root__'
+    | '/'
+    | '/error'
+    | '/login'
+    | '/oauth-complete'
+    | '/profile'
+    | '/register'
+    | '/settings'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   ErrorRoute: typeof ErrorRoute
   LoginRoute: typeof LoginRoute
+  OauthCompleteRoute: typeof OauthCompleteRoute
+  ProfileRoute: typeof ProfileRoute
   RegisterRoute: typeof RegisterRoute
+  SettingsRoute: typeof SettingsRoute
 }
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
+    '/settings': {
+      id: '/settings'
+      path: '/settings'
+      fullPath: '/settings'
+      preLoaderRoute: typeof SettingsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/register': {
       id: '/register'
       path: '/register'
       fullPath: '/register'
       preLoaderRoute: typeof RegisterRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/profile': {
+      id: '/profile'
+      path: '/profile'
+      fullPath: '/profile'
+      preLoaderRoute: typeof ProfileRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/oauth-complete': {
+      id: '/oauth-complete'
+      path: '/oauth-complete'
+      fullPath: '/oauth-complete'
+      preLoaderRoute: typeof OauthCompleteRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/login': {
@@ -106,7 +179,10 @@ const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   ErrorRoute: ErrorRoute,
   LoginRoute: LoginRoute,
+  OauthCompleteRoute: OauthCompleteRoute,
+  ProfileRoute: ProfileRoute,
   RegisterRoute: RegisterRoute,
+  SettingsRoute: SettingsRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

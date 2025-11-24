@@ -2,12 +2,12 @@ package io.github.summpot.beaconauth.client
 
 import com.sun.net.httpserver.HttpExchange
 import com.sun.net.httpserver.HttpServer
+import io.github.summpot.beaconauth.config.ServerConfig
 import io.github.summpot.beaconauth.util.PKCEUtils
 import io.github.summpot.beaconauth.util.TranslationHelper
 import net.minecraft.Util
 import net.minecraft.client.Minecraft
 import net.minecraft.client.gui.screens.ConfirmLinkScreen
-import net.minecraft.network.chat.Component
 import org.slf4j.LoggerFactory
 import java.net.BindException
 import java.net.InetSocketAddress
@@ -113,14 +113,23 @@ object AuthClient {
     private fun handleAuthCallback(exchange: HttpExchange) {
         try {
             val query = exchange.requestURI.query
-            val jwt = query?.split("&")
-                ?.map { it.split("=") }
-                ?.find { it[0] == "jwt" }
-                ?.getOrNull(1)
+            val params = query?.split("&")
+                ?.map { it.split("=", limit = 2) }
+                ?.filter { it.size == 2 }
+                ?.associate { it[0] to java.net.URLDecoder.decode(it[1], "UTF-8") }
+                ?: emptyMap()
+
+            val jwt = params["jwt"]
+            val profileUrl = params["profile_url"]
 
             if (jwt.isNullOrBlank()) {
                 logger.error("Received callback without JWT parameter")
-                sendHtmlResponse(exchange, 400, generateErrorPage("Missing JWT parameter"))
+                val redirectUrl = if (profileUrl != null) {
+                    "$profileUrl?status=error&message=Missing+JWT+parameter"
+                } else {
+                    "/profile?status=error&message=Missing+JWT+parameter"
+                }
+                sendRedirectResponse(exchange, redirectUrl)
                 loginPhaseCallback?.onAuthError("Missing JWT parameter")
                 return
             }
@@ -128,7 +137,12 @@ object AuthClient {
             val verifier = currentCodeVerifier
             if (verifier == null) {
                 logger.error("No code verifier found - login flow not initiated properly")
-                sendHtmlResponse(exchange, 400, generateErrorPage("Login flow not initiated"))
+                val redirectUrl = if (profileUrl != null) {
+                    "$profileUrl?status=error&message=Login+flow+not+initiated"
+                } else {
+                    "/profile?status=error&message=Login+flow+not+initiated"
+                }
+                sendRedirectResponse(exchange, redirectUrl)
                 loginPhaseCallback?.onAuthError("Login flow not initiated")
                 return
             }
@@ -144,145 +158,87 @@ object AuthClient {
             
             loginPhaseCallback?.onAuthSuccess(jwt, verifier)
             currentCodeVerifier = null
-            sendHtmlResponse(exchange, 200, generateSuccessPage())
+            
+            // Redirect to profile page with success status
+            val redirectUrl = if (profileUrl != null) {
+                "$profileUrl?status=success&message=Authentication+successful"
+            } else {
+                "/profile?status=success&message=Authentication+successful"
+            }
+            sendRedirectResponse(exchange, redirectUrl)
         } catch (e: Exception) {
             logger.error("Error handling auth callback: ${e.message}", e)
-            sendHtmlResponse(exchange, 500, generateErrorPage("Internal error: ${e.message}"))
+            val query = exchange.requestURI.query
+            val params = query?.split("&")
+                ?.map { it.split("=", limit = 2) }
+                ?.filter { it.size == 2 }
+                ?.associate { it[0] to java.net.URLDecoder.decode(it[1], "UTF-8") }
+                ?: emptyMap()
+            val profileUrl = params["profile_url"]
+            val redirectUrl = if (profileUrl != null) {
+                "$profileUrl?status=error&message=" + java.net.URLEncoder.encode(e.message ?: "Unknown error", "UTF-8")
+            } else {
+                "/profile?status=error&message=" + java.net.URLEncoder.encode(e.message ?: "Unknown error", "UTF-8")
+            }
+            sendRedirectResponse(exchange, redirectUrl)
             loginPhaseCallback?.onAuthError(e.message ?: "Unknown error")
         } finally {
             exchange.close()
         }
     }
 
-    private fun sendHtmlResponse(exchange: HttpExchange, statusCode: Int, htmlContent: String) {
+    private fun sendRedirectResponse(exchange: HttpExchange, location: String) {
         try {
-            val responseBytes = htmlContent.toByteArray(Charsets.UTF_8)
-            exchange.responseHeaders.set("Content-Type", "text/html; charset=UTF-8")
-            exchange.sendResponseHeaders(statusCode, responseBytes.size.toLong())
-            exchange.responseBody.use { output -> output.write(responseBytes) }
+            exchange.responseHeaders.set("Location", location)
+            exchange.sendResponseHeaders(302, -1)
         } catch (e: Exception) {
-            logger.error("Failed to send HTTP response: ${e.message}", e)
-        }
-    }
-
-    private fun generateSuccessPage(): String {
-        val title = getTranslation(TranslationHelper.htmlSuccessTitle())
-        val heading = getTranslation(TranslationHelper.htmlSuccessHeading())
-        val message = getTranslation(TranslationHelper.htmlSuccessMessage())
-        return """
-            <!DOCTYPE html>
-            <html lang="en">
-            <head>
-                <meta charset="UTF-8">
-                <meta name="viewport" content="width=device-width, initial-scale=1.0">
-                <title>$title</title>
-                <style>
-                    body {
-                        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-                        display: flex;
-                        justify-content: center;
-                        align-items: center;
-                        height: 100vh;
-                        margin: 0;
-                        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-                    }
-                    .container {
-                        text-align: center;
-                        background: white;
-                        padding: 3rem;
-                        border-radius: 1rem;
-                        box-shadow: 0 10px 40px rgba(0,0,0,0.2);
-                    }
-                    h1 { color: #4caf50; margin-bottom: 1rem; }
-                    p { color: #666; font-size: 1.1rem; }
-                    .checkmark {
-                        font-size: 4rem;
-                        animation: bounce 0.5s;
-                    }
-                    @keyframes bounce {
-                        0%, 100% { transform: scale(1); }
-                        50% { transform: scale(1.2); }
-                    }
-                </style>
-            </head>
-            <body>
-                <div class="container">
-                    <div class="checkmark">✓</div>
-                    <h1>$heading</h1>
-                    <p>$message</p>
-                </div>
-            </body>
-            </html>
-        """.trimIndent()
-    }
-
-    private fun generateErrorPage(errorMsg: String): String {
-        val title = getTranslation(TranslationHelper.htmlErrorTitle())
-        val heading = getTranslation(TranslationHelper.htmlErrorHeading())
-        return """
-            <!DOCTYPE html>
-            <html lang="en">
-            <head>
-                <meta charset="UTF-8">
-                <meta name="viewport" content="width=device-width, initial-scale=1.0">
-                <title>$title</title>
-                <style>
-                    body {
-                        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-                        display: flex;
-                        justify-content: center;
-                        align-items: center;
-                        height: 100vh;
-                        margin: 0;
-                        background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
-                    }
-                    .container {
-                        text-align: center;
-                        background: white;
-                        padding: 3rem;
-                        border-radius: 1rem;
-                        box-shadow: 0 10px 40px rgba(0,0,0,0.2);
-                    }
-                    h1 { color: #f44336; margin-bottom: 1rem; }
-                    p { color: #666; }
-                    .error-icon { font-size: 4rem; }
-                </style>
-            </head>
-            <body>
-                <div class="container">
-                    <div class="error-icon">✗</div>
-                    <h1>$heading</h1>
-                    <p>$errorMsg</p>
-                </div>
-            </body>
-            </html>
-        """.trimIndent()
-    }
-
-    private fun getTranslation(key: String): String {
-        return try {
-            Component.translatable(key).string
-        } catch (e: Exception) {
-            logger.warn("Failed to get translation for key: $key", e)
-            key.substringAfterLast('.')
+            logger.error("Failed to send redirect response: ${e.message}", e)
         }
     }
 
     /**
      * Attempts to bring the Minecraft window to the foreground.
-     * Uses platform-specific methods to focus the game window.
+     * Uses ONLY safe approaches that won't interfere with input handling.
+     * 
+     * IMPORTANT: We avoid glfwFocusWindow() and glfwShowWindow() as these can cause
+     * Minecraft to think it has focus and enable mouse capture, even when the browser
+     * actually has focus. This would trap the user's cursor.
+     * 
+     * NOTE: Due to OS-level security restrictions (especially on Windows),
+     * a window cannot steal focus from another application (like a browser).
+     * The best we can do is:
+     * - Request window attention (taskbar icon flashing) - this is safe and usually works
+     * - Restore the window if minimized - this is also safe
+     * 
+     * Users will need to manually click on the Minecraft window after authentication.
      */
     private fun focusMinecraftWindow() {
         try {
             val minecraft = Minecraft.getInstance()
             minecraft.execute {
-                // Request focus on the Minecraft window using GLFW
                 val windowHandle = minecraft.window.window
+                
+                // Check current window state
+                val isIconified = org.lwjgl.glfw.GLFW.glfwGetWindowAttrib(windowHandle, org.lwjgl.glfw.GLFW.GLFW_ICONIFIED) == org.lwjgl.glfw.GLFW.GLFW_TRUE
+                val isFocused = org.lwjgl.glfw.GLFW.glfwGetWindowAttrib(windowHandle, org.lwjgl.glfw.GLFW.GLFW_FOCUSED) == org.lwjgl.glfw.GLFW.GLFW_TRUE
+                
+                logger.info("Window state before focus attempt - Minimized: $isIconified, Focused: $isFocused")
+                
+                // Only restore if minimized - this is safe and helpful
+                if (isIconified) {
+                    org.lwjgl.glfw.GLFW.glfwRestoreWindow(windowHandle)
+                    logger.info("Restored minimized window")
+                }
+                
+                // Request window attention (taskbar flashing) - safest approach
+                // This will make the taskbar icon flash without stealing focus or affecting input
                 org.lwjgl.glfw.GLFW.glfwRequestWindowAttention(windowHandle)
-                logger.info("Successfully requested focus for Minecraft window")
+                logger.info("Requested window attention - taskbar should flash, user needs to click window to continue")
+                
+                // DO NOT call glfwFocusWindow() or glfwShowWindow() - they can cause input capture issues
             }
         } catch (e: Exception) {
-            logger.warn("Failed to focus Minecraft window: ${e.message}", e)
+            logger.warn("Failed to request window attention: ${e.message}", e)
         }
     }
 }

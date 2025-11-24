@@ -23,6 +23,8 @@ sha2 = "0.10"
 bcrypt = "0.17"
 rand = "0.9"
 
+
+
 # CLI
 clap = { version = "4.5", features = ["derive", "env"] }
 
@@ -48,6 +50,13 @@ urlencoding = "2.1"
 
 # HTTP Client
 reqwest = { version = "0.12", default-features = false, features = ["charset", "http2", "system-proxy", "json", "rustls-tls"] }
+
+# WebAuthn
+webauthn-rs = "0.5"
+webauthn-rs-proto = "0.5"
+
+# Cache
+moka = { version = "0.12", features = ["sync"] }
 
 # Build Tools
 which = "8.0"

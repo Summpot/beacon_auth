@@ -1,4 +1,8 @@
 use serde::{Deserialize, Serialize};
+use webauthn_rs::prelude::{
+    CreationChallengeResponse, PublicKeyCredential, RegisterPublicKeyCredential,
+    RequestChallengeResponse,
+};
 
 /// Request payload for POST /api/v1/register
 #[derive(Debug, Serialize, Deserialize)]
@@ -91,6 +95,101 @@ pub struct ConfigResponse {
     pub github_oauth: bool,
     /// Whether Google OAuth is configured
     pub google_oauth: bool,
+}
+
+/// Session token claims (for access token and refresh token)
+#[derive(Debug, Serialize, Deserialize)]
+pub struct SessionClaims {
+    /// Issuer
+    pub iss: String,
+    /// Subject (user ID)
+    pub sub: String,
+    /// Audience
+    pub aud: String,
+    /// Expiration time
+    pub exp: i64,
+    /// Token type: "access" or "refresh"
+    pub token_type: String,
+}
+
+/// Request payload for POST /api/v1/minecraft-jwt
+#[derive(Debug, Serialize, Deserialize)]
+pub struct MinecraftJwtRequest {
+    pub challenge: String,
+    pub redirect_port: u16,
+    pub profile_url: String,
+}
+
+/// Response for POST /api/v1/minecraft-jwt
+#[derive(Debug, Serialize, Deserialize)]
+pub struct MinecraftJwtResponse {
+    #[serde(rename = "redirectUrl")]
+    pub redirect_url: String,
+}
+
+/// Passkey registration challenge request
+#[derive(Debug, Serialize, Deserialize)]
+pub struct PasskeyRegisterStartRequest {
+    pub name: String,
+}
+
+/// Passkey registration challenge response
+#[derive(Debug, Serialize, Deserialize)]
+pub struct PasskeyRegisterStartResponse {
+    pub creation_options: CreationChallengeResponse,
+}
+
+/// Passkey registration verification request
+#[derive(Debug, Deserialize, Serialize)]
+pub struct PasskeyRegisterFinishRequest {
+    pub credential: RegisterPublicKeyCredential,
+    pub name: Option<String>,
+}
+
+/// Passkey authentication challenge request
+#[derive(Debug, Serialize, Deserialize)]
+pub struct PasskeyAuthStartRequest {
+    pub challenge: String,
+    pub redirect_port: u16,
+}
+
+/// Passkey authentication challenge response
+#[derive(Debug, Serialize, Deserialize)]
+pub struct PasskeyAuthStartResponse {
+    pub request_options: RequestChallengeResponse,
+}
+
+/// Passkey authentication verification request
+#[derive(Debug, Serialize, Deserialize)]
+pub struct PasskeyAuthFinishRequest {
+    pub credential: PublicKeyCredential,
+}
+
+/// List passkeys response
+#[derive(Debug, Serialize, Deserialize)]
+pub struct PasskeyList {
+    pub passkeys: Vec<PasskeyInfo>,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct PasskeyInfo {
+    pub id: i32,
+    pub name: String,
+    pub created_at: String,
+    pub last_used_at: Option<String>,
+}
+
+/// Delete passkey request
+#[derive(Debug, Serialize, Deserialize)]
+pub struct PasskeyDeleteRequest {
+    pub id: i32,
+}
+
+/// Change password request
+#[derive(Debug, Serialize, Deserialize)]
+pub struct ChangePasswordRequest {
+    pub current_password: String,
+    pub new_password: String,
 }
 
 #[cfg(test)]

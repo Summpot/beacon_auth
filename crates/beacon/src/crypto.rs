@@ -1,10 +1,10 @@
 use base64::{engine::general_purpose::URL_SAFE_NO_PAD, Engine};
-use jsonwebtoken::EncodingKey;
-use p256::{ecdsa::SigningKey, elliptic_curve::rand_core::OsRng, pkcs8::EncodePrivateKey};
+use jsonwebtoken::{DecodingKey, EncodingKey};
+use p256::{ecdsa::SigningKey, elliptic_curve::rand_core::OsRng, pkcs8::{EncodePrivateKey, EncodePublicKey}};
 use serde_json::json;
 
-/// Generate an ES256 (ECDSA P-256) keypair and return the EncodingKey and JWKS JSON string
-pub fn generate_ecdsa_keypair() -> anyhow::Result<(EncodingKey, String)> {
+/// Generate an ES256 (ECDSA P-256) keypair and return the EncodingKey, DecodingKey, and JWKS JSON string
+pub fn generate_ecdsa_keypair() -> anyhow::Result<(EncodingKey, DecodingKey, String)> {
     // Generate ECDSA P-256 keypair using OsRng
     let signing_key = SigningKey::random(&mut OsRng);
     let verifying_key = signing_key.verifying_key();
@@ -12,6 +12,10 @@ pub fn generate_ecdsa_keypair() -> anyhow::Result<(EncodingKey, String)> {
     // Convert private key to PKCS#8 DER format for EncodingKey
     let pkcs8_der = signing_key.to_pkcs8_der()?;
     let encoding_key = EncodingKey::from_ec_der(pkcs8_der.as_bytes());
+
+    // Convert public key to SPKI DER format for DecodingKey
+    let spki_der = verifying_key.to_public_key_der()?;
+    let decoding_key = DecodingKey::from_ec_der(spki_der.as_bytes());
 
     // Extract x and y coordinates from public key for JWKS
     let encoded_point = verifying_key.to_encoded_point(false); // uncompressed format
@@ -41,7 +45,7 @@ pub fn generate_ecdsa_keypair() -> anyhow::Result<(EncodingKey, String)> {
 
     let jwks_json = serde_json::to_string(&jwks)?;
 
-    Ok((encoding_key, jwks_json))
+    Ok((encoding_key, decoding_key, jwks_json))
 }
 
 #[cfg(test)]
@@ -53,7 +57,7 @@ mod tests {
         let result = generate_ecdsa_keypair();
         assert!(result.is_ok());
 
-        let (_encoding_key, jwks_json) = result.unwrap();
+        let (_encoding_key, _decoding_key, jwks_json) = result.unwrap();
 
         // Verify JWKS JSON is valid
         let jwks: serde_json::Value = serde_json::from_str(&jwks_json).unwrap();

@@ -9,8 +9,10 @@ use migration::MigratorTrait;
 use sea_orm::Database;
 use std::collections::HashMap;
 use std::sync::Arc;
+use std::time::Duration;
 use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
-use tokio::sync::RwLock;
+use moka::sync::Cache;
+
 
 #[cfg(unix)]
 use tokio::net::UnixListener;
@@ -32,7 +34,7 @@ pub async fn run_server(config: ServeConfig) -> anyhow::Result<()> {
 
     // 1. Generate ES256 (ECDSA P-256) keypair
     log::info!("Generating ECDSA P-256 keypair...");
-    let (encoding_key, jwks_json) = crypto::generate_ecdsa_keypair()?;
+    let (encoding_key, decoding_key, jwks_json) = crypto::generate_ecdsa_keypair()?;
     log::info!("JWKS generated successfully");
 
     // 2. Connect to database
@@ -53,14 +55,48 @@ pub async fn run_server(config: ServeConfig) -> anyhow::Result<()> {
         redirect_base: config.oauth_redirect_base.clone(),
     };
 
-    // 4. Create AppState
+    // 4. Initialize WebAuthn
+    log::info!("Initializing WebAuthn...");
+    let rp_origin = url::Url::parse(&config.oauth_redirect_base)?;
+    let rp_id = rp_origin
+        .host_str()
+        .ok_or_else(|| anyhow::anyhow!("Invalid redirect base URL"))?;
+
+    let webauthn = Arc::new(
+        webauthn_rs::WebauthnBuilder::new(rp_id, &rp_origin)?
+            .rp_name("BeaconAuth")
+            .build()?,
+    );
+
+    log::info!("WebAuthn initialized for RP: {}", rp_id);
+
+    // 5. Initialize moka caches for passkey state (5-minute TTL)
+    let passkey_reg_cache = Cache::builder()
+        .max_capacity(10_000)
+        .time_to_live(Duration::from_secs(5 * 60))
+        .build();
+    
+    let passkey_auth_cache = Cache::builder()
+        .max_capacity(10_000)
+        .time_to_live(Duration::from_secs(5 * 60))
+        .build();
+    
+    log::info!("Passkey state caches initialized with 5-minute TTL");
+
+    // 6. Create AppState
     let app_state = web::Data::new(AppState {
         db: db.clone(),
         encoding_key,
+        decoding_key,
         jwks_json,
         jwt_expiration: config.jwt_expiration,
+        access_token_expiration: 900,  // 15 minutes
+        refresh_token_expiration: 2592000, // 30 days
         oauth_config,
-        oauth_states: Arc::new(RwLock::new(HashMap::new())),
+        oauth_states: Arc::new(tokio::sync::RwLock::new(HashMap::new())),
+        webauthn,
+        passkey_reg_states: passkey_reg_cache,
+        passkey_auth_states: passkey_auth_cache,
     });
 
     // 5. Start control listener (Unix Domain Socket on Unix, Named Pipe on Windows)
@@ -111,8 +147,19 @@ pub async fn run_server(config: ServeConfig) -> anyhow::Result<()> {
             .route("/config", web::get().to(handlers::get_config))
             .route("/login", web::post().to(handlers::login))
             .route("/register", web::post().to(handlers::register))
+            .route("/logout", web::post().to(handlers::user::logout))
             .route("/oauth/start", web::post().to(handlers::oauth_start))
-            .route("/oauth/callback", web::get().to(handlers::oauth_callback));
+            .route("/oauth/callback", web::get().to(handlers::oauth_callback))
+            .route("/refresh", web::post().to(handlers::refresh_token))
+            .route("/minecraft-jwt", web::post().to(handlers::get_minecraft_jwt))
+            .route("/user/me", web::get().to(handlers::user::get_user_info))
+            .route("/user/change-password", web::post().to(handlers::user::change_password))
+            .route("/passkeys/register/start", web::post().to(handlers::passkey::register_start))
+            .route("/passkeys/register/finish", web::post().to(handlers::passkey::register_finish))
+            .route("/passkeys/auth/start", web::post().to(handlers::passkey::auth_start))
+            .route("/passkeys/auth/finish", web::post().to(handlers::passkey::auth_finish))
+            .route("/passkeys", web::get().to(handlers::passkey::list_passkeys))
+            .route("/passkeys/delete", web::post().to(handlers::passkey::delete_passkey));
 
         let jwks_route =
             web::scope("/.well-known").route("/jwks.json", web::get().to(handlers::get_jwks));

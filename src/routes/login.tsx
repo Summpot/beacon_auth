@@ -41,47 +41,70 @@ function LoginPage() {
     resolver: zodResolver(loginFormSchema),
   });
 
-  // Fetch server configuration on mount
+  // Fetch server configuration and check for auto-login on mount
   useEffect(() => {
-    const fetchConfig = async () => {
+    const initialize = async () => {
       try {
-        const response = await fetch('/api/v1/config');
-        if (response.ok) {
-          const data = await response.json();
-          setConfig(data);
+        // Fetch config
+        const configResponse = await fetch('/api/v1/config');
+        if (configResponse.ok) {
+          const configData = await configResponse.json();
+          setConfig(configData);
+        }
+
+        // Try auto-login if we have challenge and redirect_port
+        const jwtResponse = await fetch('/api/v1/minecraft-jwt', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          credentials: 'include',
+          body: JSON.stringify({
+            challenge: searchParams.challenge,
+            redirect_port: searchParams.redirect_port,
+          }),
+        });
+
+        if (jwtResponse.ok) {
+          const result = await jwtResponse.json();
+          if (result.redirectUrl) {
+            // Auto-login successful, redirect immediately
+            window.location.href = result.redirectUrl;
+            return; // Don't set configLoading to false, we're redirecting
+          }
         }
       } catch (error) {
-        console.error('Failed to fetch config:', error);
+        console.error('Initialization error:', error);
       } finally {
         setConfigLoading(false);
       }
     };
-    fetchConfig();
-  }, []);
+    initialize();
+  }, [searchParams.challenge, searchParams.redirect_port]);
 
   const onSubmit = async (data: LoginFormData) => {
     try {
-      const response = await fetch('/api/v1/login', {
+      // Step 1: Login and set session cookies
+      const loginResponse = await fetch('/api/v1/login', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
+        credentials: 'include', // Important: include cookies
         body: JSON.stringify({
           username: data.username,
           password: data.password,
-          challenge: searchParams.challenge,
-          redirect_port: searchParams.redirect_port,
         }),
       });
 
-      if (!response.ok) {
-        if (response.status === 401) {
+      if (!loginResponse.ok) {
+        if (loginResponse.status === 401) {
           setError('root', {
             type: 'manual',
             message: 'Invalid username or password',
           });
         } else {
-          const errorData = await response.json();
+          const errorData = await loginResponse.json();
           setError('root', {
             type: 'manual',
             message: errorData.message || 'Authentication failed',
@@ -90,7 +113,29 @@ function LoginPage() {
         return;
       }
 
-      const result = await response.json();
+      // Step 2: Get Minecraft JWT using the session cookie
+      const jwtResponse = await fetch('/api/v1/minecraft-jwt', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        credentials: 'include', // Important: include cookies
+        body: JSON.stringify({
+          challenge: searchParams.challenge,
+          redirect_port: searchParams.redirect_port,
+          profile_url: window.location.origin + '/profile',
+        }),
+      });
+
+      if (!jwtResponse.ok) {
+        setError('root', {
+          type: 'manual',
+          message: 'Failed to generate Minecraft token',
+        });
+        return;
+      }
+
+      const result = await jwtResponse.json();
       if (result.redirectUrl) {
         window.location.href = result.redirectUrl;
       }
@@ -104,6 +149,10 @@ function LoginPage() {
 
   const handleOAuthLogin = async (provider: 'github' | 'google') => {
     try {
+      // Save challenge and redirect_port to sessionStorage for OAuth callback
+      sessionStorage.setItem('minecraft_challenge', searchParams.challenge);
+      sessionStorage.setItem('minecraft_redirect_port', searchParams.redirect_port.toString());
+      
       const response = await fetch('/api/v1/oauth/start', {
         method: 'POST',
         headers: {

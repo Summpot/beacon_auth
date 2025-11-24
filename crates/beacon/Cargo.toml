@@ -52,10 +52,17 @@ actix-web-rust-embed-responder = { workspace = true }
 mime_guess = { workspace = true }
 url = { workspace = true }
 uuid = { workspace = true }
-urlencoding = { workspace = true }
+urlencoding.workspace = true
 
 # HTTP Client
 reqwest = { workspace = true }
+
+# WebAuthn
+webauthn-rs = { workspace = true }
+webauthn-rs-proto = { workspace = true }
+
+# Cache
+moka = { workspace = true }
 
 [build-dependencies]
 which = { workspace = true }

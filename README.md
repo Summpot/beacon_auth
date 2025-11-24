@@ -11,7 +11,9 @@
 ### Authentication Server
 - 🔐 **ES256 JWT Authentication** - Industry-standard elliptic curve cryptography
 - 🌐 **Modern Web Interface** - React-based login and registration pages
+- 🍪 **Session Management** - Secure HttpOnly cookies with refresh token rotation
 - 🔑 **OAuth Integration** - Support for GitHub and Google authentication
+- 🔒 **WebAuthn/Passkey Support** - Passwordless authentication with biometrics
 - 🗄️ **SQLite Database** - Simple, file-based user storage
 - 🐳 **Docker Ready** - Multi-architecture container images (amd64/arm64)
 - ⚡ **High Performance** - Built with Rust and Actix-web
@@ -514,40 +516,79 @@ cd modSrc
 
 #### POST `/api/v1/login`
 
-Authenticate a user with username and password.
+Authenticate a user with username and password. Sets HttpOnly session cookies.
 
 **Request**:
 ```json
 {
   "username": "player123",
-  "password": "secure_password",
-  "challenge": "PKCE_challenge_string",
-  "redirect_port": 38125
+  "password": "secure_password"
 }
 ```
 
 **Response** (200 OK):
 ```json
 {
-  "redirectUrl": "http://localhost:38125/auth-callback?jwt=eyJ..."
+  "success": true
 }
 ```
 
+**Cookies Set**:
+- `access_token` - ES256 JWT valid for 15 minutes
+- `refresh_token` - Random token valid for 7 days
+
 #### POST `/api/v1/register`
 
-Register a new user account.
+Register a new user account. Auto-logs in the user by setting session cookies.
 
 **Request**:
 ```json
 {
   "username": "newplayer",
-  "password": "secure_password",
+  "password": "secure_password"
+}
+```
+
+**Response** (201 Created):
+```json
+{
+  "success": true
+}
+```
+
+**Cookies Set**:
+- `access_token` - ES256 JWT valid for 15 minutes
+- `refresh_token` - Random token valid for 7 days
+
+#### POST `/api/v1/refresh`
+
+Refresh an expired access token using a valid refresh token.
+
+**Request**: Requires `refresh_token` cookie
+
+**Response** (200 OK):
+```json
+{
+  "success": true
+}
+```
+
+**Cookies Set**:
+- `access_token` - New ES256 JWT valid for 15 minutes
+
+#### POST `/api/v1/minecraft-jwt`
+
+Generate a Minecraft-specific JWT for mod authentication. Requires valid session.
+
+**Request**:
+```json
+{
   "challenge": "PKCE_challenge_string",
   "redirect_port": 38125
 }
 ```
 
-**Response** (201 Created):
+**Response** (200 OK):
 ```json
 {
   "redirectUrl": "http://localhost:38125/auth-callback?jwt=eyJ..."

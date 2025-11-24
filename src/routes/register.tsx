@@ -39,21 +39,21 @@ function RegisterPage() {
 
   const onSubmit = async (data: RegisterFormData) => {
     try {
-      const response = await fetch('/api/v1/register', {
+      // Step 1: Register and set session cookies
+      const registerResponse = await fetch('/api/v1/register', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
+        credentials: 'include', // Important: include cookies
         body: JSON.stringify({
           username: data.username,
           password: data.password,
-          challenge: searchParams.challenge,
-          redirect_port: searchParams.redirect_port,
         }),
       });
 
-      if (!response.ok) {
-        const errorData = await response.json();
+      if (!registerResponse.ok) {
+        const errorData = await registerResponse.json();
         setError('root', {
           type: 'manual',
           message: errorData.message || 'Registration failed',
@@ -61,8 +61,29 @@ function RegisterPage() {
         return;
       }
 
-      // Success - backend returns JWT and redirectUrl
-      const result = await response.json();
+      // Step 2: Get Minecraft JWT using the session cookie
+      const jwtResponse = await fetch('/api/v1/minecraft-jwt', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        credentials: 'include', // Important: include cookies
+        body: JSON.stringify({
+          challenge: searchParams.challenge,
+          redirect_port: searchParams.redirect_port,
+          profile_url: window.location.origin + '/profile',
+        }),
+      });
+
+      if (!jwtResponse.ok) {
+        setError('root', {
+          type: 'manual',
+          message: 'Failed to generate Minecraft token',
+        });
+        return;
+      }
+
+      const result = await jwtResponse.json();
       if (result.redirectUrl) {
         window.location.href = result.redirectUrl;
       }
