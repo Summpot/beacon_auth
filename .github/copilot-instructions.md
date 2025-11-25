@@ -54,19 +54,28 @@ This repository contains three projects with two different "root" concepts.
 ---
 
 ## Project 1: Frontend (Root - `src/`, `package.json`, etc.)
-* **Tech Stack:** React (Hooks), Rsbuild, `pnpm`, `tailwind`, `@tanstack/react-router`, `react-hook-form`.
+* **Tech Stack:** React (Hooks), Rsbuild, `pnpm`, `tailwind`, `@tanstack/react-router`, `@tanstack/react-query`, `react-hook-form`, `@simplewebauthn/browser`.
+* **Data Fetching:** **`@tanstack/react-query`** is used for server state management. The `QueryClient` is configured in `__root.tsx` with appropriate defaults (1-minute stale time, refetchOnWindowFocus disabled).
+* **API Utilities:** `src/utils/api.ts` provides:
+    * `fetchWithAuth()` - Fetch wrapper for automatic token refresh on 401 responses. **ALL** authenticated API calls **must** use `fetchWithAuth()` instead of plain `fetch()`.
+    * `fetchJsonWithAuth()` - Type-safe JSON wrapper that throws `ApiError` for better error handling with TanStack Query.
+    * `queryKeys` - Query key factory for consistent cache key management (e.g., `queryKeys.userMe()`, `queryKeys.passkeys()`).
+    * `fetchWithAuth()` automatically calls `POST /api/v1/refresh` on 401, retries the original request, and redirects to `/` if refresh fails.
+    * This ensures seamless session management across all authenticated endpoints.
 * **Routing & State:** **`@tanstack/react-router`** is the *only* tool for routing and URL search parameter management.
-    * The login route (`/login`) **must** use `validateSearch` to parse and require `challenge` (string) and `redirect_port` (number).
+    * The login route (`/login`) has **optional** `challenge` and `redirect_port` params (used for Minecraft mode). Non-Minecraft web login works without these params.
     * The component **must** use the `useSearch()` hook to retrieve these values.
-    * The index route (`/`) is the **home page** (dashboard), accessible only to authenticated users. Shows user info and links to settings.
+    * The index route (`/`) is the **home page** (dashboard), accessible to all users. Shows project info and links to profile.
+    * The `/profile` route is the **user profile page** (requires authentication). Shows user info and links to settings.
     * The `/settings` route is the **profile settings page** where users can change password, register passkeys, and manage existing passkeys.
-    * The `/oauth-complete` route is a **processing page** that completes OAuth authentication by generating Minecraft JWT and redirecting to the mod.
+    * The `/oauth-complete` route is a **processing page** that completes OAuth authentication by generating Minecraft JWT and redirecting to the mod (or home page for web-only OAuth).
 * **Forms:** **`react-hook-form`** must be used for the login and registration forms.
 * **Styling:** **`tailwind`** must be used for all styling.
 * **Configuration Fetching:**
     * On component mount, the login page **must** fetch `GET /api/v1/config` to determine which auth providers are available.
     * The response contains: `{ database_auth: boolean, github_oauth: boolean, google_oauth: boolean }`.
 * **Conditional UI Rendering:**
+    * **Challenge/Port info box**: Only shown if `challenge` and `redirect_port` params are present (Minecraft mode).
     * **Database login form**: Only shown if `config.database_auth === true`.
     * **OAuth buttons**: Only shown if `config.github_oauth === true` or `config.google_oauth === true`.
     * **"Or continue with" divider**: Only shown if both database auth and at least one OAuth provider are enabled.
@@ -74,28 +83,30 @@ This repository contains three projects with two different "root" concepts.
 * **Login Flow (Standard):**
     * The login form `onSubmit` handler must:
         * Get `username`, `password` (from `react-hook-form`) and `challenge`, `redirect_port` (from `useSearch()`).
-        * **Step 1**: `fetch` `POST /api/v1/login` with `{ username, password }` and `credentials: 'include'`. This sets `HttpOnly` session cookies (`access_token`, `refresh_token`).
-        * **Step 2**: `fetch` `POST /api/v1/minecraft-jwt` with `{ challenge, redirect_port, profile_url }` and `credentials: 'include'`. The `profile_url` is `window.location.origin + '/profile'`. This generates the Minecraft JWT using the session.
-        * On 200 OK, parse the `{"redirectUrl": "..."}` JSON response.
-        * **Execute `window.location.href = data.redirectUrl;`** to trigger the redirect back to the Mod.
-    * **Auto-Login**: On mount, check for valid session by calling `POST /api/v1/minecraft-jwt` with saved challenge/redirect_port. If successful, auto-redirect immediately without showing login UI.
+        * **Step 1**: `fetch` (NOT `fetchWithAuth`) `POST /api/v1/login` with `{ username, password }` and `credentials: 'include'`. This sets `HttpOnly` session cookies (`access_token`, `refresh_token`).
+        * **Step 2**: If `challenge` and `redirect_port` exist (Minecraft mode), call `fetchWithAuth` `POST /api/v1/minecraft-jwt` with `{ challenge, redirect_port, profile_url }`. The `profile_url` is `window.location.origin + '/profile'`. On success, execute `window.location.href = data.redirectUrl;`.
+        * **Step 2 Alternative**: If no challenge/redirect_port (web login), simply redirect to `/` home page.
+    * **Auto-Login**: On mount, if `challenge` and `redirect_port` exist, check for valid session by calling `fetchWithAuth` `POST /api/v1/minecraft-jwt`. If successful, auto-redirect immediately without showing login UI.
 * **Login Flow (OAuth):**
     * The "Login with..." buttons must:
-        * Get `challenge` and `redirect_port` from `useSearch()`.
-        * Save `challenge` and `redirect_port` to `sessionStorage` with keys `minecraft_challenge` and `minecraft_redirect_port`.
-        * `fetch` `POST /api/v1/oauth/start` with `{ provider, challenge, redirect_port }`.
+        * Get `challenge` and `redirect_port` from `useSearch()` (may be undefined for web-only OAuth).
+        * If challenge/redirect_port exist, save to `sessionStorage` with keys `minecraft_challenge` and `minecraft_redirect_port`. Otherwise, clear these keys.
+        * `fetch` (NOT `fetchWithAuth`) `POST /api/v1/oauth/start` with `{ provider, challenge: challenge || '', redirect_port: redirect_port || 0 }`.
         * On 200 OK, parse the `{"authorizationUrl": "..."}` JSON response.
         * **Execute `window.location.href = data.authorizationUrl;`** to redirect to the OAuth provider.
     * **OAuth Callback Flow**:
         * The backend `/api/v1/oauth/callback` endpoint sets session cookies and redirects to `/oauth-complete`.
         * The `/oauth-complete` page retrieves `challenge` and `redirect_port` from `sessionStorage` (keys: `minecraft_challenge`, `minecraft_redirect_port`).
-        * Calls `POST /api/v1/minecraft-jwt` with these values, `profile_url: window.location.origin + '/profile'`, and `credentials: 'include'` (cookies already set by OAuth callback).
-        * Cleans up sessionStorage by removing the saved keys.
-        * Redirects to Minecraft with the JWT via the `redirectUrl` response.
+        * **If challenge/redirect_port exist (Minecraft mode)**: Calls `fetchWithAuth` `POST /api/v1/minecraft-jwt`, cleans up sessionStorage, redirects to Minecraft via `redirectUrl`.
+        * **If challenge/redirect_port missing (web mode)**: Cleans up sessionStorage, redirects to `/` home page.
 * **Registration Flow:**
-    * The register form must `fetch` `POST /api/v1/register`.
+    * The register form must `fetch` (NOT `fetchWithAuth`) `POST /api/v1/register` with `{ username, password }`.
     * On 201 Created, session cookies are automatically set.
-    * Navigate to login page or auto-generate Minecraft JWT if challenge/redirect_port available.
+    * Then call `fetchWithAuth` `POST /api/v1/minecraft-jwt` (if challenge/redirect_port exist) and redirect via `redirectUrl`.
+* **Passkey Registration:**
+    * Use `@simplewebauthn/browser`'s `startRegistration()` function to handle WebAuthn ceremony.
+    * **CRITICAL**: Pass `data.creation_options.publicKey` to `startRegistration()`, NOT `data.creation_options`. The response has a nested structure: `{ creation_options: { publicKey: {...} } }`.
+    * The `startRegistration()` function automatically handles all base64url ↔ ArrayBuffer conversions.
 
 ---
 
@@ -116,17 +127,28 @@ This repository contains three projects with two different "root" concepts.
     * **Must** execute `pnpm build` in the **root directory** (`../../`) before the Rust build proceeds.
 * **`serve` Command Logic:**
     * **Crypto:** All JWTs **must** be signed using **`ES256`** (Elliptic Curve, P-256).
-    * **Keys:** `ES256` keys must be generated on startup.
+    * **Keys:** `ES256` keys must be generated on startup using `p256` crate.
+    * **DecodingKey Creation:** The `DecodingKey` for JWT verification **MUST** be created using `DecodingKey::from_ec_components(x, y)` with base64url-encoded x and y coordinates. **DO NOT** use `DecodingKey::from_ec_der()` with SPKI format as `jsonwebtoken`'s `rust_crypto` backend expects PKCS#8 format which is incompatible.
     * **JWKS:** The `/.well-known/jwks.json` endpoint **must** serve the `ES256` public key in `kty: "EC"`, `crv: "P-256"` format.
     * **Static Serving (Dual Mode):**
         * **Debug (`cfg(debug_assertions)`)**: Must serve files from the `dist/` directory using `actix-files`, with a SPA fallback to `dist/index.html`.
         * **Release (`cfg(not(debug_assertions)`)**: Must serve files from memory using `rust-embed` and `rust-embed-actix-web`.
+* **Configuration:**
+    * **`--base-url` / `BASE_URL`**: Single unified URL parameter (default: `http://localhost:8080`) used for:
+        * OAuth redirect callbacks
+        * JWT issuer (`iss`) claim
+        * WebAuthn Relying Party origin
+    * This replaces the previous separate `--oauth-redirect-base` and `--issuer-url` parameters.
 * **API Endpoints:**
     * **`GET /api/v1/config`**: Returns JSON with available authentication providers: `{ "database_auth": bool, "github_oauth": bool, "google_oauth": bool }`. Used by frontend to conditionally show login options.
     * **`POST /api/v1/login`**: Receives JSON `{ username, password }`. Verifies password (`bcrypt`). On success, creates `access_token` (ES256 JWT, 15 min expiry) and `refresh_token` (random SHA-256 hashed, stored in DB with family_id for rotation tracking, 30 day expiry). Sets `HttpOnly` cookies. Returns `{ "success": true }`.
     * **`POST /api/v1/register`**: Receives JSON `{ username, password }`. Validates input (min 6 chars password), hashes password with bcrypt, creates user in Sea-ORM. Auto-logs in user by creating session tokens and setting cookies. Returns 201 Created with `{ "success": true }`.
-    * **`POST /api/v1/refresh`**: Receives `refresh_token` from cookie. Validates refresh token from database by SHA-256 hash lookup, checks expiration and revocation. Generates new `access_token` and sets cookie. Used to extend session without re-login.
-    * **`POST /api/v1/minecraft-jwt`**: **[Authenticated]** Receives JSON `{ challenge, redirect_port, profile_url }`. Verifies `access_token` cookie. Creates Minecraft-specific `ES256` JWT with `challenge` claim (audience: `minecraft-client`, 1 hour expiry). Returns `{ "redirectUrl": "http://localhost:{port}/auth-callback?jwt={token}&profile_url={encoded_url}" }` where `profile_url` is URL-encoded.
+    * **`POST /api/v1/refresh`**: Receives `refresh_token` from cookie. Validates refresh token from database by SHA-256 hash lookup, checks expiration and revocation. **Implements token rotation**: revokes old refresh token and generates new token pair with same `family_id`. Returns new tokens as cookies.
+    * **`POST /api/v1/minecraft-jwt`**: **[Authenticated]** Receives JSON `{ challenge, redirect_port, profile_url }`. Verifies `access_token` cookie using **proper ES256 signature verification** (issuer, audience, expiration checks). Creates Minecraft-specific `ES256` JWT with `challenge` claim (audience: `minecraft-client`, 1 hour expiry). Returns `{ "redirectUrl": "http://localhost:{port}/auth-callback?jwt={token}&profile_url={encoded_url}" }` where `profile_url` is URL-encoded.
+* **Token Verification:**
+    * Access tokens are verified using `jsonwebtoken::decode()` with proper ES256 signature verification.
+    * Validation checks: issuer (must match `base_url`), audience (`beaconauth-web`), expiration, and token type (`access`).
+    * The `verify_access_token()` helper function in `handlers/auth.rs` handles this verification.
     * **`POST /api/v1/oauth/start`**: Receives JSON `{ provider, challenge, redirect_port }`. Generates UUID state token, stores OAuth state in memory (using `Arc<RwLock<HashMap>>`). Returns JSON: `{ "authorizationUrl": "..." }`.
     * **`GET /api/v1/oauth/callback`**: Receives query params `?code=...&state=...`. Validates state token, exchanges code for OAuth user info (GitHub/Google), finds or creates user in database (username format: `gh_{login}` or `gg_{email_prefix}`, password_hash: `oauth_{provider}_{id}`). Creates session tokens (`access_token`, `refresh_token`) and sets cookies. Returns **HTTP 302 Redirect** to `/oauth-complete` page.
     * **`GET /api/v1/user/me`**: **[Authenticated]** Returns current user info: `{ id, username }`. Verifies `access_token` cookie.

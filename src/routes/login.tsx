@@ -1,13 +1,19 @@
 import { zodResolver } from '@hookform/resolvers/zod';
-import { createFileRoute, Link } from '@tanstack/react-router';
-import { useEffect, useState } from 'react';
+import { createFileRoute, Link, useNavigate } from '@tanstack/react-router';
+import { useEffect, useState, useRef } from 'react';
 import { useForm } from 'react-hook-form';
 import { z } from 'zod';
+import { fetchWithAuth } from '../utils/api';
+import {
+  startAuthentication,
+  browserSupportsWebAuthnAutofill,
+  WebAuthnError,
+} from '@simplewebauthn/browser';
 
-// Define search params schema
+// Define search params schema - both params are optional
 const searchParamsSchema = z.object({
-  challenge: z.string().min(1, 'Challenge is required'),
-  redirect_port: z.coerce.number().min(1).max(65535),
+  challenge: z.string().min(1).optional(),
+  redirect_port: z.coerce.number().min(1).max(65535).optional(),
 });
 
 type SearchParams = z.infer<typeof searchParamsSchema>;
@@ -29,8 +35,12 @@ interface ServerConfig {
 
 function LoginPage() {
   const searchParams = Route.useSearch();
+  const navigate = useNavigate();
   const [config, setConfig] = useState<ServerConfig | null>(null);
   const [configLoading, setConfigLoading] = useState(true);
+  const [passkeyError, setPasskeyError] = useState<string>('');
+  const [passkeyLoading, setPasskeyLoading] = useState(false);
+  const conditionalUIStarted = useRef(false);
 
   const {
     register,
@@ -52,25 +62,31 @@ function LoginPage() {
           setConfig(configData);
         }
 
-        // Try auto-login if we have challenge and redirect_port
-        const jwtResponse = await fetch('/api/v1/minecraft-jwt', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          credentials: 'include',
-          body: JSON.stringify({
-            challenge: searchParams.challenge,
-            redirect_port: searchParams.redirect_port,
-          }),
-        });
+        // Try auto-login only if we have challenge and redirect_port (Minecraft mode)
+        // This will work if there's a valid access token (or valid refresh token)
+        if (searchParams.challenge && searchParams.redirect_port) {
+          const jwtResponse = await fetchWithAuth('/api/v1/minecraft-jwt', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+              challenge: searchParams.challenge,
+              redirect_port: searchParams.redirect_port,
+              profile_url: window.location.origin + '/profile',
+            }),
+          });
 
-        if (jwtResponse.ok) {
-          const result = await jwtResponse.json();
-          if (result.redirectUrl) {
-            // Auto-login successful, redirect immediately
-            window.location.href = result.redirectUrl;
-            return; // Don't set configLoading to false, we're redirecting
+          if (jwtResponse.ok) {
+            const result = await jwtResponse.json();
+            if (result.redirectUrl) {
+              // Auto-login successful, redirect immediately
+              window.location.href = result.redirectUrl;
+              return; // Don't set configLoading to false, we're redirecting
+            }
+          } else {
+            // Auto-login failed, show login form
+            console.log('Auto-login failed, showing login form');
           }
         }
       } catch (error) {
@@ -81,6 +97,178 @@ function LoginPage() {
     };
     initialize();
   }, [searchParams.challenge, searchParams.redirect_port]);
+
+  // Initialize Browser Autofill (Conditional UI) for passkeys
+  useEffect(() => {
+    const initConditionalUI = async () => {
+      // Only start once and only if browser supports it
+      if (conditionalUIStarted.current) return;
+      if (!browserSupportsWebAuthnAutofill()) return;
+
+      try {
+        conditionalUIStarted.current = true;
+
+        // Get authentication options from server
+        const optionsResp = await fetch('/api/v1/passkey/auth/start', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          credentials: 'include',
+        });
+
+        if (!optionsResp.ok) return;
+
+        const optionsJSON = await optionsResp.json();
+
+        // Start conditional UI - this won't show modal, just populates autofill
+        const credential = await startAuthentication({
+          optionsJSON: optionsJSON.request_options,
+          useBrowserAutofill: true,
+        });
+
+        // User selected a passkey from autofill, complete authentication
+        // Helper: Complete passkey authentication
+        const completeAuth = async (cred: unknown) => {
+          try {
+            const verifyResp = await fetch('/api/v1/passkey/auth/finish', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              credentials: 'include',
+              body: JSON.stringify({ credential: cred }),
+            });
+
+            if (!verifyResp.ok) {
+              const errorData = await verifyResp.json().catch(() => ({}));
+              throw new Error(errorData.message || 'Passkey authentication failed');
+            }
+
+            // Passkey auth successful, now handle redirect
+            if (searchParams.challenge && searchParams.redirect_port) {
+              // Minecraft mode
+              const jwtResponse = await fetchWithAuth('/api/v1/minecraft-jwt', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                  challenge: searchParams.challenge,
+                  redirect_port: searchParams.redirect_port,
+                  profile_url: window.location.origin + '/profile',
+                }),
+              });
+
+              if (jwtResponse.ok) {
+                const result = await jwtResponse.json();
+                if (result.redirectUrl) {
+                  window.location.href = result.redirectUrl;
+                  return;
+                }
+              }
+            } else {
+              // Normal web login
+              navigate({ to: '/' });
+            }
+          } catch (err) {
+            throw err;
+          }
+        };
+
+        await completeAuth(credential);
+      } catch (err) {
+        // Silently ignore errors from conditional UI
+        // (user might dismiss it, navigate away, etc.)
+        if (err instanceof WebAuthnError && err.code === 'ERROR_CEREMONY_ABORTED') {
+          // Expected error when user dismisses or another auth method is used
+          return;
+        }
+        console.error('Conditional UI error:', err);
+      }
+    };
+
+    // Only initialize after config is loaded
+    if (!configLoading) {
+      initConditionalUI();
+    }
+  }, [configLoading, searchParams.challenge, searchParams.redirect_port, navigate]);
+
+  // Helper: Complete passkey authentication
+  const completePasskeyAuth = async (credential: unknown) => {
+    try {
+      const verifyResp = await fetch('/api/v1/passkey/auth/finish', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({ credential }),
+      });
+
+      if (!verifyResp.ok) {
+        const errorData = await verifyResp.json().catch(() => ({}));
+        throw new Error(errorData.message || 'Passkey authentication failed');
+      }
+
+      // Passkey auth successful, now handle redirect
+      if (searchParams.challenge && searchParams.redirect_port) {
+        // Minecraft mode
+        const jwtResponse = await fetchWithAuth('/api/v1/minecraft-jwt', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            challenge: searchParams.challenge,
+            redirect_port: searchParams.redirect_port,
+            profile_url: window.location.origin + '/profile',
+          }),
+        });
+
+        if (jwtResponse.ok) {
+          const result = await jwtResponse.json();
+          if (result.redirectUrl) {
+            window.location.href = result.redirectUrl;
+            return;
+          }
+        }
+      } else {
+        // Normal web login
+        navigate({ to: '/' });
+      }
+    } catch (err) {
+      throw err;
+    }
+  };
+
+  // Helper: Trigger Auto Register after successful password login
+  const tryAutoRegisterPasskey = async () => {
+    try {
+      // Get registration options
+      const optionsResp = await fetchWithAuth('/api/v1/passkey/register/start', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: 'Auto-registered Passkey' }),
+      });
+
+      if (!optionsResp.ok) return;
+
+      const optionsJSON = await optionsResp.json();
+
+      // Attempt silent passkey registration
+      const { startRegistration } = await import('@simplewebauthn/browser');
+      const credential = await startRegistration({
+        optionsJSON: optionsJSON.creation_options.publicKey,
+        useAutoRegister: true,
+      });
+
+      // Complete registration
+      await fetchWithAuth('/api/v1/passkey/register/finish', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          credential,
+          name: 'Auto-registered Passkey',
+        }),
+      });
+
+      console.log('Auto-register passkey successful');
+    } catch (err) {
+      // Silently fail - auto-register is opportunistic
+      console.log('Auto-register passkey failed (expected):', err);
+    }
+  };
 
   const onSubmit = async (data: LoginFormData) => {
     try {
@@ -113,31 +301,42 @@ function LoginPage() {
         return;
       }
 
-      // Step 2: Get Minecraft JWT using the session cookie
-      const jwtResponse = await fetch('/api/v1/minecraft-jwt', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        credentials: 'include', // Important: include cookies
-        body: JSON.stringify({
-          challenge: searchParams.challenge,
-          redirect_port: searchParams.redirect_port,
-          profile_url: window.location.origin + '/profile',
-        }),
+      // Step 1.5: Try to auto-register a passkey (opportunistic, non-blocking)
+      tryAutoRegisterPasskey().catch(() => {
+        // Ignore errors
       });
 
-      if (!jwtResponse.ok) {
-        setError('root', {
-          type: 'manual',
-          message: 'Failed to generate Minecraft token',
+      // Step 2: Handle redirect based on whether we're in Minecraft mode
+      if (searchParams.challenge && searchParams.redirect_port) {
+        // Minecraft mode: Get Minecraft JWT using the session cookie
+        const jwtResponse = await fetchWithAuth('/api/v1/minecraft-jwt', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            challenge: searchParams.challenge,
+            redirect_port: searchParams.redirect_port,
+            profile_url: window.location.origin + '/profile',
+          }),
         });
-        return;
-      }
 
-      const result = await jwtResponse.json();
-      if (result.redirectUrl) {
-        window.location.href = result.redirectUrl;
+        if (!jwtResponse.ok) {
+          const errorData = await jwtResponse.json().catch(() => ({}));
+          setError('root', {
+            type: 'manual',
+            message: errorData.message || 'Failed to generate Minecraft token',
+          });
+          return;
+        }
+
+        const result = await jwtResponse.json();
+        if (result.redirectUrl) {
+          window.location.href = result.redirectUrl;
+        }
+      } else {
+        // Normal web login: redirect to home page
+        navigate({ to: '/' });
       }
     } catch (_error) {
       setError('root', {
@@ -147,11 +346,60 @@ function LoginPage() {
     }
   };
 
+  // Handle manual passkey authentication (button click)
+  const handlePasskeyLogin = async () => {
+    setPasskeyError('');
+    setPasskeyLoading(true);
+
+    try {
+      // Get authentication options
+      const optionsResp = await fetch('/api/v1/passkey/auth/start', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+      });
+
+      if (!optionsResp.ok) {
+        throw new Error('Failed to start passkey authentication');
+      }
+
+      const optionsJSON = await optionsResp.json();
+
+      // Show modal UI for passkey selection
+      const credential = await startAuthentication({
+        optionsJSON: optionsJSON.request_options,
+      });
+
+      // Complete authentication
+      await completePasskeyAuth(credential);
+    } catch (err) {
+      if (err instanceof WebAuthnError) {
+        if (err.code === 'ERROR_CEREMONY_ABORTED') {
+          setPasskeyError('Passkey authentication was cancelled');
+        } else {
+          setPasskeyError(`Passkey error: ${err.message}`);
+        }
+      } else if (err instanceof Error) {
+        setPasskeyError(err.message);
+      } else {
+        setPasskeyError('An unknown error occurred');
+      }
+    } finally {
+      setPasskeyLoading(false);
+    }
+  };
+
   const handleOAuthLogin = async (provider: 'github' | 'google') => {
     try {
-      // Save challenge and redirect_port to sessionStorage for OAuth callback
-      sessionStorage.setItem('minecraft_challenge', searchParams.challenge);
-      sessionStorage.setItem('minecraft_redirect_port', searchParams.redirect_port.toString());
+      // Save challenge and redirect_port to sessionStorage for OAuth callback (if present)
+      if (searchParams.challenge && searchParams.redirect_port) {
+        sessionStorage.setItem('minecraft_challenge', searchParams.challenge);
+        sessionStorage.setItem('minecraft_redirect_port', searchParams.redirect_port.toString());
+      } else {
+        // Clear any existing values to ensure clean state
+        sessionStorage.removeItem('minecraft_challenge');
+        sessionStorage.removeItem('minecraft_redirect_port');
+      }
       
       const response = await fetch('/api/v1/oauth/start', {
         method: 'POST',
@@ -160,8 +408,8 @@ function LoginPage() {
         },
         body: JSON.stringify({
           provider,
-          challenge: searchParams.challenge,
-          redirect_port: searchParams.redirect_port,
+          challenge: searchParams.challenge || '',
+          redirect_port: searchParams.redirect_port || 0,
         }),
       });
 
@@ -198,21 +446,23 @@ function LoginPage() {
             <p className="text-gray-600">Authentication Server</p>
           </div>
 
-          {/* Info Section */}
-          <div className="bg-blue-50 rounded-lg p-4 mb-6 text-sm">
-            <div className="flex justify-between mb-2">
-              <span className="font-medium text-gray-700">Challenge:</span>
-              <span className="text-gray-600 font-mono text-xs">
-                {searchParams.challenge.substring(0, 16)}...
-              </span>
+          {/* Info Section - Only show when in Minecraft mode */}
+          {searchParams.challenge && searchParams.redirect_port && (
+            <div className="bg-blue-50 rounded-lg p-4 mb-6 text-sm">
+              <div className="flex justify-between mb-2">
+                <span className="font-medium text-gray-700">Challenge:</span>
+                <span className="text-gray-600 font-mono text-xs">
+                  {searchParams.challenge.substring(0, 16)}...
+                </span>
+              </div>
+              <div className="flex justify-between">
+                <span className="font-medium text-gray-700">Redirect Port:</span>
+                <span className="text-gray-600">
+                  {searchParams.redirect_port}
+                </span>
+              </div>
             </div>
-            <div className="flex justify-between">
-              <span className="font-medium text-gray-700">Redirect Port:</span>
-              <span className="text-gray-600">
-                {searchParams.redirect_port}
-              </span>
-            </div>
-          </div>
+          )}
 
           {/* Login Form - Only show if database auth is enabled */}
           {config?.database_auth && (
@@ -231,6 +481,7 @@ function LoginPage() {
                 className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none"
                 placeholder="Enter your username"
                 disabled={isSubmitting}
+                autoComplete="username webauthn"
               />
               {errors.username && (
                 <p className="mt-1 text-sm text-red-600">
@@ -277,21 +528,65 @@ function LoginPage() {
           </form>
           )}
 
-          {/* OAuth Buttons - Only show if at least one OAuth provider is configured */}
-          {(config?.github_oauth || config?.google_oauth) && (
-            <div className={config?.database_auth ? "mt-6 space-y-3" : "space-y-3"}>
+          {/* Passkey Login Button */}
+          <div className={config?.database_auth ? "mt-6" : ""}>
             {config?.database_auth && (
-              <div className="relative">
+              <div className="relative mb-3">
                 <div className="absolute inset-0 flex items-center">
                   <div className="w-full border-t border-gray-300" />
                 </div>
                 <div className="relative flex justify-center text-sm">
                   <span className="px-2 bg-white text-gray-500">
-                    Or continue with
+                    Or use
                   </span>
                 </div>
               </div>
             )}
+            
+            <button
+              type="button"
+              onClick={handlePasskeyLogin}
+              disabled={passkeyLoading}
+              className="w-full bg-purple-600 text-white py-2 px-4 rounded-lg hover:bg-purple-700 disabled:bg-gray-400 disabled:cursor-not-allowed transition-colors font-medium flex items-center justify-center gap-2"
+            >
+              <svg
+                className="w-5 h-5"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+                aria-label="Passkey"
+              >
+                <title>Passkey</title>
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z"
+                />
+              </svg>
+              {passkeyLoading ? 'Authenticating...' : 'Login with Passkey'}
+            </button>
+
+            {passkeyError && (
+              <div className="mt-2 bg-red-50 text-red-600 px-4 py-3 rounded-lg text-sm">
+                {passkeyError}
+              </div>
+            )}
+          </div>
+
+          {/* OAuth Buttons - Only show if at least one OAuth provider is configured */}
+          {(config?.github_oauth || config?.google_oauth) && (
+            <div className="mt-6 space-y-3">
+            <div className="relative">
+              <div className="absolute inset-0 flex items-center">
+                <div className="w-full border-t border-gray-300" />
+              </div>
+              <div className="relative flex justify-center text-sm">
+                <span className="px-2 bg-white text-gray-500">
+                  Or continue with
+                </span>
+              </div>
+            </div>
 
             {config?.github_oauth && (
               <button
@@ -380,32 +675,7 @@ function LoginPage() {
 export const Route = createFileRoute('/login')({
   component: LoginPage,
   validateSearch: (search: Record<string, unknown>): SearchParams => {
+    // Parse with defaults - both params are now optional
     return searchParamsSchema.parse(search);
-  },
-  onError: () => {
-    // Show error component if parameter validation fails
-    return (
-      <div className="flex items-center justify-center min-h-screen p-4">
-        <div className="w-full max-w-md">
-          <div className="bg-white rounded-lg shadow-xl p-8">
-            <div className="text-center">
-              <div className="text-6xl mb-4">⚠️</div>
-              <h1 className="text-2xl font-bold text-gray-900 mb-4">
-                Invalid Request
-              </h1>
-              <p className="text-gray-600 mb-4">
-                This page requires valid <code>challenge</code> and{' '}
-                <code>redirect_port</code> parameters.
-                <br />
-                Please access this page through the Minecraft mod.
-              </p>
-              <div className="bg-red-50 text-red-600 px-4 py-3 rounded-lg text-sm">
-                Missing or invalid URL parameters
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-    );
   },
 });

@@ -3,6 +3,8 @@ import { useEffect, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
+import { startRegistration } from '@simplewebauthn/browser';
+import { fetchWithAuth } from '../utils/api';
 
 // Password change form schema
 const passwordChangeSchema = z.object({
@@ -49,9 +51,7 @@ function SettingsPage() {
     const fetchData = async () => {
       try {
         // Fetch user info
-        const userResponse = await fetch('/api/v1/user/me', {
-          credentials: 'include',
-        });
+        const userResponse = await fetchWithAuth('/api/v1/user/me');
 
         if (!userResponse.ok) {
           setLoading(false);
@@ -62,16 +62,14 @@ function SettingsPage() {
         setUser(userData);
 
         // Fetch passkeys
-        const passkeysResponse = await fetch('/api/v1/passkeys', {
-          credentials: 'include',
-        });
+        const passkeysResponse = await fetchWithAuth('/api/v1/passkey/list');
 
         if (passkeysResponse.ok) {
           const passkeysData = await passkeysResponse.json();
           setPasskeys(passkeysData.passkeys || []);
         }
-      } catch (error) {
-        console.error('Failed to fetch data:', error);
+      } catch {
+        // Error handled by fetchWithAuth (will redirect if needed)
       } finally {
         setLoading(false);
       }
@@ -82,12 +80,11 @@ function SettingsPage() {
 
   const onPasswordChange = async (data: PasswordChangeData) => {
     try {
-      const response = await fetch('/api/v1/user/change-password', {
+      const response = await fetchWithAuth('/api/v1/user/change-password', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
-        credentials: 'include',
         body: JSON.stringify({
           current_password: data.currentPassword,
           new_password: data.newPassword,
@@ -131,12 +128,11 @@ function SettingsPage() {
 
     try {
       // Step 1: Start registration
-      const startResponse = await fetch('/api/v1/passkeys/register/start', {
+      const startResponse = await fetchWithAuth('/api/v1/passkey/register/start', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
-        credentials: 'include',
         body: JSON.stringify({ name }),
       });
 
@@ -144,24 +140,18 @@ function SettingsPage() {
         throw new Error('Failed to start passkey registration');
       }
 
-      const { creation_options } = await startResponse.json();
+      const data = await startResponse.json();
 
-      // Step 2: Create credential
-      const credential = await navigator.credentials.create({
-        publicKey: creation_options,
-      });
-
-      if (!credential) {
-        throw new Error('Failed to create credential');
-      }
+      // Step 2: Use SimpleWebAuthn to handle the registration ceremony
+      // Pass the publicKey field directly (SimpleWebAuthn expects PublicKeyCredentialCreationOptions)
+      const credential = await startRegistration(data.creation_options.publicKey);
 
       // Step 3: Finish registration
-      const finishResponse = await fetch('/api/v1/passkeys/register/finish', {
+      const finishResponse = await fetchWithAuth('/api/v1/passkey/register/finish', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
-        credentials: 'include',
         body: JSON.stringify({
           credential,
           name,
@@ -182,9 +172,7 @@ function SettingsPage() {
       setPasskeyName('');
 
       // Refresh passkeys list
-      const passkeysResponse = await fetch('/api/v1/passkeys', {
-        credentials: 'include',
-      });
+      const passkeysResponse = await fetchWithAuth('/api/v1/passkey/list');
       if (passkeysResponse.ok) {
         const passkeysData = await passkeysResponse.json();
         setPasskeys(passkeysData.passkeys || []);
@@ -206,12 +194,11 @@ function SettingsPage() {
     }
 
     try {
-      const response = await fetch('/api/v1/passkeys/delete', {
+      const response = await fetchWithAuth('/api/v1/passkey/delete', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
-        credentials: 'include',
         body: JSON.stringify({ id }),
       });
 
@@ -264,7 +251,7 @@ function SettingsPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 p-4">
+    <div className="min-h-screen bg-linear-to-br from-blue-50 to-indigo-100 p-4">
       <div className="max-w-4xl mx-auto py-8">
         {/* Header */}
         <div className="mb-6">
@@ -458,7 +445,7 @@ function SettingsPage() {
           <div className="mt-6 bg-blue-50 border border-blue-200 rounded-lg p-4">
             <div className="flex">
               <svg
-                className="w-5 h-5 text-blue-600 mr-3 flex-shrink-0 mt-0.5"
+                className="w-5 h-5 text-blue-600 mr-3 shrink-0 mt-0.5"
                 fill="currentColor"
                 viewBox="0 0 20 20"
               >
@@ -483,7 +470,7 @@ function SettingsPage() {
 
         {/* Passkey Name Modal */}
         {showPasskeyModal && (
-          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
             <div className="bg-white rounded-lg shadow-xl max-w-md w-full p-6">
               <h3 className="text-xl font-bold text-gray-900 mb-4">
                 Add New Passkey
@@ -503,7 +490,6 @@ function SettingsPage() {
                     onChange={(e) => setPasskeyName(e.target.value)}
                     placeholder='e.g., "My Phone", "YubiKey"'
                     className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none"
-                    autoFocus
                   />
                   <p className="mt-2 text-sm text-gray-600">
                     Give your passkey a memorable name to identify this device or security key.

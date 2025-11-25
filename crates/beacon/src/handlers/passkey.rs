@@ -300,7 +300,7 @@ pub async fn list_passkeys(
     }))
 }
 
-/// POST /api/v1/passkeys/delete
+/// POST /api/v1/passkey/delete
 pub async fn delete_passkey(
     req: HttpRequest,
     app_state: web::Data<AppState>,

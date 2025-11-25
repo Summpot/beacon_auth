@@ -1,6 +1,8 @@
 import { createFileRoute, Link } from '@tanstack/react-router';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useEffect, useState } from 'react';
 import { z } from 'zod';
+import { fetchWithAuth, queryKeys } from '../utils/api';
 
 // Define search params schema for status messages
 const searchParamsSchema = z.object({
@@ -13,11 +15,42 @@ interface UserInfo {
   username: string;
 }
 
+// Query function to fetch user info
+async function fetchUserInfo(): Promise<UserInfo | null> {
+  const response = await fetchWithAuth('/api/v1/user/me');
+
+  if (!response.ok) {
+    return null;
+  }
+
+  return response.json();
+}
+
 function ProfilePage() {
   const { status, message } = Route.useSearch();
-  const [user, setUser] = useState<UserInfo | null>(null);
-  const [loading, setLoading] = useState(true);
   const [statusMessage, setStatusMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+  const queryClient = useQueryClient();
+
+  // Use TanStack Query to fetch user info
+  const { data: user, isLoading } = useQuery({
+    queryKey: queryKeys.userMe(),
+    queryFn: fetchUserInfo,
+  });
+
+  // Logout mutation
+  const logoutMutation = useMutation({
+    mutationFn: async () => {
+      const response = await fetchWithAuth('/api/v1/logout', {
+        method: 'POST',
+      });
+      if (!response.ok) {
+        throw new Error('Logout failed');
+      }
+    },
+    onSuccess: () => {
+      queryClient.setQueryData(queryKeys.userMe(), null);
+    },
+  });
 
   useEffect(() => {
     // Show status message from URL params if present
@@ -36,44 +69,11 @@ function ProfilePage() {
     }
   }, [status, message]);
 
-  useEffect(() => {
-    const fetchUserInfo = async () => {
-      try {
-        const response = await fetch('/api/v1/user/me', {
-          credentials: 'include',
-        });
-
-        if (!response.ok) {
-          // Not authenticated
-          setLoading(false);
-          return;
-        }
-
-        const data = await response.json();
-        setUser(data);
-      } catch (error) {
-        console.error('Failed to fetch user info:', error);
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    fetchUserInfo();
-  }, []);
-
-  const handleLogout = async () => {
-    try {
-      await fetch('/api/v1/logout', {
-        method: 'POST',
-        credentials: 'include',
-      });
-      setUser(null);
-    } catch (error) {
-      console.error('Logout failed:', error);
-    }
+  const handleLogout = () => {
+    logoutMutation.mutate();
   };
 
-  if (loading) {
+  if (isLoading) {
     return (
       <div className="flex items-center justify-center min-h-screen p-4">
         <div className="text-gray-600">Loading...</div>

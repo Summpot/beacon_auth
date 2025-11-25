@@ -11,54 +11,65 @@ use crate::{
     models::*,
 };
 
-/// Helper: Generate access token
-fn generate_access_token(
+/// Token pair returned from token generation
+pub struct TokenPair {
+    pub access_token: String,
+    pub refresh_token: String,
+    pub family_id: String,
+}
+
+/// Helper: Generate a raw JWT token with given claims
+/// This is the core JWT generation logic used by all token types
+fn generate_jwt<T: serde::Serialize>(
+    app_state: &AppState,
+    claims: &T,
+) -> Result<String, jsonwebtoken::errors::Error> {
+    let mut header = Header::new(jsonwebtoken::Algorithm::ES256);
+    header.kid = Some("beacon-auth-key-1".to_string());
+    encode(&header, claims, &app_state.encoding_key)
+}
+
+/// Helper: Generate a pair of access and refresh tokens atomically
+/// This ensures tokens are always created together with proper family_id tracking
+async fn create_token_pair(
     app_state: &AppState,
     user_id: i32,
-) -> Result<String, jsonwebtoken::errors::Error> {
+    family_id: Option<String>,
+) -> Result<TokenPair, anyhow::Error> {
     let now = Utc::now();
-    let exp = now + chrono::Duration::seconds(app_state.access_token_expiration);
 
-    let claims = SessionClaims {
-        iss: "http://localhost:8080".to_string(),
+    // Generate access token using the unified JWT generator
+    let access_exp = now + chrono::Duration::seconds(app_state.access_token_expiration);
+    let access_claims = SessionClaims {
+        iss: app_state.oauth_config.redirect_base.clone(),
         sub: user_id.to_string(),
         aud: "beaconauth-web".to_string(),
-        exp: exp.timestamp(),
+        exp: access_exp.timestamp(),
         token_type: "access".to_string(),
     };
 
-    let mut header = Header::new(jsonwebtoken::Algorithm::ES256);
-    header.kid = Some("beacon-auth-key-1".to_string());
+    let access_token = generate_jwt(app_state, &access_claims)?;
 
-    encode(&header, &claims, &app_state.encoding_key)
-}
-
-/// Helper: Generate refresh token
-async fn generate_refresh_token(
-    app_state: &AppState,
-    user_id: i32,
-) -> Result<String, anyhow::Error> {
-    // Generate random token
+    // Generate refresh token
     let token_bytes = rand::random::<[u8; 32]>();
-    let token = base64::Engine::encode(&base64::engine::general_purpose::URL_SAFE_NO_PAD, token_bytes);
+    let refresh_token = base64::Engine::encode(&base64::engine::general_purpose::URL_SAFE_NO_PAD, token_bytes);
 
-    // Hash the token for storage
+    // Hash the refresh token for storage
     let mut hasher = Sha256::new();
-    hasher.update(&token);
+    hasher.update(&refresh_token);
     let token_hash = format!("{:x}", hasher.finalize());
 
-    // Generate family ID (for token rotation tracking)
-    let family_id = Uuid::new_v4().to_string();
+    // Use existing family_id or create new one
+    let token_family_id = family_id.unwrap_or_else(|| Uuid::new_v4().to_string());
 
-    let now = Utc::now();
-    let expires_at = now + chrono::Duration::seconds(app_state.refresh_token_expiration);
+    let refresh_exp = now + chrono::Duration::seconds(app_state.refresh_token_expiration);
 
-    // Store in database
+    // Store refresh token in database
     let refresh_token_model = refresh_token::ActiveModel {
         user_id: Set(user_id),
         token_hash: Set(token_hash),
-        family_id: Set(family_id),
-        expires_at: Set(expires_at),
+        family_id: Set(token_family_id.clone()),
+        expires_at: Set(refresh_exp),
         revoked: Set(false),
         created_at: Set(now),
         ..Default::default()
@@ -66,13 +77,17 @@ async fn generate_refresh_token(
 
     refresh_token_model.insert(&app_state.db).await?;
 
-    Ok(token)
+    Ok(TokenPair {
+        access_token,
+        refresh_token,
+        family_id: token_family_id,
+    })
 }
 
 
 
 /// POST /api/v1/refresh
-/// Refresh access token using refresh token
+/// Refresh access token using refresh token with token rotation
 pub async fn refresh_token(
     app_state: web::Data<AppState>,
     req: HttpRequest,
@@ -131,22 +146,33 @@ pub async fn refresh_token(
         });
     }
 
-    // Generate new access token
-    let access_token = match generate_access_token(&app_state, token_record.user_id) {
-        Ok(token) => token,
+    // Save user_id and family_id for token rotation
+    let user_id = token_record.user_id;
+    let family_id = token_record.family_id.clone();
+
+    // Revoke old refresh token (for rotation security)
+    let mut token_to_revoke: refresh_token::ActiveModel = token_record.into();
+    token_to_revoke.revoked = Set(true);
+    if let Err(e) = token_to_revoke.update(&app_state.db).await {
+        log::error!("Failed to revoke old refresh token: {}", e);
+    }
+
+    // Generate new token pair with same family_id (token rotation)
+    let token_pair = match create_token_pair(&app_state, user_id, Some(family_id)).await {
+        Ok(pair) => pair,
         Err(e) => {
-            log::error!("Failed to generate access token: {}", e);
+            log::error!("Failed to generate token pair: {}", e);
             return HttpResponse::InternalServerError().json(ErrorResponse {
                 error: "internal_error".to_string(),
-                message: "Failed to generate token".to_string(),
+                message: "Failed to generate tokens".to_string(),
             });
         }
     };
 
-    // Return new access token as cookie
+    // Return new tokens as cookies
     HttpResponse::Ok()
         .cookie(
-            actix_web::cookie::Cookie::build("access_token", access_token)
+            actix_web::cookie::Cookie::build("access_token", token_pair.access_token)
                 .path("/")
                 .http_only(true)
                 .same_site(actix_web::cookie::SameSite::Strict)
@@ -155,53 +181,64 @@ pub async fn refresh_token(
                 ))
                 .finish(),
         )
+        .cookie(
+            actix_web::cookie::Cookie::build("refresh_token", token_pair.refresh_token)
+                .path("/")
+                .http_only(true)
+                .same_site(actix_web::cookie::SameSite::Strict)
+                .max_age(actix_web::cookie::time::Duration::seconds(
+                    app_state.refresh_token_expiration,
+                ))
+                .finish(),
+        )
         .json(serde_json::json!({ "success": true }))
 }
 
 /// POST /api/v1/minecraft-jwt
 /// Get Minecraft JWT using access token
+/// This endpoint ONLY generates the Minecraft-specific JWT for client-server communication.
+/// It does NOT refresh or modify session tokens - that should only happen during login or explicit refresh.
 pub async fn get_minecraft_jwt(
     app_state: web::Data<AppState>,
     req: HttpRequest,
     payload: web::Json<MinecraftJwtRequest>,
 ) -> impl Responder {
-    // Get and verify access token
-    let access_token = match get_access_token_from_cookie(&req) {
-        Some(token) => token,
+    // Get user_id from access token (no automatic refresh)
+    let user_id = match get_access_token_from_cookie(&req) {
+        Some(access_token) => {
+            match verify_access_token(&app_state, &access_token) {
+                Ok(id) => id,
+                Err(e) => {
+                    log::warn!("Invalid access token for minecraft-jwt: {}", e);
+                    return HttpResponse::Unauthorized().json(ErrorResponse {
+                        error: "unauthorized".to_string(),
+                        message: "Not authenticated. Please log in again.".to_string(),
+                    });
+                }
+            }
+        }
         None => {
+            log::warn!("No access token provided for minecraft-jwt");
             return HttpResponse::Unauthorized().json(ErrorResponse {
                 error: "unauthorized".to_string(),
-                message: "Not authenticated".to_string(),
+                message: "Not authenticated. Please log in again.".to_string(),
             });
         }
     };
 
-    let user_id = match verify_access_token(&app_state, &access_token) {
-        Ok(id) => id,
-        Err(e) => {
-            return HttpResponse::Unauthorized().json(ErrorResponse {
-                error: "invalid_token".to_string(),
-                message: e,
-            });
-        }
-    };
-
-    // Create Minecraft JWT with challenge
+    // Create Minecraft JWT with challenge using the unified JWT generator
     let now = Utc::now();
     let exp = now + chrono::Duration::seconds(app_state.jwt_expiration);
 
     let claims = Claims {
-        iss: "http://localhost:8080".to_string(),
+        iss: app_state.oauth_config.redirect_base.clone(),
         sub: user_id.to_string(),
         aud: "minecraft-client".to_string(),
         exp: exp.timestamp(),
         challenge: payload.challenge.clone(),
     };
 
-    let mut header = Header::new(jsonwebtoken::Algorithm::ES256);
-    header.kid = Some("beacon-auth-key-1".to_string());
-
-    let token = match encode(&header, &claims, &app_state.encoding_key) {
+    let token = match generate_jwt(&app_state, &claims) {
         Ok(t) => t,
         Err(e) => {
             log::error!("Failed to sign JWT: {}", e);
@@ -252,13 +289,13 @@ pub fn set_auth_cookies(
 }
 
 /// Helper: Create session tokens for a user
+/// Returns a tuple of (access_token, refresh_token) for backward compatibility
 pub async fn create_session_for_user(
     app_state: &AppState,
     user_id: i32,
 ) -> Result<(String, String), anyhow::Error> {
-    let access_token = generate_access_token(app_state, user_id)?;
-    let refresh_token = generate_refresh_token(app_state, user_id).await?;
-    Ok((access_token, refresh_token))
+    let token_pair = create_token_pair(app_state, user_id, None).await?;
+    Ok((token_pair.access_token, token_pair.refresh_token))
 }
 
 /// Helper: Extract access token from cookie
@@ -267,31 +304,36 @@ pub fn get_access_token_from_cookie(req: &HttpRequest) -> Option<String> {
         .map(|cookie| cookie.value().to_string())
 }
 
-/// Helper: Verify access token (simplified - should verify signature in production)
-pub fn verify_access_token(_app_state: &AppState, token: &str) -> Result<i32, String> {
-    // For now, decode without verification
-    // In production, you should verify the ES256 signature properly
-    let parts: Vec<&str> = token.split('.').collect();
-    if parts.len() != 3 {
-        return Err("Invalid token format".to_string());
-    }
+/// Helper: Verify access token with proper ES256 signature verification
+pub fn verify_access_token(app_state: &AppState, token: &str) -> Result<i32, String> {
+    // Create validation for ES256 tokens
+    let mut validation = jsonwebtoken::Validation::new(jsonwebtoken::Algorithm::ES256);
+    validation.set_issuer(&[&app_state.oauth_config.redirect_base]);
+    validation.set_audience(&["beaconauth-web"]);
+    validation.validate_exp = true;
 
-    let payload = parts[1];
-    let decoded = base64::Engine::decode(
-        &base64::engine::general_purpose::URL_SAFE_NO_PAD,
-        payload,
+    // Decode and validate JWT with signature verification
+    let token_data = jsonwebtoken::decode::<SessionClaims>(
+        token,
+        &app_state.decoding_key,
+        &validation,
     )
-    .map_err(|_| "Failed to decode token".to_string())?;
+    .map_err(|e| {
+        log::debug!("Failed to decode access token: {:?}", e);
+        format!("Invalid access token: {:?}", e)
+    })?;
 
-    let claims: SessionClaims = serde_json::from_slice(&decoded)
-        .map_err(|_| "Invalid token claims".to_string())?;
-
-    if claims.token_type != "access" {
+    // Verify token type
+    if token_data.claims.token_type != "access" {
         return Err("Invalid token type".to_string());
     }
 
-    claims
+    // Parse user ID from subject claim
+    token_data
+        .claims
         .sub
         .parse::<i32>()
         .map_err(|_| "Invalid user ID in token".to_string())
 }
+
+

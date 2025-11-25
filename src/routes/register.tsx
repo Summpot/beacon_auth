@@ -2,6 +2,7 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { createFileRoute } from '@tanstack/react-router';
 import { useForm } from 'react-hook-form';
 import { z } from 'zod';
+import { fetchWithAuth } from '../utils/api';
 
 // Define search params schema
 const searchParamsSchema = z.object({
@@ -62,12 +63,11 @@ function RegisterPage() {
       }
 
       // Step 2: Get Minecraft JWT using the session cookie
-      const jwtResponse = await fetch('/api/v1/minecraft-jwt', {
+      const jwtResponse = await fetchWithAuth('/api/v1/minecraft-jwt', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
-        credentials: 'include', // Important: include cookies
         body: JSON.stringify({
           challenge: searchParams.challenge,
           redirect_port: searchParams.redirect_port,

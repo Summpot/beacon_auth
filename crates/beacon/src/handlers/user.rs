@@ -26,7 +26,6 @@ pub async fn get_user_info(
         }
     };
 
-    // Decode JWT to get user ID
     let user_id = match crate::handlers::auth::verify_access_token(&app_state, &access_token) {
         Ok(id) => id,
         Err(e) => {

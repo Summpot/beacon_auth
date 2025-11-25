@@ -1,5 +1,6 @@
 import { createFileRoute } from '@tanstack/react-router';
 import { useEffect, useState } from 'react';
+import { fetchWithAuth } from '../utils/api';
 
 function OAuthCompletePage() {
   const [status, setStatus] = useState<'loading' | 'success' | 'error'>('loading');
@@ -12,21 +13,31 @@ function OAuthCompletePage() {
         const challenge = sessionStorage.getItem('minecraft_challenge');
         const redirectPortStr = sessionStorage.getItem('minecraft_redirect_port');
 
+        // Check if we're in Minecraft mode or normal web mode
         if (!challenge || !redirectPortStr) {
-          setStatus('error');
-          setMessage('Missing authentication parameters. Please try logging in again.');
+          // Normal web OAuth login - redirect to home page
+          setStatus('success');
+          setMessage('Authentication successful! Redirecting to home...');
+          
+          // Clean up any partial sessionStorage data
+          sessionStorage.removeItem('minecraft_challenge');
+          sessionStorage.removeItem('minecraft_redirect_port');
+          
+          setTimeout(() => {
+            window.location.href = '/';
+          }, 1000);
           return;
         }
 
+        // Minecraft mode - generate JWT and redirect to mod
         const redirect_port = parseInt(redirectPortStr, 10);
 
         // Get Minecraft JWT using the session cookie (set by OAuth callback)
-        const jwtResponse = await fetch('/api/v1/minecraft-jwt', {
+        const jwtResponse = await fetchWithAuth('/api/v1/minecraft-jwt', {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
           },
-          credentials: 'include', // Important: include cookies
           body: JSON.stringify({
             challenge,
             redirect_port,
@@ -64,7 +75,7 @@ function OAuthCompletePage() {
   }, []);
 
   return (
-    <div className="flex items-center justify-center min-h-screen p-4 bg-gradient-to-br from-blue-50 to-indigo-100">
+    <div className="flex items-center justify-center min-h-screen p-4 bg-linear-to-br from-blue-50 to-indigo-100">
       <div className="w-full max-w-md">
         <div className="bg-white rounded-lg shadow-xl p-8">
           <div className="text-center">

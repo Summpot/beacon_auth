@@ -104,13 +104,14 @@ pub struct ServeConfig {
     #[arg(long, env = "GOOGLE_CLIENT_SECRET")]
     pub google_client_secret: Option<String>,
 
-    /// OAuth Redirect Base URL (e.g., http://localhost:8080)
+    /// Base URL for the server (e.g., http://localhost:8080)
+    /// Used for OAuth redirects, JWT issuer claim, and WebAuthn RP origin
     #[arg(
         long,
-        env = "OAUTH_REDIRECT_BASE",
+        env = "BASE_URL",
         default_value = "http://localhost:8080"
     )]
-    pub oauth_redirect_base: String,
+    pub base_url: String,
 }
 
 impl ServeConfig {

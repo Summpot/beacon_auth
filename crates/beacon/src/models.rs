@@ -9,8 +9,6 @@ use webauthn_rs::prelude::{
 pub struct RegisterPayload {
     pub username: String,
     pub password: String,
-    pub challenge: String,
-    pub redirect_port: u16,
 }
 
 /// Request payload for POST /api/v1/login
@@ -18,8 +16,6 @@ pub struct RegisterPayload {
 pub struct LoginPayload {
     pub username: String,
     pub password: String,
-    pub challenge: String,
-    pub redirect_port: u16,
 }
 
 /// Response for successful login
@@ -40,7 +36,9 @@ pub struct ErrorResponse {
 #[derive(Debug, Serialize, Deserialize)]
 pub struct OAuthStartPayload {
     pub provider: String,
+    #[serde(default)]
     pub challenge: String,
+    #[serde(default)]
     pub redirect_port: u16,
 }
 
@@ -62,8 +60,8 @@ pub struct OAuthCallbackQuery {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct OAuthState {
     pub provider: String,
-    pub challenge: String,
-    pub redirect_port: u16,
+    pub challenge: Option<String>,
+    pub redirect_port: Option<u16>,
     pub state_token: String,
 }
 

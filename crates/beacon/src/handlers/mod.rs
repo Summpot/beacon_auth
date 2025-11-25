@@ -233,11 +233,11 @@ pub async fn oauth_start(
     // Generate state token
     let state_token = Uuid::new_v4().to_string();
 
-    // Store OAuth state
+    // Store OAuth state with optional challenge and redirect_port
     let oauth_state = OAuthState {
         provider: payload.provider.clone(),
-        challenge: payload.challenge.clone(),
-        redirect_port: payload.redirect_port,
+        challenge: if payload.challenge.is_empty() { None } else { Some(payload.challenge.clone()) },
+        redirect_port: if payload.redirect_port == 0 { None } else { Some(payload.redirect_port) },
         state_token: state_token.clone(),
     };
 
@@ -584,16 +584,27 @@ pub fn extract_session_user(
         .value()
         .to_string();
 
+    // Create validation with proper issuer and audience checks
+    let mut validation = jsonwebtoken::Validation::new(jsonwebtoken::Algorithm::ES256);
+    validation.set_issuer(&[&app_state.oauth_config.redirect_base]);
+    validation.set_audience(&["beaconauth-web"]);
+    validation.validate_exp = true;
+
     // Decode and validate JWT
     let token_data = jsonwebtoken::decode::<SessionClaims>(
         &access_token,
         &app_state.decoding_key,
-        &jsonwebtoken::Validation::new(jsonwebtoken::Algorithm::ES256),
+        &validation,
     )
     .map_err(|e| {
         log::warn!("Failed to decode access token: {:?}", e);
         actix_web::error::ErrorUnauthorized("Invalid access token")
     })?;
+
+    // Verify token type
+    if token_data.claims.token_type != "access" {
+        return Err(actix_web::error::ErrorUnauthorized("Invalid token type"));
+    }
 
     // Parse user_id from sub (subject) field
     let user_id: i32 = token_data.claims.sub.parse().map_err(|e| {

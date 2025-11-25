@@ -1,6 +1,6 @@
 use base64::{engine::general_purpose::URL_SAFE_NO_PAD, Engine};
 use jsonwebtoken::{DecodingKey, EncodingKey};
-use p256::{ecdsa::SigningKey, elliptic_curve::rand_core::OsRng, pkcs8::{EncodePrivateKey, EncodePublicKey}};
+use p256::{ecdsa::SigningKey, elliptic_curve::rand_core::OsRng, pkcs8::EncodePrivateKey};
 use serde_json::json;
 
 /// Generate an ES256 (ECDSA P-256) keypair and return the EncodingKey, DecodingKey, and JWKS JSON string
@@ -13,11 +13,7 @@ pub fn generate_ecdsa_keypair() -> anyhow::Result<(EncodingKey, DecodingKey, Str
     let pkcs8_der = signing_key.to_pkcs8_der()?;
     let encoding_key = EncodingKey::from_ec_der(pkcs8_der.as_bytes());
 
-    // Convert public key to SPKI DER format for DecodingKey
-    let spki_der = verifying_key.to_public_key_der()?;
-    let decoding_key = DecodingKey::from_ec_der(spki_der.as_bytes());
-
-    // Extract x and y coordinates from public key for JWKS
+    // Extract x and y coordinates from public key for JWKS and DecodingKey
     let encoded_point = verifying_key.to_encoded_point(false); // uncompressed format
 
     let x_bytes = encoded_point
@@ -29,6 +25,11 @@ pub fn generate_ecdsa_keypair() -> anyhow::Result<(EncodingKey, DecodingKey, Str
 
     let x_b64 = URL_SAFE_NO_PAD.encode(x_bytes);
     let y_b64 = URL_SAFE_NO_PAD.encode(y_bytes);
+
+    // Create DecodingKey from EC components (x, y coordinates)
+    // This is the correct way to create a DecodingKey for ES256 verification
+    let decoding_key = DecodingKey::from_ec_components(&x_b64, &y_b64)
+        .map_err(|e| anyhow::anyhow!("Failed to create DecodingKey: {}", e))?;
 
     // Build JWKS JSON for ES256 (ECDSA with P-256 curve)
     let jwks = json!({

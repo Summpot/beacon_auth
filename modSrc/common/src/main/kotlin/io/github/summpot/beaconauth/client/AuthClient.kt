@@ -198,19 +198,16 @@ object AuthClient {
 
     /**
      * Attempts to bring the Minecraft window to the foreground.
-     * Uses ONLY safe approaches that won't interfere with input handling.
+     * Uses a smart strategy that switches to fullscreen temporarily if needed.
      * 
-     * IMPORTANT: We avoid glfwFocusWindow() and glfwShowWindow() as these can cause
+     * IMPORTANT: We avoid glfwFocusWindow() and glfwShowWindow() in windowed mode as these can cause
      * Minecraft to think it has focus and enable mouse capture, even when the browser
      * actually has focus. This would trap the user's cursor.
      * 
-     * NOTE: Due to OS-level security restrictions (especially on Windows),
-     * a window cannot steal focus from another application (like a browser).
-     * The best we can do is:
-     * - Request window attention (taskbar icon flashing) - this is safe and usually works
-     * - Restore the window if minimized - this is also safe
-     * 
-     * Users will need to manually click on the Minecraft window after authentication.
+     * STRATEGY:
+     * - In fullscreen mode: Can reliably focus by restoring if minimized
+     * - In windowed mode while not focused: Switch to fullscreen, focus, then restore windowed mode
+     * - This provides seamless window activation across all scenarios
      */
     private fun focusMinecraftWindow() {
         try {
@@ -221,24 +218,67 @@ object AuthClient {
                 // Check current window state
                 val isIconified = org.lwjgl.glfw.GLFW.glfwGetWindowAttrib(windowHandle, org.lwjgl.glfw.GLFW.GLFW_ICONIFIED) == org.lwjgl.glfw.GLFW.GLFW_TRUE
                 val isFocused = org.lwjgl.glfw.GLFW.glfwGetWindowAttrib(windowHandle, org.lwjgl.glfw.GLFW.GLFW_FOCUSED) == org.lwjgl.glfw.GLFW.GLFW_TRUE
+                val isFullscreen = minecraft.window.isFullscreen
                 
-                logger.info("Window state before focus attempt - Minimized: $isIconified, Focused: $isFocused")
+                logger.info("Window state: Minimized=$isIconified, Focused=$isFocused, Fullscreen=$isFullscreen")
                 
-                // Only restore if minimized - this is safe and helpful
+                // Restore if minimized
                 if (isIconified) {
                     org.lwjgl.glfw.GLFW.glfwRestoreWindow(windowHandle)
                     logger.info("Restored minimized window")
                 }
                 
-                // Request window attention (taskbar flashing) - safest approach
-                // This will make the taskbar icon flash without stealing focus or affecting input
-                org.lwjgl.glfw.GLFW.glfwRequestWindowAttention(windowHandle)
-                logger.info("Requested window attention - taskbar should flash, user needs to click window to continue")
+                // If already focused or fullscreen, just request attention
+                if (isFocused || isFullscreen) {
+                    org.lwjgl.glfw.GLFW.glfwRequestWindowAttention(windowHandle)
+                    logger.info("Window is fullscreen or already focused, requested attention")
+                    return@execute
+                }
                 
-                // DO NOT call glfwFocusWindow() or glfwShowWindow() - they can cause input capture issues
+                // Windowed mode and not focused: Use fullscreen trick for reliable activation
+                logger.info("Windowed mode without focus - switching to fullscreen temporarily")
+                
+                // Save current windowed mode state
+                val wasWindowed = !isFullscreen
+                
+                // Switch to fullscreen (this reliably grabs focus)
+                minecraft.window.toggleFullScreen()
+                
+                // Schedule restoration back to windowed mode after a short delay
+                if (wasWindowed) {
+                    // Use a scheduled task to switch back after 100ms
+                    Thread {
+                        Thread.sleep(100)
+                        minecraft.execute {
+                            // Switch back to windowed mode
+                            if (minecraft.window.isFullscreen) {
+                                minecraft.window.toggleFullScreen()
+                                logger.info("Restored windowed mode after focus grab")
+                            }
+                        }
+                    }.start()
+                }
+
+                // Close pause screen if it's open (so player returns to gameplay)
+                val currentScreen = minecraft.screen
+                if (currentScreen != null && currentScreen.javaClass.simpleName == "PauseScreen") {
+                    minecraft.setScreen(null)
+                    logger.info("Closed pause screen to resume gameplay")
+                }
+                
+                logger.info("Window activation sequence initiated")
             }
         } catch (e: Exception) {
-            logger.warn("Failed to request window attention: ${e.message}", e)
+            logger.warn("Failed to focus window: ${e.message}", e)
+            // Fallback to basic window attention request
+            try {
+                val minecraft = Minecraft.getInstance()
+                minecraft.execute {
+                    org.lwjgl.glfw.GLFW.glfwRequestWindowAttention(minecraft.window.window)
+                }
+            } catch (fallbackError: Exception) {
+                logger.error("Fallback focus also failed: ${fallbackError.message}")
+            }
         }
     }
 }

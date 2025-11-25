@@ -15,20 +15,32 @@ function HomePage() {
             password, OAuth, and passkey authentication.
           </p>
           <div className="flex gap-4 justify-center">
+            <Link
+              to="/login"
+              className="px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium"
+            >
+              Login
+            </Link>
+            <Link
+              to="/register"
+              className="px-6 py-3 bg-white text-blue-600 border-2 border-blue-600 rounded-lg hover:bg-blue-50 transition-colors font-medium"
+            >
+              Register
+            </Link>
+            <Link
+              to="/profile"
+              className="px-6 py-3 bg-white text-gray-900 border-2 border-gray-300 rounded-lg hover:bg-gray-50 transition-colors font-medium"
+            >
+              Profile
+            </Link>
             <a
               href="https://github.com/Summpot/beacon_auth"
               target="_blank"
               rel="noopener noreferrer"
               className="px-6 py-3 bg-gray-900 text-white rounded-lg hover:bg-gray-800 transition-colors font-medium"
             >
-              View on GitHub →
+              GitHub →
             </a>
-            <Link
-              to="/profile"
-              className="px-6 py-3 bg-white text-gray-900 border-2 border-gray-900 rounded-lg hover:bg-gray-50 transition-colors font-medium"
-            >
-              Go to Profile
-            </Link>
           </div>
         </div>
 

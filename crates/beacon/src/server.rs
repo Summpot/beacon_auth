@@ -52,12 +52,12 @@ pub async fn run_server(config: ServeConfig) -> anyhow::Result<()> {
         github_client_secret: config.github_client_secret.clone(),
         google_client_id: config.google_client_id.clone(),
         google_client_secret: config.google_client_secret.clone(),
-        redirect_base: config.oauth_redirect_base.clone(),
+        redirect_base: config.base_url.clone(),
     };
 
     // 4. Initialize WebAuthn
     log::info!("Initializing WebAuthn...");
-    let rp_origin = url::Url::parse(&config.oauth_redirect_base)?;
+    let rp_origin = url::Url::parse(&config.base_url)?;
     let rp_id = rp_origin
         .host_str()
         .ok_or_else(|| anyhow::anyhow!("Invalid redirect base URL"))?;
@@ -154,12 +154,12 @@ pub async fn run_server(config: ServeConfig) -> anyhow::Result<()> {
             .route("/minecraft-jwt", web::post().to(handlers::get_minecraft_jwt))
             .route("/user/me", web::get().to(handlers::user::get_user_info))
             .route("/user/change-password", web::post().to(handlers::user::change_password))
-            .route("/passkeys/register/start", web::post().to(handlers::passkey::register_start))
-            .route("/passkeys/register/finish", web::post().to(handlers::passkey::register_finish))
-            .route("/passkeys/auth/start", web::post().to(handlers::passkey::auth_start))
-            .route("/passkeys/auth/finish", web::post().to(handlers::passkey::auth_finish))
-            .route("/passkeys", web::get().to(handlers::passkey::list_passkeys))
-            .route("/passkeys/delete", web::post().to(handlers::passkey::delete_passkey));
+            .route("/passkey/register/start", web::post().to(handlers::passkey::register_start))
+            .route("/passkey/register/finish", web::post().to(handlers::passkey::register_finish))
+            .route("/passkey/auth/start", web::post().to(handlers::passkey::auth_start))
+            .route("/passkey/auth/finish", web::post().to(handlers::passkey::auth_finish))
+            .route("/passkey/list", web::get().to(handlers::passkey::list_passkeys))
+            .route("/passkey/delete", web::post().to(handlers::passkey::delete_passkey));
 
         let jwks_route =
             web::scope("/.well-known").route("/jwks.json", web::get().to(handlers::get_jwks));
@@ -390,7 +390,7 @@ mod tests {
             github_client_secret: None,
             google_client_id: None,
             google_client_secret: None,
-            oauth_redirect_base: "http://localhost:8080".to_string(),
+            base_url: "http://localhost:8080".to_string(),
         };
 
         let origins = config.cors_origin_list();
