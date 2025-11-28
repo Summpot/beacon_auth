@@ -84,23 +84,10 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-${{ matrix.target }}-cargo-test-
 
-      - name: Install system dependencies (Linux)
-        if: runner.os == 'Linux'
+      - name: Install OpenSSL via vcpkg
         run: |
-          sudo apt-get update
-          sudo apt-get install -y libssl-dev pkg-config
-
-      - name: Install OpenSSL via vcpkg (Windows)
-        if: runner.os == 'Windows'
-        run: |
-          vcpkg install openssl:x64-windows-static-md
+          vcpkg install
           echo "VCPKG_ROOT=$env:VCPKG_INSTALLATION_ROOT" >> $env:GITHUB_ENV
-
-      - name: Install OpenSSL via Homebrew (macOS)
-        if: runner.os == 'macOS'
-        run: |
-          brew install openssl@3
-          echo "OPENSSL_DIR=$(brew --prefix openssl@3)" >> $GITHUB_ENV
 
       - name: Run tests
         env:
