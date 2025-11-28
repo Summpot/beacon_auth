@@ -86,8 +86,7 @@ jobs:
 
       - name: Install OpenSSL via vcpkg
         run: |
-          vcpkg install
-          echo "VCPKG_ROOT=$env:VCPKG_INSTALLATION_ROOT" >> $env:GITHUB_ENV
+          vcpkg install openssl
 
       - name: Run tests
         env:
