@@ -34,21 +34,25 @@ jobs:
             artifact_name: beaconauth-linux-amd64
             artifact_ext: tar.gz
             arch: amd64
+            apt_packages: libssl-dev pkg-config
           - os: ubuntu-latest
             target: aarch64-unknown-linux-gnu
             artifact_name: beaconauth-linux-arm64
             artifact_ext: tar.gz
             arch: arm64
+            apt_packages: gcc-aarch64-linux-gnu g++-aarch64-linux-gnu pkg-config
           - os: ubuntu-latest
             target: x86_64-unknown-linux-musl
             artifact_name: beaconauth-linux-amd64-musl
             artifact_ext: tar.gz
             arch: amd64
+            apt_packages: musl-tools pkg-config
           - os: ubuntu-latest
             target: aarch64-unknown-linux-musl
             artifact_name: beaconauth-linux-arm64-musl
             artifact_ext: tar.gz
             arch: arm64
+            apt_packages: gcc-aarch64-linux-gnu g++-aarch64-linux-gnu musl-tools pkg-config
           - os: windows-latest
             target: x86_64-pc-windows-msvc
             artifact_name: beaconauth-windows-amd64
@@ -106,52 +110,22 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-${{ matrix.target }}-cargo-
 
-      - name: Install system dependencies (Linux x86_64)
-        if: runner.os == 'Linux' && matrix.target == 'x86_64-unknown-linux-gnu'
+      - name: Install system dependencies
+        if: runner.os == 'Linux'
         run: |
           sudo apt-get update
-          sudo apt-get install -y libssl-dev pkg-config
+          sudo apt-get install -y ${{ matrix.apt_packages }}
 
-      - name: Install system dependencies (Linux aarch64)
-        if: runner.os == 'Linux' && matrix.target == 'aarch64-unknown-linux-gnu'
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y gcc-aarch64-linux-gnu g++-aarch64-linux-gnu pkg-config
-          echo "CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_LINKER=aarch64-linux-gnu-gcc" >> $GITHUB_ENV
-          echo "CC_aarch64_unknown_linux_gnu=aarch64-linux-gnu-gcc" >> $GITHUB_ENV
-          echo "CXX_aarch64_unknown_linux_gnu=aarch64-linux-gnu-g++" >> $GITHUB_ENV
-
-      - name: Install system dependencies (Linux x86_64-musl)
-        if: runner.os == 'Linux' && matrix.target == 'x86_64-unknown-linux-musl'
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y musl-tools pkg-config
-
-      - name: Install system dependencies (Linux aarch64-musl)
-        if: runner.os == 'Linux' && matrix.target == 'aarch64-unknown-linux-musl'
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y gcc-aarch64-linux-gnu g++-aarch64-linux-gnu musl-tools pkg-config
-          echo "CARGO_TARGET_AARCH64_UNKNOWN_LINUX_MUSL_LINKER=aarch64-linux-gnu-gcc" >> $GITHUB_ENV
-          echo "CC_aarch64_unknown_linux_musl=aarch64-linux-gnu-gcc" >> $GITHUB_ENV
-          echo "CXX_aarch64_unknown_linux_musl=aarch64-linux-gnu-g++" >> $GITHUB_ENV
-
-      - name: Install OpenSSL via vcpkg (Windows)
-        if: runner.os == 'Windows'
+      - name: Install OpenSSL via vcpkg
         run: |
           vcpkg install openssl:x64-windows-static-md
           echo "VCPKG_ROOT=$env:VCPKG_INSTALLATION_ROOT" >> $env:GITHUB_ENV
-
-      - name: Install OpenSSL via Homebrew (macOS)
-        if: runner.os == 'macOS'
-        run: |
-          brew install openssl@3
-          echo "OPENSSL_DIR=$(brew --prefix openssl@3)" >> $GITHUB_ENV
 
       - name: Build workspace
         env:
           RUSTC_WRAPPER: sccache
           SCCACHE_GHA_ENABLED: "true"
+          VCPKG_ROOT: ${{ env.VCPKG_INSTALLATION_ROOT }}
         run: |
           cargo build --workspace --release --target ${{ matrix.target }}
           sccache --show-stats
