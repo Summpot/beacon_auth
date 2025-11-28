@@ -31,43 +31,36 @@ jobs:
         include:
           - os: ubuntu-latest
             target: x86_64-unknown-linux-gnu
-            vcpkg_target_triplet: x64-linux
             artifact_name: beaconauth-linux-amd64
             artifact_ext: tar.gz
             arch: amd64
           - os: ubuntu-latest
             target: aarch64-unknown-linux-gnu
-            vcpkg_target_triplet: arm64-linux
             artifact_name: beaconauth-linux-arm64
             artifact_ext: tar.gz
             arch: arm64
           - os: ubuntu-latest
             target: x86_64-unknown-linux-musl
-            vcpkg_target_triplet: x64-linux-musl
             artifact_name: beaconauth-linux-amd64-musl
             artifact_ext: tar.gz
             arch: amd64
           - os: ubuntu-latest
             target: aarch64-unknown-linux-musl
-            vcpkg_target_triplet: arm64-linux-musl
             artifact_name: beaconauth-linux-arm64-musl
             artifact_ext: tar.gz
             arch: arm64
           - os: windows-latest
             target: x86_64-pc-windows-msvc
-            vcpkg_target_triplet: x64-windows-static-md
             artifact_name: beaconauth-windows-amd64
             artifact_ext: zip
             arch: amd64
           - os: macos-latest
             target: x86_64-apple-darwin
-            vcpkg_target_triplet: x64-osx
             artifact_name: beaconauth-macos-amd64
             artifact_ext: tar.gz
             arch: amd64
           - os: macos-latest
             target: aarch64-apple-darwin
-            vcpkg_target_triplet: arm64-osx
             artifact_name: beaconauth-macos-arm64
             artifact_ext: tar.gz
             arch: arm64
@@ -79,7 +72,7 @@ jobs:
       - name: Setup pnpm
         uses: pnpm/action-setup@v4
         with:
-          version: 9
+          version: 10
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -118,21 +111,12 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-${{ matrix.target }}-cargo-
 
-      - name: Run vcpkg and export OPENSSL_DIR
-        shell: pwsh
-        run: |
-          vcpkg install openssl --triplet=${{ matrix.vcpkg_target_triplet }}
-          $opensslDir = Join-Path $env:VCPKG_INSTALLATION_ROOT "installed\${{ matrix.vcpkg_target_triplet }}"
-          Write-Host "Setting OPENSSL_DIR=$opensslDir"
-          Add-Content -Path $env:GITHUB_ENV -Value "OPENSSL_DIR=$opensslDir"
-          
-
       - name: Build workspace
         env:
           RUSTC_WRAPPER: sccache
           SCCACHE_GHA_ENABLED: "true"
         run: |
-          cargo build --workspace --release --target ${{ matrix.target }}
+          cargo build --workspace --release
           sccache --show-stats
 
       - name: Prepare artifacts

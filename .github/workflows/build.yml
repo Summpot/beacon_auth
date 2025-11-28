@@ -84,10 +84,6 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-${{ matrix.target }}-cargo-test-
 
-      - name: Install OpenSSL via vcpkg
-        run: |
-          vcpkg install openssl
-
       - name: Run tests
         env:
           RUSTC_WRAPPER: sccache
