@@ -22,8 +22,7 @@ ecdsa = { version = "0.16", features = ["signing"] }
 sha2 = "0.10"
 bcrypt = "0.17"
 rand = "0.9"
-
-
+openssl = { version = "0.10", features = ["vendored"] }
 
 # CLI
 clap = { version = "4.5", features = ["derive", "env"] }
