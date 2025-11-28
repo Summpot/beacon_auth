@@ -31,36 +31,43 @@ jobs:
         include:
           - os: ubuntu-latest
             target: x86_64-unknown-linux-gnu
+            vcpkg_target_triplet: x64-linux
             artifact_name: beaconauth-linux-amd64
             artifact_ext: tar.gz
             arch: amd64
           - os: ubuntu-latest
             target: aarch64-unknown-linux-gnu
+            vcpkg_target_triplet: arm64-linux
             artifact_name: beaconauth-linux-arm64
             artifact_ext: tar.gz
             arch: arm64
           - os: ubuntu-latest
             target: x86_64-unknown-linux-musl
+            vcpkg_target_triplet: x64-linux
             artifact_name: beaconauth-linux-amd64-musl
             artifact_ext: tar.gz
             arch: amd64
           - os: ubuntu-latest
             target: aarch64-unknown-linux-musl
+            vcpkg_target_triplet: arm64-linux
             artifact_name: beaconauth-linux-arm64-musl
             artifact_ext: tar.gz
             arch: arm64
           - os: windows-latest
             target: x86_64-pc-windows-msvc
+            vcpkg_target_triplet: x64-windows-static-md
             artifact_name: beaconauth-windows-amd64
             artifact_ext: zip
             arch: amd64
           - os: macos-latest
             target: x86_64-apple-darwin
+            vcpkg_target_triplet: x64-osx
             artifact_name: beaconauth-macos-amd64
             artifact_ext: tar.gz
             arch: amd64
           - os: macos-latest
             target: aarch64-apple-darwin
+            vcpkg_target_triplet: arm64-osx
             artifact_name: beaconauth-macos-arm64
             artifact_ext: tar.gz
             arch: arm64
@@ -110,6 +117,10 @@ jobs:
           key: ${{ runner.os }}-${{ matrix.target }}-cargo-${{ hashFiles('**/Cargo.lock') }}
           restore-keys: |
             ${{ runner.os }}-${{ matrix.target }}-cargo-
+
+      - name: Run vcpkg
+        run: |
+          vcpkg install
 
       - name: Build workspace
         env:
