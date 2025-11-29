@@ -87,9 +87,6 @@ jobs:
         uses: pnpm/action-setup@v4
         with:
           version: 10
-      
-      - name: Setup pwsh
-        uses: milliewalky/setup-pwsh@v1
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -137,37 +134,64 @@ jobs:
           sccache --show-stats
 
       - name: Prepare artifacts
-        shell: pwsh
-        run: |
-          New-Item -ItemType Directory -Force -Path artifacts
-          
-          $target = "${{ matrix.target }}"
-          $basePath = "target/$target/release"
-          
-          # Copy binaries
-          if ($target -like "*windows*") {
-            Copy-Item "$basePath/beacon.exe" artifacts/ -ErrorAction SilentlyContinue
-          } else {
-            Copy-Item "$basePath/beacon" artifacts/ -ErrorAction SilentlyContinue
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const path = require('path');
+            const { execSync } = require('child_process');
             
-            if ($IsMacOS) {
-              chmod +x artifacts/*
+            const target = '${{ matrix.target }}';
+            const artifactPrefix = '${{ inputs.artifact-prefix }}';
+            const artifactName = '${{ matrix.artifact_name }}';
+            const artifactExt = '${{ matrix.artifact_ext }}';
+            const includeDocs = '${{ inputs.include-docs }}' === 'true';
+            const basePath = `target/${target}/release`;
+            
+            // Create artifacts directory
+            fs.mkdirSync('artifacts', { recursive: true });
+            
+            // Copy binaries
+            const isWindows = target.includes('windows');
+            const binaryName = isWindows ? 'beacon.exe' : 'beacon';
+            const srcBinary = path.join(basePath, binaryName);
+            const destBinary = path.join('artifacts', binaryName);
+            
+            if (fs.existsSync(srcBinary)) {
+              fs.copyFileSync(srcBinary, destBinary);
+              console.log(`Copied ${srcBinary} to ${destBinary}`);
+              
+              // Make executable on non-Windows
+              if (!isWindows) {
+                fs.chmodSync(destBinary, 0o755);
+              }
+            } else {
+              console.log(`Warning: ${srcBinary} not found`);
             }
-          }
-          
-          # Copy documentation if requested
-          if ("${{ inputs.include-docs }}" -eq "true") {
-            Copy-Item "README.md" artifacts/ -ErrorAction SilentlyContinue
-            Copy-Item "LICENSE" artifacts/ -ErrorAction SilentlyContinue
-          }
-          
-          # Create archive
-          Set-Location artifacts
-          if ($target -like "*windows*") {
-            Compress-Archive -Path * -DestinationPath ../${{ inputs.artifact-prefix }}${{ matrix.artifact_name }}.${{ matrix.artifact_ext }}
-          } else {
-            tar -czf ../${{ inputs.artifact-prefix }}${{ matrix.artifact_name }}.${{ matrix.artifact_ext }} *
-          }
+            
+            // Copy documentation if requested
+            if (includeDocs) {
+              for (const doc of ['README.md', 'LICENSE']) {
+                if (fs.existsSync(doc)) {
+                  fs.copyFileSync(doc, path.join('artifacts', doc));
+                  console.log(`Copied ${doc}`);
+                }
+              }
+            }
+            
+            // Create archive
+            const archiveName = `${artifactPrefix}${artifactName}.${artifactExt}`;
+            process.chdir('artifacts');
+            
+            if (isWindows) {
+              // Use PowerShell's Compress-Archive on Windows
+              execSync(`powershell -Command "Compress-Archive -Path * -DestinationPath ../${archiveName}"`, { stdio: 'inherit' });
+            } else {
+              // Use tar on Unix-like systems
+              execSync(`tar -czf ../${archiveName} *`, { stdio: 'inherit' });
+            }
+            
+            console.log(`Created archive: ${archiveName}`);
 
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
