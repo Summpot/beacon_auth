@@ -107,6 +107,13 @@ jobs:
         with:
           target: ${{ matrix.target }}
 
+      - name: Install OpenSSL
+        if: runner.os == 'Windows'
+        run: |
+          vcpkg install openssl:x64-windows-static-md openssl:arm64-windows-static-md
+          echo "VCPKG_ROOT=$env:VCPKG_INSTALLATION_ROOT" >> $env:GITHUB_ENV
+        shell: pwsh
+
       - name: Setup sccache
         uses: Summpot/sccache-action@main
         with:
