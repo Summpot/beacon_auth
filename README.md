@@ -32,6 +32,10 @@
   - [Using Docker (Recommended)](#using-docker-recommended)
   - [Using Pre-built Binaries](#using-pre-built-binaries)
   - [Building from Source](#building-from-source)
+- [Cloudflare Deployment (Workers + Pages)](#cloudflare-deployment-workers--pages)
+  - [One-time Cloudflare setup](#one-time-cloudflare-setup)
+  - [GitHub Actions deployment](#github-actions-deployment)
+  - [Routing (same-origin API)](#routing-same-origin-api)
 - [Auth Server Deployment](#auth-server-deployment)
   - [Configuration](#configuration)
   - [Database Setup](#database-setup)
@@ -120,6 +124,84 @@ cargo build --workspace --release
 
 # The binary will be at target/release/beacon
 ```
+
+## Cloudflare Deployment (Workers + Pages)
+
+This repository includes two deployable targets for Cloudflare:
+
+- **Workers API**: `crates/beacon-worker` (Rust/WASM) using **D1** for storage.
+- **Frontend**: a static React app (this repo root) suitable for **Cloudflare Pages**.
+
+The recommended production setup is:
+
+1. Deploy the frontend to Pages.
+2. Deploy the API to Workers.
+3. Route the Worker on the **same hostname** as Pages for `/api/*` so cookies and OAuth redirects work reliably.
+
+### One-time Cloudflare setup
+
+#### 1) Create and migrate the D1 database
+
+The Worker expects a D1 binding named `DB`.
+
+- Create a D1 database named `beacon-auth` (or change `database_name` in `crates/beacon-worker/wrangler.toml`).
+- Apply the initial schema:
+
+  - Migration SQL: `crates/beacon-worker/migrations/0001_init.sql`
+
+#### 2) Configure Worker vars and secrets
+
+In `crates/beacon-worker/wrangler.toml`:
+
+- Replace `database_id = "REPLACE_WITH_D1_DATABASE_ID"` with your real D1 database id.
+- Set `BASE_URL` to your public site origin (usually your Pages URL), e.g. `https://<project>.pages.dev` or your custom domain.
+
+For production, you should provide a stable ES256 private key so JWKS/JWTs remain valid across deployments:
+
+- `JWT_PRIVATE_KEY_DER_B64` (secret): base64-encoded PKCS#8 DER P-256 private key.
+
+Optional OAuth secrets (only needed if you enable those providers):
+
+- `GITHUB_CLIENT_ID`, `GITHUB_CLIENT_SECRET`
+- `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`
+
+#### 3) Create a Cloudflare Pages project
+
+Create a Pages project in Cloudflare and note its **project name** (used by CI).
+
+### GitHub Actions deployment
+
+This repo includes a workflow that deploys both targets:
+
+- `.github/workflows/deploy-cloudflare.yml`
+
+Add the following **GitHub Actions secrets**:
+
+| Secret | Required | Used for |
+|---|---:|---|
+| `CLOUDFLARE_API_TOKEN` | Yes | Wrangler authentication (Workers + Pages) |
+| `CLOUDFLARE_ACCOUNT_ID` | Yes | Target Cloudflare account |
+| `CLOUDFLARE_PAGES_PROJECT_NAME` | Yes | Pages project name |
+| `CLOUDFLARE_WORKER_D1_DATABASE_ID` | Yes | Replaces `REPLACE_WITH_D1_DATABASE_ID` at deploy time |
+| `CLOUDFLARE_WORKER_BASE_URL` | Recommended | Sets `BASE_URL` in the Worker at deploy time |
+| `CLOUDFLARE_WORKER_JWT_PRIVATE_KEY_DER_B64` | Strongly recommended | Stable JWT signing key |
+| `CLOUDFLARE_WORKER_GITHUB_CLIENT_ID` | Optional | GitHub OAuth |
+| `CLOUDFLARE_WORKER_GITHUB_CLIENT_SECRET` | Optional | GitHub OAuth |
+| `CLOUDFLARE_WORKER_GOOGLE_CLIENT_ID` | Optional | Google OAuth |
+| `CLOUDFLARE_WORKER_GOOGLE_CLIENT_SECRET` | Optional | Google OAuth |
+
+The workflow runs on pushes to `main` and can also be triggered manually.
+
+### Routing (same-origin API)
+
+The frontend calls the API using same-origin relative paths (e.g. `/api/v1/login`). For production, configure your Worker routes so the API is served on the **same host** as Pages:
+
+- Route `https://<your-pages-domain>/api/*` → your Worker script
+- Route `https://<your-pages-domain>/.well-known/jwks.json` → your Worker script
+
+Then set `BASE_URL` to `https://<your-pages-domain>`.
+
+> Note: The Workers build currently does not enable Passkey/WebAuthn endpoints.
 
 ## Auth Server Deployment
 

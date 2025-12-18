@@ -5,6 +5,11 @@ members = [
 ]
 
 [workspace.dependencies]
+# Workspace crates
+beacon-core = { path = "crates/beacon-core", default-features = false }
+entity = { path = "crates/entity" }
+migration = { path = "crates/migration" }
+
 # Web Framework
 actix-web = "4.12"
 actix-cors = "0.7"
@@ -57,6 +62,17 @@ webauthn-rs-proto = "0.5"
 
 # Cache
 moka = { version = "0.12", features = ["sync"] }
+
+# Serverless
+lambda-web = "0.2.1"
+
+# Cloudflare Workers (wasm)
+worker = { version = "0.7", features = ["d1"] }
+console_error_panic_hook = "0.1"
+
+# Help rand/getrandom work reliably on wasm.
+getrandom = { version = "0.3.4", features = ["wasm_js"] }
+getrandom02 = { package = "getrandom", version = "0.2", features = ["js"] }
 
 # Build Tools
 which = "8.0"

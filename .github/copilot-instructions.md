@@ -1,109 +1,96 @@
 # Instructions for Summpot/BeaconAuth
 
-## 0. Task Execution Philosophy
+## 1) Execution Principles
 
-* **Complete tasks in a single pass whenever possible.** No need to break work into multiple incremental steps.
-* When a task involves multiple related changes, complete ALL of them together.
-* **Integration over isolation**: When implementing a new module, also integrate it into existing code, update imports, and handle any resulting compilation errors - all in one go.
-* Only request user confirmation when genuinely uncertain, not for every intermediate step.
+* Prefer completing tasks in a single integrated pass.
+* If a task is truly large, create a concrete plan and still deliver a complete end-to-end implementation (do not land partial behavior).
+* Integration over isolation: when adding or changing functionality, also update imports, wiring, and call sites in the same pass.
+* Ask for user confirmation only when genuinely ambiguous (requirements, security tradeoffs, or irreversible changes).
 
-## 1. Communication Guidelines
+## 2) Language & Communication
 
-* **User Communication:** Use the **same language as the user's request**.
-* **Code Output:** All code content (comments, documentation, commit messages, console logs) **MUST** be in **English**.
+* User-facing chat responses: use the same language as the user’s request.
+* Repository artifacts (code comments, docs, commit messages, logs, error messages): MUST be in English.
 
-## 2. Code Verification
-* **After modifying any code**, run the appropriate verification command:
-    * **Rust**: `cargo check --all-targets`.
-* Never consider a code modification complete without verification.
-* **NEVER use `--release` flag for local builds** - release builds are slow and unnecessary for development.
-* Use `cargo build --all-targets` (debug mode) for local validation.
-* Release builds are only for CI/CD pipelines.
+## 3) Research First (MANDATORY: DeepWiki MCP when unsure)
 
-## 3. Testing Strategy
+When you are not sure about usage, conventions, or existing patterns in this repo, you MUST consult DeepWiki MCP BEFORE implementing.
 
-* **Avoid running all tests locally** unless:
-    * You modified the tests themselves.
-    * Your changes have obvious breaking potential.
-* Use `cargo check --workspace` for quick validation instead of full test runs.
-* When tests are necessary, run only relevant test modules.
+* Mandatory tool: `mcp_cognitionai_d_ask_question` (DeepWiki MCP)
+* Scope: APIs, auth flows, crypto/JWKS/JWT handling, DB patterns, error conventions, configuration/env usage, and any new dependency.
+* Ask targeted questions that reference the exact crate/module/file and desired behavior.
 
-## 4. Library Usage Research
+If DeepWiki does not contain enough information:
 
-* **Before using any external library**, use available tools to query usage patterns.
-* Recommended: Use `mcp_cognitionai_d_ask_question` (DeepWiki MCP) with the repo name.
-* **If DeepWiki lacks documentation**: Record the issue and proceed with best knowledge.
-* Do NOT use `cargo doc --open` to generate documentation locally.
+* Record what is missing and proceed with the best available evidence (code search, existing modules), keeping changes minimal and consistent.
+* Do NOT use `cargo doc --open`.
 
-## 5. Prohibition of Simplified Implementations
+## 4) Correctness Bar (No stubs / no shortcuts)
 
-**NEVER use simplified, stub, placeholder implementations, or temporary fixes.** This includes:
+Never ship simplified, stubbed, placeholder, or “temporary” implementations.
 
-* **Language migration projects** (e.g., Go to Rust).
-* **Protocol implementations** requiring wire-compatibility.
-* **Security-critical code** (cryptography, authentication, access control).
-* **Match original behavior exactly**: Replicate original logic, error handling, and edge cases.
-* **No TODO stubs**: Do not leave unimplemented functions or placeholder returns.
-* **No temporary workarounds**: Always implement the complete, correct solution.
-* **Complete error handling**: Handle all error cases the same way as the reference implementation.
-* **Full feature parity**: Implement all features, not just the "common" ones.
-* **Research thoroughly**: Understand the full complexity before implementing.
-* **Port completely**: Translate ALL logic including edge cases.
-* **Split large tasks**: Create a detailed plan with specific milestones rather than implementing a partial version.
+This is especially strict for:
 
-## 6. Best Practices
+* Authentication & authorization
+* Cryptography / key management / JWT / JWKS
+* OAuth and WebAuthn/passkeys
+* Protocol compatibility (wire formats, redirects, cookies)
 
-### Dependency Management
-* **Rust**: `cargo add -p <crate-name>`.
-* **Node.js**: `pnpm add`, `npm install`, or `yarn add`.
-* **Python**: `pip install` or `poetry add`.
+Requirements:
 
-### Error Handling
-* Handle errors gracefully with meaningful error messages.
-* Use typed errors where possible (Result types, custom exceptions).
-* Log errors with sufficient context for debugging.
+* Match intended behavior exactly, including edge cases.
+* No TODO stubs, no placeholder returns, no “just for now” workarounds.
+* Handle errors fully and consistently; include actionable English error messages.
 
-### Code Style
-* Follow the project's established coding conventions.
-* Use consistent naming conventions as per language standards.
-* Keep functions/methods focused and single-purpose.
+## 5) Verification (Build/Check)
 
-## 7. Multi-language Workspace Rules (Rust + TypeScript + Gradle/Kotlin)
+Do not consider a change complete until it is verified.
 
-This repository is multi-language. Changes often span multiple toolchains. When you touch one part, verify the relevant part(s) still build.
+* Rust: after any Rust change, run `cargo check --all-targets`.
+* Avoid local `--release` builds.
+* Use debug-mode builds only when needed for additional validation (e.g., `cargo build --all-targets`).
 
-### 7.1 Rust (Auth server + shared crates)
+## 6) Testing Strategy
+
+* Avoid running the full test suite locally unless you changed tests or the change has broad blast radius.
+* Prefer fast validation first (e.g., `cargo check --workspace`) and then run only the relevant tests/modules when needed.
+
+## 7) Dependency Management
+
+* Rust: `cargo add -p <crate-name>`
+* Node.js: prefer `pnpm add` in this repo (avoid introducing additional package managers).
+* Python: `pip install` or `poetry add` depending on the project setup.
+
+Before adding any new dependency/crate/package:
+
+* MUST consult DeepWiki MCP for existing patterns/approved libraries.
+* Justify why it is needed and why existing dependencies are insufficient.
+
+## 8) Multi-language Workspace Rules (Rust + TypeScript/React + Gradle/Kotlin)
+
+This repository is multi-language. When you touch one part, ensure the relevant toolchain still builds.
+
+### Rust (server + shared crates)
 
 * Source lives under `crates/`.
-* Preferred validation:
-    * Fast: `cargo check --workspace`
-    * Full targets: `cargo check --all-targets` (required after any Rust change)
-* Do not add new crates lightly. If you add one:
-    * Justify why it is needed.
-    * Keep it optional behind a feature when it is platform-specific (e.g., serverless).
-* Security-sensitive changes (JWT, OAuth, WebAuthn):
-    * Avoid stateful in-memory coordination that breaks multi-instance deployments.
-    * Prefer stateless, signed tokens/cookies or persistent storage.
+* Required after Rust changes: `cargo check --all-targets`.
+* Do not add new crates lightly; consider optional features for platform-specific code (e.g., serverless).
+* Distributed deployments: avoid per-process in-memory coordination for OAuth/Passkey start→finish unless you require sticky sessions.
+* Ensure JWT/JWKS keys are stable across instances.
 
-### 7.2 TypeScript/React (Web UI)
+### TypeScript/React (Web UI)
 
-* Source lives under `src/` (frontend) and uses `pnpm`.
+* Frontend source lives under `src/` and uses `pnpm`.
 * When backend API shape changes, update frontend calls/types in the same pass.
-* Formatting/linting uses Biome configuration (`biome.json`). Do not introduce a second formatter.
+* Formatting/linting uses Biome (`biome.json`). Do not introduce a second formatter.
 
-### 7.3 Gradle/Kotlin (Mod source)
+### Gradle/Kotlin (Mod source)
 
-* Source lives under `modSrc/` with Gradle (Kotlin DSL).
-* Keep server-side protocol changes compatible with the mod’s expectations (JWKS, redirect URLs, cookie/auth flow).
-* Do not hardcode secrets in Gradle files.
+* Source lives under `modSrc/`.
+* Keep server-side protocol/auth changes compatible with the mod’s expectations (JWKS, redirect URLs, cookie/auth flow).
+* Never hardcode secrets in Gradle files.
 
-### 7.4 Cross-cutting rules
+## 9) Cross-cutting Operational Rules
 
-* Always keep code comments, logs, and error messages in **English**.
-* Prefer configuration via environment variables / CLI flags.
-* For distributed deployments:
-    * Do not rely on per-process memory for OAuth/Passkey start→finish unless you require sticky sessions.
-    * Ensure JWT/JWKS keys are stable across instances.
-* For serverless targets:
-    * Keep the HTTP app construction in reusable library functions.
-    * Gate serverless-only code behind Cargo features and `required-features` binaries.
+* Prefer configuration via environment variables or CLI flags.
+* Keep HTTP app construction reusable for serverless targets; gate serverless-only code behind Cargo features and `required-features` binaries.

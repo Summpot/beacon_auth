@@ -1,0 +1,175 @@
+name: Deploy (Cloudflare Workers + Pages)
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - crates/beacon-worker/**
+      - crates/beacon-core/**
+      - Cargo.toml
+      - Cargo.lock
+      - src/**
+      - public/**
+      - package.json
+      - pnpm-lock.yaml
+      - rsbuild.config.ts
+      - tsconfig.json
+      - .github/workflows/deploy-cloudflare.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cloudflare-deploy-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  deploy-worker:
+    name: Deploy beacon-worker (Workers)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: crates/beacon-worker
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32-unknown-unknown
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Cache cargo
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/bin/
+            ~/.cargo/registry/index/
+            ~/.cargo/registry/cache/
+            ~/.cargo/git/db/
+            target/
+          key: ${{ runner.os }}-cargo-wasm-${{ hashFiles('**/Cargo.lock') }}
+
+      - name: Install Wrangler
+        run: npm i -g wrangler@3
+
+      - name: Install worker-build
+        run: cargo install worker-build --locked
+
+      - name: Build worker (Rust -> wasm + shim)
+        run: worker-build --release
+
+      - name: Prepare Wrangler config (CI)
+        env:
+          D1_DATABASE_ID: ${{ secrets.CLOUDFLARE_WORKER_D1_DATABASE_ID }}
+          BASE_URL: ${{ secrets.CLOUDFLARE_WORKER_BASE_URL }}
+        run: |
+          python - <<'PY'
+          import os
+          from pathlib import Path
+
+          src = Path('wrangler.toml')
+          text = src.read_text(encoding='utf-8')
+
+          d1 = (os.environ.get('D1_DATABASE_ID') or '').strip()
+          base_url = (os.environ.get('BASE_URL') or '').strip()
+
+          if d1:
+              text = text.replace('REPLACE_WITH_D1_DATABASE_ID', d1)
+
+          # Keep repo defaults unless a BASE_URL secret is provided.
+          if base_url:
+              text = text.replace('BASE_URL = "https://example.com"', f'BASE_URL = "{base_url}"')
+
+          out = Path('wrangler.ci.toml')
+          out.write_text(text, encoding='utf-8')
+          print(f'Wrote {out}')
+          PY
+
+      - name: Sync Worker secrets (optional)
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          JWT_PRIVATE_KEY_DER_B64: ${{ secrets.CLOUDFLARE_WORKER_JWT_PRIVATE_KEY_DER_B64 }}
+          GITHUB_CLIENT_ID: ${{ secrets.CLOUDFLARE_WORKER_GITHUB_CLIENT_ID }}
+          GITHUB_CLIENT_SECRET: ${{ secrets.CLOUDFLARE_WORKER_GITHUB_CLIENT_SECRET }}
+          GOOGLE_CLIENT_ID: ${{ secrets.CLOUDFLARE_WORKER_GOOGLE_CLIENT_ID }}
+          GOOGLE_CLIENT_SECRET: ${{ secrets.CLOUDFLARE_WORKER_GOOGLE_CLIENT_SECRET }}
+        run: |
+          set -euo pipefail
+
+          put_secret() {
+            local name="$1"
+            local value="$2"
+            if [ -n "$value" ]; then
+              echo "Setting secret: $name"
+              printf %s "$value" | wrangler secret put "$name" --config wrangler.ci.toml
+            else
+              echo "Skipping secret (not provided): $name"
+            fi
+          }
+
+          put_secret JWT_PRIVATE_KEY_DER_B64 "${JWT_PRIVATE_KEY_DER_B64:-}"
+          put_secret GITHUB_CLIENT_ID "${GITHUB_CLIENT_ID:-}"
+          put_secret GITHUB_CLIENT_SECRET "${GITHUB_CLIENT_SECRET:-}"
+          put_secret GOOGLE_CLIENT_ID "${GOOGLE_CLIENT_ID:-}"
+          put_secret GOOGLE_CLIENT_SECRET "${GOOGLE_CLIENT_SECRET:-}"
+
+      - name: Deploy to Cloudflare Workers
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: wrangler deploy --config wrangler.ci.toml
+
+  deploy-pages:
+    name: Deploy frontend (Pages)
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'pnpm'
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build
+        run: pnpm build
+
+      - name: Install Wrangler
+        run: npm i -g wrangler@3
+
+      - name: Deploy to Cloudflare Pages
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          CLOUDFLARE_PAGES_PROJECT_NAME: ${{ secrets.CLOUDFLARE_PAGES_PROJECT_NAME }}
+        run: |
+          set -euo pipefail
+
+          if [ -z "${CLOUDFLARE_PAGES_PROJECT_NAME:-}" ]; then
+            echo "Missing secret: CLOUDFLARE_PAGES_PROJECT_NAME" >&2
+            exit 1
+          fi
+
+          wrangler pages deploy dist \
+            --project-name "$CLOUDFLARE_PAGES_PROJECT_NAME" \
+            --branch main

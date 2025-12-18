@@ -1,0 +1,15 @@
+name = "beacon-auth"
+main = "build/worker/shim.mjs"
+compatibility_date = "2025-12-18"
+
+[[d1_databases]]
+binding = "DB"
+database_name = "beacon-auth"
+database_id = "REPLACE_WITH_D1_DATABASE_ID"
+
+[vars]
+BASE_URL = "https://example.com"
+JWT_KID = "beacon-auth-key-1"
+ACCESS_TOKEN_EXPIRATION = "900"
+REFRESH_TOKEN_EXPIRATION = "2592000"
+JWT_EXPIRATION = "3600"

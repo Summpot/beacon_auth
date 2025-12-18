@@ -9,7 +9,7 @@ path = "src/lib.rs"
 
 [dependencies]
 sea-orm-migration = { workspace = true }
-entity = { path = "../entity" }
+entity = { workspace = true }
 tokio = { workspace = true }
 
 [dependencies.sea-orm]
