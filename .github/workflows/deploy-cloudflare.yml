@@ -54,45 +54,156 @@ jobs:
             target/
           key: ${{ runner.os }}-cargo-wasm-${{ hashFiles('**/Cargo.lock') }}
 
-      - name: Build + migrate + deploy (wrangler-action)
-        uses: cloudflare/wrangler-action@v3
-        with:
-          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          workingDirectory: crates/beacon-worker
-          command: deploy --config wrangler.ci.toml
-          preCommands: |
-            echo "==> Installing worker-build (if needed)"
-            cargo install worker-build --locked
+      - name: Install Wrangler CLI
+        run: |
+          npm install -g wrangler@3
+          wrangler --version
 
-            echo "==> Building worker (Rust -> wasm + shim)"
-            worker-build --release
+      - name: Install worker-build (if needed)
+        run: cargo install worker-build --locked
 
-            echo "==> Resolving D1 database id & generating wrangler.ci.toml"
-            node ../../scripts/ci/generate-wrangler-ci.mjs
+      - name: Build worker (Rust -> wasm + shim)
+        working-directory: crates/beacon-worker
+        run: worker-build --release
 
-            echo "==> Applying D1 schema (idempotent)"
-            pnpm exec wrangler d1 execute DB --remote --yes --file migrations/0001_init.sql --config wrangler.ci.toml
-
-            echo "==> Syncing Worker secrets (optional)"
-            [ -n "${JWT_PRIVATE_KEY_DER_B64:-}" ] && (echo "Setting secret: JWT_PRIVATE_KEY_DER_B64"; tmpfile="$(mktemp)"; printf %s "$JWT_PRIVATE_KEY_DER_B64" > "$tmpfile"; pnpm exec wrangler secret put JWT_PRIVATE_KEY_DER_B64 --config wrangler.ci.toml < "$tmpfile"; rm -f "$tmpfile") || echo "Skipping secret (not provided): JWT_PRIVATE_KEY_DER_B64"
-            [ -n "${GITHUB_CLIENT_ID:-}" ] && (echo "Setting secret: GITHUB_CLIENT_ID"; tmpfile="$(mktemp)"; printf %s "$GITHUB_CLIENT_ID" > "$tmpfile"; pnpm exec wrangler secret put GITHUB_CLIENT_ID --config wrangler.ci.toml < "$tmpfile"; rm -f "$tmpfile") || echo "Skipping secret (not provided): GITHUB_CLIENT_ID"
-            [ -n "${GITHUB_CLIENT_SECRET:-}" ] && (echo "Setting secret: GITHUB_CLIENT_SECRET"; tmpfile="$(mktemp)"; printf %s "$GITHUB_CLIENT_SECRET" > "$tmpfile"; pnpm exec wrangler secret put GITHUB_CLIENT_SECRET --config wrangler.ci.toml < "$tmpfile"; rm -f "$tmpfile") || echo "Skipping secret (not provided): GITHUB_CLIENT_SECRET"
-            [ -n "${GOOGLE_CLIENT_ID:-}" ] && (echo "Setting secret: GOOGLE_CLIENT_ID"; tmpfile="$(mktemp)"; printf %s "$GOOGLE_CLIENT_ID" > "$tmpfile"; pnpm exec wrangler secret put GOOGLE_CLIENT_ID --config wrangler.ci.toml < "$tmpfile"; rm -f "$tmpfile") || echo "Skipping secret (not provided): GOOGLE_CLIENT_ID"
-            [ -n "${GOOGLE_CLIENT_SECRET:-}" ] && (echo "Setting secret: GOOGLE_CLIENT_SECRET"; tmpfile="$(mktemp)"; printf %s "$GOOGLE_CLIENT_SECRET" > "$tmpfile"; pnpm exec wrangler secret put GOOGLE_CLIENT_SECRET --config wrangler.ci.toml < "$tmpfile"; rm -f "$tmpfile") || echo "Skipping secret (not provided): GOOGLE_CLIENT_SECRET"
+      - name: Resolve D1 id + generate wrangler.ci.toml
+        uses: actions/github-script@v7
         env:
-          # Make credentials available to preCommands (no interactive `wrangler login` required).
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           D1_DATABASE_ID: ${{ secrets.CLOUDFLARE_WORKER_D1_DATABASE_ID }}
-          # Non-sensitive; defaults to 'beaconauth' if not set.
           D1_DATABASE_NAME: ${{ vars.CLOUDFLARE_WORKER_D1_DATABASE_NAME || 'beaconauth' }}
           BASE_URL: ${{ secrets.CLOUDFLARE_WORKER_BASE_URL }}
+        with:
+          script: |
+            const fs = require('node:fs');
+            const path = require('node:path');
+            const cp = require('node:child_process');
+
+            const workerDir = path.join(process.env.GITHUB_WORKSPACE, 'crates', 'beacon-worker');
+            process.chdir(workerDir);
+
+            const d1IdFromEnv = (process.env.D1_DATABASE_ID || '').trim();
+            const d1Name = (process.env.D1_DATABASE_NAME || 'beaconauth').trim();
+            const baseUrl = (process.env.BASE_URL || '').trim();
+
+            function execJson(args) {
+              const out = cp.execFileSync('wrangler', args, { encoding: 'utf8' });
+              try {
+                return JSON.parse(out);
+              } catch (e) {
+                throw new Error(`Failed to parse JSON from: wrangler ${args.join(' ')}\n${out}`);
+              }
+            }
+
+            function asArray(data) {
+              if (Array.isArray(data)) return data;
+              if (data && Array.isArray(data.result)) return data.result;
+              if (data && Array.isArray(data.databases)) return data.databases;
+              return [];
+            }
+
+            function getId(item) {
+              return (item?.uuid ?? item?.id ?? item?.database_id ?? '').toString().trim();
+            }
+
+            let d1Id = d1IdFromEnv;
+            if (!d1Id) {
+              const list = execJson(['d1', 'list', '--json']);
+              for (const it of asArray(list)) {
+                if (it?.name === d1Name) {
+                  d1Id = getId(it);
+                  break;
+                }
+              }
+
+              if (!d1Id) {
+                console.log(`D1 database '${d1Name}' not found; creating it...`);
+                cp.execFileSync('wrangler', ['d1', 'create', d1Name], { stdio: 'inherit' });
+
+                const list2 = execJson(['d1', 'list', '--json']);
+                for (const it of asArray(list2)) {
+                  if (it?.name === d1Name) {
+                    d1Id = getId(it);
+                    break;
+                  }
+                }
+              }
+            }
+
+            if (!d1Id) {
+              throw new Error(
+                "Unable to resolve a D1 database id. Provide secrets.CLOUDFLARE_WORKER_D1_DATABASE_ID or set vars.CLOUDFLARE_WORKER_D1_DATABASE_NAME (defaults to 'beaconauth').",
+              );
+            }
+
+            const srcPath = path.join(workerDir, 'wrangler.toml');
+            let text = fs.readFileSync(srcPath, 'utf8');
+
+            if (text.includes('REPLACE_WITH_D1_DATABASE_ID')) {
+              text = text.replaceAll('REPLACE_WITH_D1_DATABASE_ID', d1Id);
+            } else {
+              const re = /^database_id\s*=\s*"[^"]*"\s*$/gm;
+              if (!re.test(text)) throw new Error('Could not find D1 database_id entry in wrangler.toml');
+              text = text.replace(re, `database_id = "${d1Id}"`);
+            }
+
+            // Align the CI config to the resolved database name.
+            text = text.replace(/^database_name\s*=\s*"[^"]*"\s*$/gm, `database_name = "${d1Name}"`);
+
+            // Keep repo defaults unless BASE_URL is provided.
+            if (baseUrl) {
+              text = text.replace('BASE_URL = "https://example.com"', `BASE_URL = "${baseUrl}"`);
+            }
+
+            const outPath = path.join(workerDir, 'wrangler.ci.toml');
+            fs.writeFileSync(outPath, text, 'utf8');
+            console.log(`Wrote ${outPath} (D1 name=${d1Name}, id=${d1Id})`);
+
+      - name: Apply D1 schema (idempotent)
+        working-directory: crates/beacon-worker
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: wrangler d1 execute DB --remote --yes --file migrations/0001_init.sql --config wrangler.ci.toml
+
+      - name: Sync Worker secrets (optional)
+        working-directory: crates/beacon-worker
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           JWT_PRIVATE_KEY_DER_B64: ${{ secrets.CLOUDFLARE_WORKER_JWT_PRIVATE_KEY_DER_B64 }}
           GITHUB_CLIENT_ID: ${{ secrets.CLOUDFLARE_WORKER_GITHUB_CLIENT_ID }}
           GITHUB_CLIENT_SECRET: ${{ secrets.CLOUDFLARE_WORKER_GITHUB_CLIENT_SECRET }}
           GOOGLE_CLIENT_ID: ${{ secrets.CLOUDFLARE_WORKER_GOOGLE_CLIENT_ID }}
           GOOGLE_CLIENT_SECRET: ${{ secrets.CLOUDFLARE_WORKER_GOOGLE_CLIENT_SECRET }}
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          put_secret() {
+            local name="$1"
+            local value="$2"
+            if [ -n "$value" ]; then
+              echo "Setting secret: $name"
+              printf %s "$value" | wrangler secret put "$name" --config wrangler.ci.toml
+            else
+              echo "Skipping secret (not provided): $name"
+            fi
+          }
+
+          put_secret JWT_PRIVATE_KEY_DER_B64 "${JWT_PRIVATE_KEY_DER_B64:-}"
+          put_secret GITHUB_CLIENT_ID "${GITHUB_CLIENT_ID:-}"
+          put_secret GITHUB_CLIENT_SECRET "${GITHUB_CLIENT_SECRET:-}"
+          put_secret GOOGLE_CLIENT_ID "${GOOGLE_CLIENT_ID:-}"
+          put_secret GOOGLE_CLIENT_SECRET "${GOOGLE_CLIENT_SECRET:-}"
+
+      - name: Deploy worker
+        working-directory: crates/beacon-worker
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: wrangler deploy --config wrangler.ci.toml
 
   deploy-pages:
     name: Deploy frontend (Pages)
@@ -119,19 +230,69 @@ jobs:
       - name: Build
         run: pnpm build
 
-      - name: Deploy to Cloudflare Pages (wrangler-action)
-        uses: cloudflare/wrangler-action@v3
-        with:
-          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          # Keep this as ONE shell line: wrangler-action executes preCommands in a way that breaks multi-line constructs.
-          preCommands: >-
-            set -eu; echo "==> Ensuring Cloudflare Pages project exists: ${PAGES_PROJECT_NAME}"; code="$(curl -sS -o /dev/null -w '%{http_code}' -H "Authorization: Bearer ${CLOUDFLARE_API_TOKEN}" "https://api.cloudflare.com/client/v4/accounts/${CLOUDFLARE_ACCOUNT_ID}/pages/projects/${PAGES_PROJECT_NAME}")"; if [ "$code" = "200" ]; then echo "Pages project '${PAGES_PROJECT_NAME}' already exists."; elif [ "$code" = "404" ]; then echo "Creating Pages project '${PAGES_PROJECT_NAME}' (production branch: main)..."; create_code="$(curl -sS -o /dev/null -w '%{http_code}' -X POST -H "Authorization: Bearer ${CLOUDFLARE_API_TOKEN}" -H "Content-Type: application/json" --data "$(printf '{\"name\":\"%s\",\"production_branch\":\"main\"}' "${PAGES_PROJECT_NAME}")" "https://api.cloudflare.com/client/v4/accounts/${CLOUDFLARE_ACCOUNT_ID}/pages/projects")"; [ "$create_code" = "200" ] || { echo "Failed to create Pages project (HTTP ${create_code})."; exit 1; }; else echo "Failed to query Pages project (HTTP ${code})."; exit 1; fi
+      - name: Install Wrangler CLI
+        run: |
+          npm install -g wrangler@3
+          wrangler --version
 
-          # Non-sensitive; defaults to 'beaconauth' if not set.
-          command: pages deploy dist --project-name=${{ vars.CLOUDFLARE_PAGES_PROJECT_NAME || 'beaconauth' }} --branch main --commit-dirty=true
+      - name: Ensure Pages project exists
+        uses: actions/github-script@v7
         env:
-          # Make credentials available to preCommands (no interactive `wrangler login` required).
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           PAGES_PROJECT_NAME: ${{ vars.CLOUDFLARE_PAGES_PROJECT_NAME || 'beaconauth' }}
+        with:
+          script: |
+            const token = (process.env.CLOUDFLARE_API_TOKEN || '').trim();
+            const accountId = (process.env.CLOUDFLARE_ACCOUNT_ID || '').trim();
+            const projectName = (process.env.PAGES_PROJECT_NAME || 'beaconauth').trim();
+
+            if (!token) throw new Error('CLOUDFLARE_API_TOKEN is not set');
+            if (!accountId) throw new Error('CLOUDFLARE_ACCOUNT_ID is not set');
+            if (!projectName) throw new Error('PAGES_PROJECT_NAME is not set');
+
+            const base = `https://api.cloudflare.com/client/v4/accounts/${accountId}/pages/projects`;
+            const headers = {
+              Authorization: `Bearer ${token}`,
+              'Content-Type': 'application/json',
+            };
+
+            const getRes = await fetch(`${base}/${projectName}`, { headers });
+            if (getRes.status === 200) {
+              console.log(`Pages project '${projectName}' already exists.`);
+              return;
+            }
+
+            if (getRes.status !== 404) {
+              const body = await getRes.text();
+              throw new Error(`Failed to query Pages project '${projectName}' (HTTP ${getRes.status}): ${body}`);
+            }
+
+            console.log(`Creating Pages project '${projectName}' (production branch: main)...`);
+            const createRes = await fetch(base, {
+              method: 'POST',
+              headers,
+              body: JSON.stringify({ name: projectName, production_branch: 'main' }),
+            });
+
+            const createBody = await createRes.text();
+            if (!createRes.ok) {
+              throw new Error(`Failed to create Pages project '${projectName}' (HTTP ${createRes.status}): ${createBody}`);
+            }
+
+            try {
+              const json = JSON.parse(createBody);
+              if (json && json.success === false) {
+                throw new Error(`Cloudflare API reported failure: ${createBody}`);
+              }
+            } catch {
+              // Non-JSON response is still acceptable as long as HTTP status is OK.
+            }
+
+            console.log(`Created Pages project '${projectName}'.`);
+
+      - name: Deploy to Cloudflare Pages
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: pages_project_name="${{ vars.CLOUDFLARE_PAGES_PROJECT_NAME || 'beaconauth' }}"; wrangler pages deploy dist --project-name="$pages_project_name" --branch main --commit-dirty=true
