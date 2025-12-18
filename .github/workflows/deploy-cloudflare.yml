@@ -82,7 +82,7 @@ jobs:
                 return subprocess.check_output(list(args), text=True).strip()
 
             d1_id = (os.environ.get("D1_DATABASE_ID") or "").strip()
-            d1_name = (os.environ.get("D1_DATABASE_NAME") or "beacon-auth").strip()
+            d1_name = (os.environ.get("D1_DATABASE_NAME") or "beaconauth").strip()
             base_url = (os.environ.get("BASE_URL") or "").strip()
 
             if not d1_id:
@@ -113,8 +113,8 @@ jobs:
 
             if not d1_id:
                 raise SystemExit(
-                    "Unable to resolve a D1 database id. Provide secrets.CLOUDFLARE_WORKER_D1_DATABASE_ID "
-                    "or secrets.CLOUDFLARE_WORKER_D1_DATABASE_NAME."
+                "Unable to resolve a D1 database id. Provide secrets.CLOUDFLARE_WORKER_D1_DATABASE_ID "
+                "or set vars.CLOUDFLARE_WORKER_D1_DATABASE_NAME (defaults to 'beaconauth')."
                 )
 
             src = Path("wrangler.toml")
@@ -160,7 +160,8 @@ jobs:
             put_secret GOOGLE_CLIENT_SECRET "${GOOGLE_CLIENT_SECRET:-}"
         env:
           D1_DATABASE_ID: ${{ secrets.CLOUDFLARE_WORKER_D1_DATABASE_ID }}
-          D1_DATABASE_NAME: ${{ secrets.CLOUDFLARE_WORKER_D1_DATABASE_NAME }}
+          # Non-sensitive; defaults to 'beaconauth' if not set.
+          D1_DATABASE_NAME: ${{ vars.CLOUDFLARE_WORKER_D1_DATABASE_NAME || 'beaconauth' }}
           BASE_URL: ${{ secrets.CLOUDFLARE_WORKER_BASE_URL }}
           JWT_PRIVATE_KEY_DER_B64: ${{ secrets.CLOUDFLARE_WORKER_JWT_PRIVATE_KEY_DER_B64 }}
           GITHUB_CLIENT_ID: ${{ secrets.CLOUDFLARE_WORKER_GITHUB_CLIENT_ID }}
@@ -198,4 +199,5 @@ jobs:
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          command: pages deploy dist --project-name=${{ secrets.CLOUDFLARE_PAGES_PROJECT_NAME }} --branch main
+          # Non-sensitive; defaults to 'beaconauth' if not set.
+          command: pages deploy dist --project-name=${{ vars.CLOUDFLARE_PAGES_PROJECT_NAME || 'beaconauth' }} --branch main
