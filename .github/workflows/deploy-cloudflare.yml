@@ -53,10 +53,7 @@ jobs:
       - name: Install dependencies (frontend)
         run: pnpm install --frozen-lockfile
 
-      - name: Build frontend
-        run: pnpm build
-
-      - name: Sync frontend assets into Worker
+      - name: Build frontend + sync assets into Worker
         run: node scripts/sync-worker-assets.mjs
 
       - name: Cache cargo
@@ -74,22 +71,6 @@ jobs:
         run: |
           npm install -g wrangler@3
           wrangler --version
-
-      - name: Install worker-build (if needed)
-        shell: bash
-        run: |
-          set -euo pipefail
-
-          if command -v worker-build >/dev/null 2>&1; then
-            echo "worker-build already installed (from cache)."
-            worker-build --version || true
-          else
-            cargo install worker-build --locked
-          fi
-
-      - name: Build worker (Rust -> wasm + shim)
-        working-directory: crates/beacon-worker
-        run: worker-build --release
 
       - name: Resolve D1 id + generate wrangler.ci.toml
         uses: actions/github-script@v7

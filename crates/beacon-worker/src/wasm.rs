@@ -693,19 +693,49 @@ fn method_not_allowed(req: &Request) -> Result<Response> {
     json_with_cors(req, resp)
 }
 
+fn is_api_path(raw_path: &str) -> bool {
+    // In the single-worker deployment, the UI lives at `/` and the API uses `/api/v1/*`.
+    // Additionally, we support route-mounted deployments like `example.com/api/*` where
+    // requests arrive as `/api/v1/...` (normalized later).
+    raw_path == "/api"
+        || raw_path.starts_with("/api/")
+        || raw_path == "/v1"
+        || raw_path.starts_with("/v1/")
+        || raw_path.starts_with("/.well-known/")
+}
+
+async fn serve_assets(req: Request, env: &Env) -> Result<Response> {
+    // Wrangler [assets] bindings are exposed as a Fetcher.
+    // https://docs.rs/worker/latest/src/worker/env.rs.html
+    let assets = env.assets("ASSETS")?;
+    assets.fetch_request(req).await
+}
+
 #[event(fetch)]
 pub async fn fetch(req: Request, env: Env, _ctx: Context) -> Result<Response> {
     console_error_panic_hook::set_once();
 
+    let url = req.url()?;
+    let raw_path = url.path().to_string();
+    let api = is_api_path(&raw_path);
+
     if req.method() == Method::Options {
-        // Basic preflight response
-        let resp = Response::empty()?.with_status(204);
-        return json_with_cors(&req, resp);
+        // Preflight handling is only relevant for API endpoints.
+        // For static assets, just delegate to the assets fetcher.
+        if api {
+            let resp = Response::empty()?.with_status(204);
+            return json_with_cors(&req, resp);
+        }
+        return serve_assets(req, &env).await;
+    }
+
+    // When `assets.run_worker_first = true`, we must explicitly serve the UI from the ASSETS
+    // binding for all non-API requests.
+    if !api {
+        return serve_assets(req, &env).await;
     }
 
     let method = req.method();
-    let url = req.url()?;
-    let raw_path = url.path().to_string();
     // Support deployments where the backend is mounted at a context path, e.g. `/api/*`.
     // For example, when a Worker route is configured as `example.com/api/*`, requests will
     // arrive with paths like `/api/v1/login`. We normalize to `/v1/login` for routing.
