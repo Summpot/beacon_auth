@@ -76,10 +76,10 @@ jobs:
           wrangler --version
 
       - name: Resolve D1 id + generate wrangler.ci.toml
+        id: wrangler_ci
         uses: actions/github-script@v7
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           D1_DATABASE_ID: ${{ secrets.CLOUDFLARE_WORKER_D1_DATABASE_ID }}
           D1_DATABASE_NAME: ${{ vars.CLOUDFLARE_WORKER_D1_DATABASE_NAME || 'beacon-auth' }}
           BASE_URL: ${{ secrets.CLOUDFLARE_WORKER_BASE_URL }}
@@ -96,6 +96,13 @@ jobs:
 
             const wranglerTomlPath = path.join(repoRoot, 'wrangler.toml');
             process.chdir(repoRoot);
+
+            const wranglerTomlRaw = fs.readFileSync(wranglerTomlPath, 'utf8');
+            const nameMatch = wranglerTomlRaw.match(/^name\s*=\s*"([^"]+)"\s*$/m);
+            const workerName = nameMatch ? String(nameMatch[1]).trim() : '';
+            if (!workerName) {
+              throw new Error('Could not resolve Worker name from wrangler.toml (expected: name = "...")');
+            }
 
             const d1IdFromEnv = (process.env.D1_DATABASE_ID || '').trim();
             const d1Name = (process.env.D1_DATABASE_NAME || 'beacon-auth').trim();
@@ -151,7 +158,7 @@ jobs:
             // (d1 list/create/execute, deploy) do not require an explicit secret.
             const resolvedAccountId = await resolveAccountId();
             if (resolvedAccountId) {
-              process.env.CLOUDFLARE_ACCOUNT_ID = resolvedAccountId;
+              core.exportVariable('CLOUDFLARE_ACCOUNT_ID', resolvedAccountId);
               console.log(`Using Cloudflare account id: ${resolvedAccountId}`);
             }
 
@@ -173,12 +180,7 @@ jobs:
                 const subdomain = (sub?.result?.subdomain || '').trim();
                 if (!subdomain) return '';
 
-                const wranglerToml = fs.readFileSync(wranglerTomlPath, 'utf8');
-                const nameMatch = wranglerToml.match(/^name\s*=\s*"([^"]+)"\s*$/m);
-                const scriptName = nameMatch ? nameMatch[1] : '';
-                if (!scriptName) return '';
-
-                return `https://${scriptName}.${subdomain}.workers.dev`;
+                return `https://${workerName}.${subdomain}.workers.dev`;
               } catch (e) {
                 console.log(`workers.dev BASE_URL auto-detect skipped: ${e?.message ?? e}`);
               }
@@ -267,6 +269,11 @@ jobs:
             fs.writeFileSync(outPath, text, 'utf8');
             console.log(`Wrote ${outPath} (D1 name=${d1Name}, id=${d1Id})`);
 
+            core.setOutput('worker_name', workerName);
+            core.setOutput('d1_name', d1Name);
+            core.setOutput('d1_id', d1Id);
+            core.setOutput('resolved_base_url', resolvedBaseUrl || baseUrlFromEnv || '');
+
       - name: Apply D1 schema (idempotent)
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
@@ -302,6 +309,126 @@ jobs:
           put_secret GOOGLE_CLIENT_SECRET "${GOOGLE_CLIENT_SECRET:-}"
 
       - name: Deploy worker
+        id: deploy_worker
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-        run: wrangler deploy --config wrangler.ci.toml
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          out_file="$(mktemp)"
+          wrangler deploy --config wrangler.ci.toml 2>&1 | tee "$out_file"
+
+          # Try to extract the workers.dev URL from `wrangler deploy` output.
+          worker_url="$(grep -Eo 'https://[^ ]+\.workers\.dev' "$out_file" | head -n 1 || true)"
+          if [ -z "$worker_url" ]; then
+            host_only="$(grep -Eo '[A-Za-z0-9.-]+\.workers\.dev' "$out_file" | head -n 1 || true)"
+            if [ -n "$host_only" ]; then
+              worker_url="https://$host_only"
+            fi
+          fi
+
+          if [ -n "$worker_url" ]; then
+            echo "Detected Worker URL: $worker_url"
+          else
+            echo "Could not detect Worker URL from deploy output; Pages proxy step will fall back to resolved_base_url (if available)."
+          fi
+
+          echo "worker_url=$worker_url" >> "$GITHUB_OUTPUT"
+
+      - name: Deploy Pages proxy (short *.pages.dev)
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          PAGES_PROJECT: ${{ steps.wrangler_ci.outputs.worker_name }}
+          WORKER_ORIGIN: ${{ steps.deploy_worker.outputs.worker_url || steps.wrangler_ci.outputs.resolved_base_url }}
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          # Pages deploy should not require an explicit account id.
+          unset CLOUDFLARE_ACCOUNT_ID || true
+
+          project="${PAGES_PROJECT:?PAGES_PROJECT is required}"
+          upstream="${WORKER_ORIGIN:-}"
+          if [ -z "$upstream" ]; then
+            echo "::error::WORKER_ORIGIN is empty; could not infer Worker URL from deploy output (preferred) or resolved_base_url (fallback)."
+            exit 1
+          fi
+
+          if [[ "$upstream" != http://* && "$upstream" != https://* ]]; then
+            upstream="https://$upstream"
+          fi
+
+          tmp_dir="$(mktemp -d)"
+          cat > "$tmp_dir/index.html" <<'HTML'
+          <!doctype html>
+          <meta charset="utf-8" />
+          <meta name="viewport" content="width=device-width, initial-scale=1" />
+          <title>BeaconAuth</title>
+          <p>BeaconAuth Pages proxy.</p>
+          HTML
+
+          # Deploy a Pages project that reverse-proxies all requests to the Worker.
+          # This keeps the short *.pages.dev domain in the browser while the Worker handles logic.
+          cat > "$tmp_dir/_worker.js" <<JS
+          const UPSTREAM_ORIGIN = ${upstream@Q};
+          const UPSTREAM = new URL(UPSTREAM_ORIGIN);
+
+          addEventListener('fetch', (event) => {
+            event.respondWith(handle(event.request));
+          });
+
+          async function handle(request) {
+            const url = new URL(request.url);
+            const upstreamUrl = new URL(request.url);
+            upstreamUrl.protocol = UPSTREAM.protocol;
+            upstreamUrl.hostname = UPSTREAM.hostname;
+            upstreamUrl.port = UPSTREAM.port;
+
+            const headers = new Headers(request.headers);
+            // Avoid forbidden/host-related header issues; the URL determines the upstream host.
+            headers.delete('host');
+            headers.delete('Host');
+            headers.set('X-Forwarded-Host', url.host);
+            headers.set('X-Forwarded-Proto', url.protocol.replace(':', ''));
+
+            const init = {
+              method: request.method,
+              headers,
+              redirect: 'manual',
+              body: request.method === 'GET' || request.method === 'HEAD' ? undefined : request.body,
+            };
+
+            let resp = await fetch(new Request(upstreamUrl.toString(), init));
+
+            // If the upstream sends absolute redirects back to *.workers.dev, rewrite them to this Pages host.
+            const location = resp.headers.get('Location');
+            if (location) {
+              try {
+                const locUrl = new URL(location, upstreamUrl);
+                if (locUrl.hostname === UPSTREAM.hostname) {
+                  locUrl.hostname = url.hostname;
+                  locUrl.protocol = url.protocol;
+                  const newHeaders = new Headers(resp.headers);
+                  newHeaders.set('Location', locUrl.toString());
+                  resp = new Response(resp.body, {
+                    status: resp.status,
+                    statusText: resp.statusText,
+                    headers: newHeaders,
+                  });
+                }
+              } catch {
+                // ignore malformed Location header
+              }
+            }
+
+            return resp;
+          }
+          JS
+
+          echo "Deploying Pages project '$project' (proxy -> $upstream)"
+          wrangler pages deploy "$tmp_dir" --project-name "$project" --branch "main"
+
+          echo "Pages URL: https://$project.pages.dev" >> "$GITHUB_STEP_SUMMARY"
+
+      
