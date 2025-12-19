@@ -1,4 +1,4 @@
-name: Deploy (Cloudflare Workers + Pages)
+name: Deploy (Cloudflare Worker)
 
 on:
   push:
@@ -11,6 +11,7 @@ on:
       - Cargo.lock
       - src/**
       - public/**
+      - scripts/**
       - package.json
       - pnpm-lock.yaml
       - rsbuild.config.ts
@@ -27,7 +28,7 @@ concurrency:
 
 jobs:
   deploy-worker:
-    name: Deploy beacon-worker (Workers)
+    name: Deploy beacon-worker (API + Assets)
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -38,10 +39,25 @@ jobs:
         with:
           targets: wasm32-unknown-unknown
 
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10
+
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
           node-version: '20'
+          cache: 'pnpm'
+
+      - name: Install dependencies (frontend)
+        run: pnpm install --frozen-lockfile
+
+      - name: Build frontend
+        run: pnpm build
+
+      - name: Sync frontend assets into Worker
+        run: node scripts/sync-worker-assets.mjs
 
       - name: Cache cargo
         uses: actions/cache@v4
@@ -81,9 +97,8 @@ jobs:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           D1_DATABASE_ID: ${{ secrets.CLOUDFLARE_WORKER_D1_DATABASE_ID }}
-          D1_DATABASE_NAME: ${{ vars.CLOUDFLARE_WORKER_D1_DATABASE_NAME || 'beaconauth' }}
+          D1_DATABASE_NAME: ${{ vars.CLOUDFLARE_WORKER_D1_DATABASE_NAME || 'beacon-auth' }}
           BASE_URL: ${{ secrets.CLOUDFLARE_WORKER_BASE_URL }}
-          PAGES_PROJECT_NAME: ${{ vars.CLOUDFLARE_PAGES_PROJECT_NAME || 'beaconauth' }}
         with:
           script: |
             const fs = require('node:fs');
@@ -94,11 +109,14 @@ jobs:
             process.chdir(workerDir);
 
             const d1IdFromEnv = (process.env.D1_DATABASE_ID || '').trim();
-            const d1Name = (process.env.D1_DATABASE_NAME || 'beaconauth').trim();
+            const d1Name = (process.env.D1_DATABASE_NAME || 'beacon-auth').trim();
             const baseUrlFromEnv = (process.env.BASE_URL || '').trim();
-            const pagesProjectName = (process.env.PAGES_PROJECT_NAME || 'beaconauth').trim();
-            const accountId = (process.env.CLOUDFLARE_ACCOUNT_ID || '').trim();
+            const accountIdFromEnv = (process.env.CLOUDFLARE_ACCOUNT_ID || '').trim();
             const token = (process.env.CLOUDFLARE_API_TOKEN || '').trim();
+
+            if (!token) {
+              throw new Error('CLOUDFLARE_API_TOKEN is not set (required).');
+            }
 
             async function cfJson(url, init) {
               const res = await fetch(url, init);
@@ -115,32 +133,51 @@ jobs:
               return json;
             }
 
-            async function resolveBaseUrl() {
-              if (baseUrlFromEnv) return baseUrlFromEnv;
-              if (!token || !accountId) return '';
+            async function resolveAccountId() {
+              if (accountIdFromEnv) return accountIdFromEnv;
 
               const headers = {
                 Authorization: `Bearer ${token}`,
                 'Content-Type': 'application/json',
               };
 
-              // 1) Prefer Pages production URL (same-origin with frontend).
-              // Works well because `<project>.pages.dev` is stable.
               try {
-                const url = `https://api.cloudflare.com/client/v4/accounts/${accountId}/pages/projects/${encodeURIComponent(pagesProjectName)}`;
-                const proj = await cfJson(url, { headers });
-                const result = proj?.result;
-                const subdomain = (result?.subdomain || '').trim();
-                const domains = Array.isArray(result?.domains) ? result.domains : [];
-                // If a custom domain is attached, prefer it; otherwise fall back to pages.dev.
-                const custom = domains.find((d) => d && typeof d === 'string' && !d.endsWith('.pages.dev'));
-                if (custom) return `https://${custom}`;
-                if (subdomain) return `https://${subdomain}.pages.dev`;
+                const acc = await cfJson('https://api.cloudflare.com/client/v4/accounts?per_page=50', { headers });
+                const list = Array.isArray(acc?.result) ? acc.result : [];
+                if (list.length === 1 && list[0]?.id) return String(list[0].id).trim();
+                if (list.length > 1 && list[0]?.id) {
+                  console.log(
+                    `CLOUDFLARE_ACCOUNT_ID not provided; multiple accounts visible (${list.length}). Using the first account: ${list[0].name ?? list[0].id}`,
+                  );
+                  return String(list[0].id).trim();
+                }
               } catch (e) {
-                console.log(`Pages BASE_URL auto-detect skipped: ${e?.message ?? e}`);
+                console.log(`Account id auto-detect skipped: ${e?.message ?? e}`);
               }
 
-              // 2) Fall back to workers.dev (works for basic API testing; same-origin routing is still recommended).
+              return '';
+            }
+
+            // If we can resolve an account id, export it so subsequent `wrangler` commands
+            // (d1 list/create/execute, deploy) do not require an explicit secret.
+            const resolvedAccountId = await resolveAccountId();
+            if (resolvedAccountId) {
+              process.env.CLOUDFLARE_ACCOUNT_ID = resolvedAccountId;
+              console.log(`Using Cloudflare account id: ${resolvedAccountId}`);
+            }
+
+            async function resolveBaseUrl() {
+              if (baseUrlFromEnv) return baseUrlFromEnv;
+
+              const accountId = resolvedAccountId;
+              if (!accountId) return '';
+
+              const headers = {
+                Authorization: `Bearer ${token}`,
+                'Content-Type': 'application/json',
+              };
+
+              // Fall back to workers.dev (single Worker serves both UI + API).
               try {
                 const url = `https://api.cloudflare.com/client/v4/accounts/${accountId}/workers/subdomain`;
                 const sub = await cfJson(url, { headers });
@@ -206,7 +243,7 @@ jobs:
 
             if (!d1Id) {
               throw new Error(
-                "Unable to resolve a D1 database id. Provide secrets.CLOUDFLARE_WORKER_D1_DATABASE_ID or set vars.CLOUDFLARE_WORKER_D1_DATABASE_NAME (defaults to 'beaconauth').",
+                "Unable to resolve a D1 database id. Provide secrets.CLOUDFLARE_WORKER_D1_DATABASE_ID or set vars.CLOUDFLARE_WORKER_D1_DATABASE_NAME (defaults to 'beacon-auth').",
               );
             }
 
@@ -227,10 +264,14 @@ jobs:
             // Keep repo defaults unless BASE_URL can be resolved.
             const resolvedBaseUrl = await resolveBaseUrl();
             if (resolvedBaseUrl) {
-              text = text.replace('BASE_URL = "https://example.com"', `BASE_URL = "${resolvedBaseUrl}"`);
+              const re = /^BASE_URL\s*=\s*"[^"]*"\s*$/gm;
+              if (!re.test(text)) {
+                throw new Error('Could not find BASE_URL entry in wrangler.toml');
+              }
+              text = text.replace(re, `BASE_URL = "${resolvedBaseUrl}"`);
             } else {
               console.log('BASE_URL not provided and could not be auto-detected; leaving repo default in wrangler.toml.');
-              console.log('Tip: set secrets.CLOUDFLARE_WORKER_BASE_URL to your Pages/custom-domain origin for correct OAuth redirects and cookies.');
+              console.log('Tip: set secrets.CLOUDFLARE_WORKER_BASE_URL to your Worker custom domain origin if you need a stable issuer/redirect base.');
             }
 
             const outPath = path.join(workerDir, 'wrangler.ci.toml');
@@ -241,14 +282,12 @@ jobs:
         working-directory: crates/beacon-worker
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
         run: wrangler d1 execute DB --remote --yes --file migrations/0001_init.sql --config wrangler.ci.toml
 
       - name: Sync Worker secrets (optional)
         working-directory: crates/beacon-worker
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           JWT_PRIVATE_KEY_DER_B64: ${{ secrets.CLOUDFLARE_WORKER_JWT_PRIVATE_KEY_DER_B64 }}
           GITHUB_CLIENT_ID: ${{ secrets.CLOUDFLARE_WORKER_GITHUB_CLIENT_ID }}
           GITHUB_CLIENT_SECRET: ${{ secrets.CLOUDFLARE_WORKER_GITHUB_CLIENT_SECRET }}
@@ -279,221 +318,4 @@ jobs:
         working-directory: crates/beacon-worker
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
         run: wrangler deploy --config wrangler.ci.toml
-
-      - name: Ensure Worker route for /api/* (optional)
-        uses: actions/github-script@v7
-        env:
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          BASE_URL: ${{ secrets.CLOUDFLARE_WORKER_BASE_URL }}
-          CLOUDFLARE_ZONE_ID: ${{ secrets.CLOUDFLARE_ZONE_ID }}
-          CLOUDFLARE_ZONE_NAME: ${{ vars.CLOUDFLARE_ZONE_NAME }}
-        with:
-          script: |
-            const fs = require('node:fs');
-            const path = require('node:path');
-
-            const token = (process.env.CLOUDFLARE_API_TOKEN || '').trim();
-            let baseUrl = (process.env.BASE_URL || '').trim();
-            const zoneIdFromEnv = (process.env.CLOUDFLARE_ZONE_ID || '').trim();
-            const zoneNameFromEnv = (process.env.CLOUDFLARE_ZONE_NAME || '').trim();
-
-            if (!token) {
-              console.log('CLOUDFLARE_API_TOKEN not set; skipping route configuration.');
-              return;
-            }
-
-            const workerDir = path.join(process.env.GITHUB_WORKSPACE, 'crates', 'beacon-worker');
-
-            if (!baseUrl) {
-              // Try to read the BASE_URL that was resolved during the wrangler.ci.toml generation step.
-              try {
-                const ciText = fs.readFileSync(path.join(workerDir, 'wrangler.ci.toml'), 'utf8');
-                const m = ciText.match(/^BASE_URL\s*=\s*"([^"]+)"\s*$/m);
-                if (m) baseUrl = m[1].trim();
-              } catch {
-                // ignore
-              }
-            }
-
-            if (!baseUrl) {
-              console.log('BASE_URL not set and could not be read from wrangler.ci.toml; skipping route configuration.');
-              return;
-            }
-
-            let hostname;
-            try {
-              hostname = new URL(baseUrl).hostname;
-            } catch (e) {
-              throw new Error(`Invalid BASE_URL '${baseUrl}': ${e?.message ?? e}`);
-            }
-
-            if (hostname.endsWith('.pages.dev') || hostname.endsWith('.workers.dev')) {
-              console.log(`Host '${hostname}' is a Cloudflare-managed domain; Worker Routes for /api/* must be configured on a custom domain (zone). Skipping.`);
-              return;
-            }
-
-            const wranglerToml = fs.readFileSync(path.join(workerDir, 'wrangler.toml'), 'utf8');
-            const nameMatch = wranglerToml.match(/^name\s*=\s*"([^"]+)"\s*$/m);
-            if (!nameMatch) throw new Error('Unable to determine Worker script name from crates/beacon-worker/wrangler.toml');
-            const scriptName = nameMatch[1];
-
-            const headers = {
-              Authorization: `Bearer ${token}`,
-              'Content-Type': 'application/json',
-            };
-
-            async function cfJson(url, init) {
-              const res = await fetch(url, init);
-              const text = await res.text();
-              let json;
-              try {
-                json = JSON.parse(text);
-              } catch {
-                throw new Error(`Cloudflare API returned non-JSON (HTTP ${res.status}): ${text}`);
-              }
-              if (!res.ok || json?.success === false) {
-                throw new Error(`Cloudflare API error (HTTP ${res.status}): ${text}`);
-              }
-              return json;
-            }
-
-            let zoneId = zoneIdFromEnv;
-            if (!zoneId) {
-              if (!zoneNameFromEnv) {
-                console.log('No CLOUDFLARE_ZONE_ID secret and no vars.CLOUDFLARE_ZONE_NAME provided; skipping route configuration.');
-                console.log('To enable automatic /api/* routing, set secrets.CLOUDFLARE_ZONE_ID (recommended) or vars.CLOUDFLARE_ZONE_NAME (your apex zone name, e.g. example.com).');
-                return;
-              }
-
-              const zonesUrl = `https://api.cloudflare.com/client/v4/zones?name=${encodeURIComponent(zoneNameFromEnv)}&per_page=50`;
-              const zones = await cfJson(zonesUrl, { headers });
-              const found = Array.isArray(zones?.result) ? zones.result[0] : null;
-              if (!found?.id) {
-                throw new Error(`Could not resolve zone id for zone name '${zoneNameFromEnv}'. Provide secrets.CLOUDFLARE_ZONE_ID instead.`);
-              }
-              zoneId = found.id;
-            }
-
-            const pattern = `${hostname}/api/*`;
-            const listUrl = `https://api.cloudflare.com/client/v4/zones/${zoneId}/workers/routes`;
-            const list = await cfJson(listUrl, { headers });
-            const routes = Array.isArray(list?.result) ? list.result : [];
-
-            const existing = routes.find((r) => r?.pattern === pattern);
-            if (existing) {
-              if (existing.script === scriptName) {
-                console.log(`Worker route already present: ${pattern} -> ${scriptName}`);
-                return;
-              }
-
-              console.log(`Updating Worker route: ${pattern} (was -> ${existing.script}, now -> ${scriptName})`);
-              const putUrl = `https://api.cloudflare.com/client/v4/zones/${zoneId}/workers/routes/${existing.id}`;
-              await cfJson(putUrl, {
-                method: 'PUT',
-                headers,
-                body: JSON.stringify({ pattern, script: scriptName }),
-              });
-              return;
-            }
-
-            console.log(`Creating Worker route: ${pattern} -> ${scriptName}`);
-            await cfJson(listUrl, {
-              method: 'POST',
-              headers,
-              body: JSON.stringify({ pattern, script: scriptName }),
-            });
-
-  deploy-pages:
-    name: Deploy frontend (Pages)
-    runs-on: ubuntu-latest
-
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Setup pnpm
-        uses: pnpm/action-setup@v4
-        with:
-          version: 10
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: '20'
-          cache: 'pnpm'
-
-      - name: Install dependencies
-        run: pnpm install --frozen-lockfile
-
-      - name: Build
-        run: pnpm build
-
-      - name: Install Wrangler CLI
-        run: |
-          npm install -g wrangler@3
-          wrangler --version
-
-      - name: Ensure Pages project exists
-        uses: actions/github-script@v7
-        env:
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          PAGES_PROJECT_NAME: ${{ vars.CLOUDFLARE_PAGES_PROJECT_NAME || 'beaconauth' }}
-        with:
-          script: |
-            const token = (process.env.CLOUDFLARE_API_TOKEN || '').trim();
-            const accountId = (process.env.CLOUDFLARE_ACCOUNT_ID || '').trim();
-            const projectName = (process.env.PAGES_PROJECT_NAME || 'beaconauth').trim();
-
-            if (!token) throw new Error('CLOUDFLARE_API_TOKEN is not set');
-            if (!accountId) throw new Error('CLOUDFLARE_ACCOUNT_ID is not set');
-            if (!projectName) throw new Error('PAGES_PROJECT_NAME is not set');
-
-            const base = `https://api.cloudflare.com/client/v4/accounts/${accountId}/pages/projects`;
-            const headers = {
-              Authorization: `Bearer ${token}`,
-              'Content-Type': 'application/json',
-            };
-
-            const getRes = await fetch(`${base}/${projectName}`, { headers });
-            if (getRes.status === 200) {
-              console.log(`Pages project '${projectName}' already exists.`);
-              return;
-            }
-
-            if (getRes.status !== 404) {
-              const body = await getRes.text();
-              throw new Error(`Failed to query Pages project '${projectName}' (HTTP ${getRes.status}): ${body}`);
-            }
-
-            console.log(`Creating Pages project '${projectName}' (production branch: main)...`);
-            const createRes = await fetch(base, {
-              method: 'POST',
-              headers,
-              body: JSON.stringify({ name: projectName, production_branch: 'main' }),
-            });
-
-            const createBody = await createRes.text();
-            if (!createRes.ok) {
-              throw new Error(`Failed to create Pages project '${projectName}' (HTTP ${createRes.status}): ${createBody}`);
-            }
-
-            try {
-              const json = JSON.parse(createBody);
-              if (json && json.success === false) {
-                throw new Error(`Cloudflare API reported failure: ${createBody}`);
-              }
-            } catch {
-              // Non-JSON response is still acceptable as long as HTTP status is OK.
-            }
-
-            console.log(`Created Pages project '${projectName}'.`);
-
-      - name: Deploy to Cloudflare Pages
-        env:
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-        run: pages_project_name="${{ vars.CLOUDFLARE_PAGES_PROJECT_NAME || 'beaconauth' }}"; wrangler pages deploy dist --project-name="$pages_project_name" --branch main --commit-dirty=true

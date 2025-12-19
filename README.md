@@ -125,18 +125,18 @@ cargo build --workspace --release
 # The binary will be at target/release/beacon
 ```
 
-## Cloudflare Deployment (Workers + Pages)
+## Cloudflare Deployment (Single Worker)
 
-This repository includes two deployable targets for Cloudflare:
+This repository deploys to Cloudflare as a **single Worker**:
 
-- **Workers API**: `crates/beacon-worker` (Rust/WASM) using **D1** for storage.
-- **Frontend**: a static React app (this repo root) suitable for **Cloudflare Pages**.
+- **Full-stack Worker**: `crates/beacon-worker` (Rust/WASM) using **D1** for storage.
+- **Frontend** (React): built at repo root and served via **Workers Static Assets** from the same Worker.
 
-The recommended production setup is:
+This avoids cross-origin issues by keeping the UI and API on the **same origin**:
 
-1. Deploy the frontend to Pages.
-2. Deploy the API to Workers.
-3. Route the Worker on the **same hostname** as Pages for `/api/*` so cookies and OAuth redirects work reliably.
+- UI: `/` (and SPA routes like `/login`)
+- API: `/api/v1/*`
+- JWKS: `/.well-known/jwks.json` (and also `/api/.well-known/jwks.json`)
 
 ### One-time Cloudflare setup
 
@@ -157,7 +157,7 @@ Apply the initial schema:
 In `crates/beacon-worker/wrangler.toml`:
 
 - Replace `database_id = "REPLACE_WITH_D1_DATABASE_ID"` with your real D1 database id (recommended for local/manual deploys).
-- Set `BASE_URL` to your public site origin (usually your Pages URL), e.g. `https://<project>.pages.dev` or your custom domain.
+- `BASE_URL` is optional in the repo config (CI will try to auto-detect a `*.workers.dev` URL). If you use a custom domain and want a stable issuer/redirect base, set it explicitly.
 
 For production, you should provide a stable ES256 private key so JWKS/JWTs remain valid across deployments:
 
@@ -168,13 +168,9 @@ Optional OAuth secrets (only needed if you enable those providers):
 - `GITHUB_CLIENT_ID`, `GITHUB_CLIENT_SECRET`
 - `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`
 
-#### 3) Create a Cloudflare Pages project
-
-Create a Pages project in Cloudflare and note its **project name** (used by CI).
-
 ### GitHub Actions deployment
 
-This repo includes a workflow that deploys both targets:
+This repo includes a workflow that deploys the Worker:
 
 - `.github/workflows/deploy-cloudflare.yml`
 
@@ -182,9 +178,8 @@ Add the following **GitHub Actions secrets**:
 
 | Secret | Required | Used for |
 |---|---:|---|
-| `CLOUDFLARE_API_TOKEN` | Yes | Wrangler authentication (Workers + Pages) |
-| `CLOUDFLARE_ACCOUNT_ID` | Yes | Target Cloudflare account |
-| `CLOUDFLARE_PAGES_PROJECT_NAME` | Yes | Pages project name |
+| `CLOUDFLARE_API_TOKEN` | Yes | Wrangler authentication (deploy + D1 operations) |
+| `CLOUDFLARE_ACCOUNT_ID` | Optional | Helps BASE_URL auto-detect; if omitted CI will try to pick the first accessible account |
 | `CLOUDFLARE_WORKER_D1_DATABASE_ID` | One of* | Replaces `REPLACE_WITH_D1_DATABASE_ID` at deploy time |
 | `CLOUDFLARE_WORKER_D1_DATABASE_NAME` | One of* | If `..._D1_DATABASE_ID` is not provided, CI will `wrangler d1 create` this database name (default: `beacon-auth`) |
 | `CLOUDFLARE_WORKER_BASE_URL` | Recommended | Sets `BASE_URL` in the Worker at deploy time |
@@ -196,23 +191,22 @@ Add the following **GitHub Actions secrets**:
 
 \* Provide **at least one** of `CLOUDFLARE_WORKER_D1_DATABASE_ID` or `CLOUDFLARE_WORKER_D1_DATABASE_NAME`.
 
-The workflow uses `cloudflare/wrangler-action@v3` and will:
+The workflow will:
 
+- build the frontend (React)
+- sync `dist/` into `crates/beacon-worker/assets/`
 - build the Worker with `worker-build --release`
 - resolve (or create) the D1 database and generate `wrangler.ci.toml`
 - apply `crates/beacon-worker/migrations/0001_init.sql` (idempotent)
-- deploy the Worker and deploy the frontend to Pages
+- deploy the Worker (serving both UI + API)
 
 The workflow runs on pushes to `main` and can also be triggered manually.
 
-### Routing (same-origin API)
+### Routing
 
-The frontend calls the API using same-origin relative paths (e.g. `/api/v1/login`). For production, configure your Worker routes so the API is served on the **same host** as Pages:
+No special `/api/*` route mapping is needed anymore because the Worker serves both UI and API.
 
-- Route `https://<your-pages-domain>/api/*` → your Worker script
-- Route `https://<your-pages-domain>/.well-known/jwks.json` → your Worker script
-
-Then set `BASE_URL` to `https://<your-pages-domain>`.
+If you want a custom domain (instead of `*.workers.dev`), configure a Worker route / custom domain in Cloudflare and set `BASE_URL` accordingly.
 
 > Note: The Workers build currently does not enable Passkey/WebAuthn endpoints.
 

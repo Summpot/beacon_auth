@@ -5,6 +5,7 @@
   "type": "module",
   "scripts": {
     "build": "rsbuild build",
+    "build:worker": "rsbuild build && node scripts/sync-worker-assets.mjs",
     "check": "biome check --write",
     "dev": "rsbuild dev --open",
     "format": "biome format --write",
