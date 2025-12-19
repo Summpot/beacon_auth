@@ -50,6 +50,12 @@ jobs:
           node-version: '20'
           cache: 'pnpm'
 
+      - name: Install worker-build from subtree
+        uses: baptiste0928/cargo-install@v3
+        with:
+          crate: worker-build
+          args: --path ./thirdparty/worker-rs/worker-build
+
       - name: Install dependencies (frontend)
         run: pnpm install --frozen-lockfile
 
