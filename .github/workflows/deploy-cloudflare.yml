@@ -424,35 +424,11 @@ jobs:
           JS
 
           echo "Ensuring Pages project exists: '$project'"
-          project_exists="$(wrangler pages project list --json 2>/dev/null | node - "$project" <<'NODE'
-          let input = '';
-          process.stdin.setEncoding('utf8');
-          process.stdin.on('data', (d) => (input += d));
-          process.stdin.on('end', () => {
-            const name = process.argv[2];
-            try {
-              const j = JSON.parse(input || 'null');
-              const arr = Array.isArray(j)
-                ? j
-                : Array.isArray(j?.result)
-                  ? j.result
-                  : Array.isArray(j?.projects)
-                    ? j.projects
-                    : [];
-              const ok = arr.some((p) => (p?.name || '').toString() === name);
-              process.stdout.write(ok ? 'true' : 'false');
-            } catch {
-              process.stdout.write('unknown');
-            }
-          });
-          NODE
-          )"
-
-          if [ "$project_exists" != "true" ]; then
+          if wrangler pages project list --json | jq -e --arg name "$project" '(if type=="array" then . else (.result // .projects // []) end) | any(.name == $name)' >/dev/null; then
+            echo "Pages project '$project' already exists."
+          else
             echo "Pages project '$project' not found; creating it (production branch: main)..."
             wrangler pages project create "$project" --production-branch "main"
-          else
-            echo "Pages project '$project' already exists."
           fi
 
           echo "Deploying Pages project '$project' (proxy -> $upstream)"
