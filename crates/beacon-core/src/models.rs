@@ -223,10 +223,10 @@ mod tests {
     #[test]
     fn test_login_payload_deserialization() {
         let json = r#"{
-            \"username\": \"testuser\",
-            \"password\": \"testpass\",
-            \"challenge\": \"abc123\",
-            \"redirect_port\": 25585
+            "username": "testuser",
+            "password": "testpass",
+            "challenge": "abc123",
+            "redirect_port": 25585
         }"#;
 
         let payload: LoginPayload = serde_json::from_str(json).unwrap();
