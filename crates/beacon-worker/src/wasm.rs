@@ -13,10 +13,11 @@ use chrono::TimeZone;
 use jsonwebtoken::{encode, Header};
 use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
-use serde_json::{json, Value};
+use serde_json::json;
 use sha2::{Digest, Sha256};
 use url::Url;
 use uuid::Uuid;
+use wasm_bindgen::JsValue;
 use worker::*;
 
 #[derive(Clone)]
@@ -246,9 +247,10 @@ fn ts_to_rfc3339(ts: i64) -> String {
         .unwrap_or_else(|| ts.to_string())
 }
 
-fn d1_number(value: i64) -> Value {
+fn d1_number(value: i64) -> JsValue {
     // D1 currently rejects JavaScript BigInt parameters, so always pass numeric values.
-    (value as f64).into()
+    // The `worker` D1 binding expects `JsValue` parameters.
+    JsValue::from_f64(value as f64)
 }
 
 fn kv(env: &Env) -> Result<KvStore> {
