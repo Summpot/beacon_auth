@@ -10,6 +10,7 @@ on:
       - Cargo.toml
       - Cargo.lock
       - wrangler.jsonc
+      - wrangler.workers.jsonc
       - src/**
       - public/**
       - package.json
@@ -47,7 +48,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: '22'
           cache: 'pnpm'
 
       - name: Install worker-build from subtree
@@ -56,7 +57,7 @@ jobs:
           crate: worker-build
           args: --path ./thirdparty/worker-rs/worker-build
 
-      - name: Install dependencies (frontend)
+      - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
       - name: Cache cargo
@@ -70,11 +71,6 @@ jobs:
             target/
           key: ${{ runner.os }}-cargo-wasm-${{ hashFiles('**/Cargo.lock') }}
 
-      - name: Install Wrangler CLI
-        run: |
-          npm install -g wrangler@4
-          wrangler --version
-
       - name: Resolve deploy settings
         id: cfg
         env:
@@ -87,10 +83,26 @@ jobs:
           node <<'NODE'
           const fs = require('node:fs');
 
-          const cfg = JSON.parse(fs.readFileSync('wrangler.jsonc', 'utf8'));
-          const workerName = String(cfg?.name ?? '').trim();
-          if (!workerName) {
-            throw new Error('Could not resolve Worker name from wrangler.jsonc (expected: { "name": "..." })');
+          function readJson(path) {
+            return JSON.parse(fs.readFileSync(path, 'utf8'));
+          }
+
+          const pagesCfgPath = 'wrangler.jsonc';
+          const workersCfgPath = 'wrangler.workers.jsonc';
+
+          const pagesCfg = readJson(pagesCfgPath);
+          const workersCfg = readJson(workersCfgPath);
+
+          const pagesName = String(pagesCfg?.name ?? '').trim();
+          const workersName = String(workersCfg?.name ?? '').trim();
+          if (!pagesName) {
+            throw new Error('Could not resolve Pages project name from wrangler.jsonc (expected: { "name": "..." })');
+          }
+          if (!workersName) {
+            throw new Error('Could not resolve Worker name from wrangler.workers.jsonc (expected: { "name": "..." })');
+          }
+          if (pagesName !== workersName) {
+            throw new Error(`Config mismatch: wrangler.jsonc name="${pagesName}" but wrangler.workers.jsonc name="${workersName}". They must match.`);
           }
 
           const accountId = String(process.env.CLOUDFLARE_ACCOUNT_ID ?? '').trim();
@@ -98,69 +110,65 @@ jobs:
             throw new Error('Missing CLOUDFLARE_ACCOUNT_ID (required for Wrangler in CI).');
           }
 
-          // Generate a CI-only config that pins the account_id so Wrangler does not need to call
+          // Generate CI-only configs that pin account_id so Wrangler does not need to call
           // the /memberships endpoint to infer it.
-          cfg.account_id = accountId;
-          const ciConfigPath = 'wrangler.ci.json';
-          fs.writeFileSync(ciConfigPath, JSON.stringify(cfg, null, 2) + '\n');
+          pagesCfg.account_id = accountId;
+          workersCfg.account_id = accountId;
 
-          const pagesBaseUrl = `https://${workerName}.pages.dev`;
+          const ciPagesConfigPath = 'wrangler.pages.ci.json';
+          const ciWorkersConfigPath = 'wrangler.workers.ci.json';
+          fs.writeFileSync(ciPagesConfigPath, JSON.stringify(pagesCfg, null, 2) + '\n');
+          fs.writeFileSync(ciWorkersConfigPath, JSON.stringify(workersCfg, null, 2) + '\n');
+
+          const pagesBaseUrl = `https://${pagesName}.pages.dev`;
           const baseUrlFromEnv = String(process.env.BASE_URL ?? '').trim();
           const resolvedBaseUrl = baseUrlFromEnv || pagesBaseUrl;
 
           fs.appendFileSync(
             process.env.GITHUB_OUTPUT,
-            `worker_name=${workerName}\npages_base_url=${pagesBaseUrl}\nresolved_base_url=${resolvedBaseUrl}\nwrangler_config=${ciConfigPath}\n`,
+            [
+              `worker_name=${pagesName}`,
+              `pages_base_url=${pagesBaseUrl}`,
+              `resolved_base_url=${resolvedBaseUrl}`,
+              `wrangler_pages_config=${ciPagesConfigPath}`,
+              `wrangler_workers_config=${ciWorkersConfigPath}`,
+              '',
+            ].join('\n'),
           );
 
-          console.log(`Worker name: ${workerName}`);
+          console.log(`Project name: ${pagesName}`);
           console.log(`BASE_URL: ${resolvedBaseUrl}`);
-          console.log(`Wrangler config: ${ciConfigPath}`);
+          console.log(`Wrangler Pages config: ${ciPagesConfigPath}`);
+          console.log(`Wrangler Worker config: ${ciWorkersConfigPath}`);
           NODE
 
+      - name: Build frontend (UI + Pages _worker.js)
+        run: pnpm build
+
       - name: Deploy worker
-        id: deploy_worker
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           BASE_URL: ${{ steps.cfg.outputs.resolved_base_url }}
-          WRANGLER_CONFIG: ${{ steps.cfg.outputs.wrangler_config }}
+          WRANGLER_WORKERS_CONFIG: ${{ steps.cfg.outputs.wrangler_workers_config }}
         shell: bash
         run: |
           set -euo pipefail
 
-          out_file="$(mktemp)"
-          wrangler deploy --config "${WRANGLER_CONFIG}" --var "BASE_URL:${BASE_URL}" 2>&1 | tee "$out_file"
+          pnpm exec wrangler deploy --config "${WRANGLER_WORKERS_CONFIG}" --var "BASE_URL:${BASE_URL}"
 
-          # Try to extract the workers.dev URL from `wrangler deploy` output.
-          worker_url="$(grep -Eo 'https://[^ ]+\.workers\.dev' "$out_file" | head -n 1 || true)"
-          if [ -z "$worker_url" ]; then
-            host_only="$(grep -Eo '[A-Za-z0-9.-]+\.workers\.dev' "$out_file" | head -n 1 || true)"
-            if [ -n "$host_only" ]; then
-              worker_url="https://$host_only"
-            fi
-          fi
-
-          if [ -n "$worker_url" ]; then
-            echo "Detected Worker URL: $worker_url"
-          else
-            echo "Could not detect Worker URL from deploy output."
-          fi
-
-          echo "worker_url=$worker_url" >> "$GITHUB_OUTPUT"
-
-      - name: Apply D1 schema (idempotent)
+      - name: Apply D1 migrations (remote)
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          WRANGLER_CONFIG: ${{ steps.cfg.outputs.wrangler_config }}
-        run: wrangler d1 execute DB --remote --yes --file crates/beacon-worker/migrations/0001_init.sql --config "${WRANGLER_CONFIG}"
+          WRANGLER_WORKERS_CONFIG: ${{ steps.cfg.outputs.wrangler_workers_config }}
+        run: pnpm exec wrangler d1 migrations apply DB --remote --config "${WRANGLER_WORKERS_CONFIG}"
 
       - name: Sync Worker secrets (optional)
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          WRANGLER_CONFIG: ${{ steps.cfg.outputs.wrangler_config }}
+          WRANGLER_WORKERS_CONFIG: ${{ steps.cfg.outputs.wrangler_workers_config }}
           JWT_PRIVATE_KEY_DER_B64: ${{ secrets.CLOUDFLARE_WORKER_JWT_PRIVATE_KEY_DER_B64 }}
           GITHUB_CLIENT_ID: ${{ secrets.CLOUDFLARE_WORKER_GITHUB_CLIENT_ID }}
           GITHUB_CLIENT_SECRET: ${{ secrets.CLOUDFLARE_WORKER_GITHUB_CLIENT_SECRET }}
@@ -175,7 +183,7 @@ jobs:
             local value="$2"
             if [ -n "$value" ]; then
               echo "Setting secret: $name"
-              printf %s "$value" | wrangler secret put "$name" --config "${WRANGLER_CONFIG}"
+              printf %s "$value" | pnpm exec wrangler secret put "$name" --config "${WRANGLER_WORKERS_CONFIG}"
             else
               echo "Skipping secret (not provided): $name"
             fi
@@ -187,130 +195,12 @@ jobs:
           put_secret GOOGLE_CLIENT_ID "${GOOGLE_CLIENT_ID:-}"
           put_secret GOOGLE_CLIENT_SECRET "${GOOGLE_CLIENT_SECRET:-}"
 
-      - name: Prepare Pages _worker.js (proxy /api to Worker)
-        env:
-          PAGES_PROJECT: ${{ steps.cfg.outputs.worker_name }}
-          WORKER_ORIGIN: ${{ steps.deploy_worker.outputs.worker_url }}
-        shell: bash
-        run: |
-          set -euo pipefail
-
-          project="${PAGES_PROJECT:?PAGES_PROJECT is required}"
-          upstream="${WORKER_ORIGIN:-}"
-          if [ -z "$upstream" ]; then
-            echo "::error::WORKER_ORIGIN is empty; could not infer Worker URL from deploy output."
-            exit 1
-          fi
-
-          if [[ "$upstream" != http://* && "$upstream" != https://* ]]; then
-            upstream="https://$upstream"
-          fi
-
-          if [ ! -d "dist" ]; then
-            echo "::error::dist/ not found. Expected frontend build output at ./dist."
-            exit 1
-          fi
-
-          # Pages deployment: static assets in ./dist plus a single _worker.js.
-          # Only /api, /v1, and /.well-known are proxied to the API Worker.
-          cat > "dist/_worker.js" <<JS
-          const UPSTREAM_ORIGIN = ${upstream@Q};
-          const UPSTREAM = new URL(UPSTREAM_ORIGIN);
-
-          const PROXY_PREFIXES = [
-            '/api',
-            '/v1',
-            '/.well-known',
-          ];
-
-          function shouldProxy(pathname) {
-            for (const p of PROXY_PREFIXES) {
-              if (pathname === p || pathname.startsWith(p + '/')) return true;
-            }
-            return false;
-          }
-
-          function isHtmlRequest(request) {
-            const accept = request.headers.get('Accept') || '';
-            return accept.includes('text/html');
-          }
-
-          async function proxyToWorker(request) {
-            const url = new URL(request.url);
-            const upstreamUrl = new URL(request.url);
-            upstreamUrl.protocol = UPSTREAM.protocol;
-            upstreamUrl.hostname = UPSTREAM.hostname;
-            upstreamUrl.port = UPSTREAM.port;
-
-            const headers = new Headers(request.headers);
-            // Avoid forbidden/host-related header issues; the URL determines the upstream host.
-            headers.delete('host');
-            headers.delete('Host');
-            headers.set('X-Forwarded-Host', url.host);
-            headers.set('X-Forwarded-Proto', url.protocol.replace(':', ''));
-
-            const init = {
-              method: request.method,
-              headers,
-              redirect: 'manual',
-              body: request.method === 'GET' || request.method === 'HEAD' ? undefined : request.body,
-            };
-
-            let resp = await fetch(new Request(upstreamUrl.toString(), init));
-
-            // If the upstream sends absolute redirects back to the Worker host, rewrite them to this Pages host.
-            const location = resp.headers.get('Location');
-            if (location) {
-              try {
-                const locUrl = new URL(location, upstreamUrl);
-                if (locUrl.hostname === UPSTREAM.hostname) {
-                  locUrl.hostname = url.hostname;
-                  locUrl.protocol = url.protocol;
-                  const newHeaders = new Headers(resp.headers);
-                  newHeaders.set('Location', locUrl.toString());
-                  resp = new Response(resp.body, {
-                    status: resp.status,
-                    statusText: resp.statusText,
-                    headers: newHeaders,
-                  });
-                }
-              } catch {
-                // ignore malformed Location header
-              }
-            }
-
-            return resp;
-          }
-
-          export default {
-            async fetch(request, env, ctx) {
-              const url = new URL(request.url);
-
-              if (shouldProxy(url.pathname)) {
-                return proxyToWorker(request);
-              }
-
-              // Serve static assets from Pages.
-              const resp = await env.ASSETS.fetch(request);
-
-              // SPA fallback: for HTML navigations, serve index.html on 404.
-              if ((request.method === 'GET' || request.method === 'HEAD') && resp.status === 404 && isHtmlRequest(request)) {
-                const indexReq = new Request(new URL('/index.html', url), request);
-                return env.ASSETS.fetch(indexReq);
-              }
-
-              return resp;
-            },
-          };
-          JS
-
-          echo "Wrote dist/_worker.js (Pages project: $project, proxy -> $upstream)"
-
       - name: Deploy Pages (UI)
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           PAGES_PROJECT: ${{ steps.cfg.outputs.worker_name }}
+          WRANGLER_PAGES_CONFIG: ${{ steps.cfg.outputs.wrangler_pages_config }}
         shell: bash
         run: |
           set -euo pipefail
@@ -318,10 +208,7 @@ jobs:
           project="${PAGES_PROJECT:?PAGES_PROJECT is required}"
           echo "Deploying Pages project '$project' from ./dist"
 
-          # Run from dist/ so Wrangler doesn't auto-detect this repo's wrangler.jsonc/git state.
-          pushd "dist" >/dev/null
-          wrangler pages deploy . --project-name "$project" --branch "main" --experimental-provision --experimental-auto-create
-          popd >/dev/null
+          pnpm exec wrangler pages deploy dist --project-name "$project" --branch "main" --experimental-provision --experimental-auto-create --config "${WRANGLER_PAGES_CONFIG}"
 
           echo "Pages URL: https://$project.pages.dev" >> "$GITHUB_STEP_SUMMARY"
 

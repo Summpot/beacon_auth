@@ -47,4 +47,9 @@ export default defineConfig({
       },
     },
   },
+  output: {
+    cleanDistPath: {
+      keep: [/dist\/_worker.js/],
+    },
+  },
 });

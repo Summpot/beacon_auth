@@ -142,7 +142,10 @@ Everything else (SPA routes like `/login`) is served as static content from Page
 
 ### Wrangler config
 
-The primary Wrangler config is `wrangler.jsonc` at repo root.
+This repo uses **two** Wrangler configs at the repo root:
+
+- `wrangler.workers.jsonc`: the **API Worker** (`crates/beacon-worker`, D1 + KV, Rust/WASM)
+- `wrangler.jsonc`: **Cloudflare Pages** (static UI + a service binding `BACKEND` pointing to the API Worker)
 
 This repo is configured for **Automatic provisioning**:
 
@@ -177,9 +180,9 @@ The workflow will:
 
 - build the frontend (React)
 - deploy the API Worker (Automatic provisioning will create/link D1 + KV if needed)
-- apply the schema `crates/beacon-worker/migrations/0001_init.sql` (idempotent)
+- apply D1 migrations via `wrangler d1 migrations apply` (idempotent)
 - sync Worker secrets (when provided)
-- deploy Pages from `dist/` and generate `dist/_worker.js` as the proxy layer
+- deploy Pages from `dist/` (which includes `dist/_worker.js` built from `src/pages/_worker.ts` via rsbuild)
 
 The workflow runs on pushes to `main` and can also be triggered manually.
 
