@@ -19,6 +19,7 @@ jsonwebtoken = { workspace = true }
 p256 = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
+urlencoding = { workspace = true }
 
 # Optional (native/server) passkey types
 webauthn-rs = { workspace = true, optional = true }

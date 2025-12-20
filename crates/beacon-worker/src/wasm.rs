@@ -1,6 +1,6 @@
 use std::sync::OnceLock;
 
-use beacon_core::{crypto, models};
+use beacon_core::{crypto, models, oauth};
 use beacon_passkey::{
     extract_challenge_from_client_data_b64url, AuthenticationState, AuthResult,
     CreationChallengeResponse, PublicKeyCredential as PasskeyPublicKeyCredential,
@@ -577,12 +577,74 @@ fn query_param(url: &Url, key: &str) -> Option<String> {
         .find_map(|(k, v)| if k == key { Some(v.to_string()) } else { None })
 }
 
-async fn exchange_github_code(client_id: &str, client_secret: &str, code: &str) -> Result<(String, String)> {
+fn truncate_for_log(s: &str, max_len: usize) -> String {
+    if s.len() <= max_len {
+        return s.to_string();
+    }
+
+    // `str` slicing must happen on UTF-8 boundaries.
+    let mut end = max_len.min(s.len());
+    while end > 0 && !s.is_char_boundary(end) {
+        end -= 1;
+    }
+
+    let mut out = s[..end].to_string();
+    out.push_str("…(truncated)");
+    out
+}
+
+fn redact_oauth_token_body_for_log(body: &str) -> String {
+    // Best-effort redaction. We generally only log token bodies on error paths,
+    // but never risk leaking an access token.
+    if let Ok(mut v) = serde_json::from_str::<serde_json::Value>(body) {
+        let mut redacted = false;
+        if v.get("access_token").is_some() {
+            v["access_token"] = json!("[REDACTED]");
+            redacted = true;
+        }
+        if v.get("refresh_token").is_some() {
+            v["refresh_token"] = json!("[REDACTED]");
+            redacted = true;
+        }
+        let rendered = v.to_string();
+        return truncate_for_log(&rendered, if redacted { 2048 } else { 4096 });
+    }
+
+    // GitHub may return urlencoded bodies in some circumstances.
+    let pairs: Vec<(String, String)> = url::form_urlencoded::parse(body.as_bytes())
+        .into_owned()
+        .collect();
+    if !pairs.is_empty() {
+        let mut ser = url::form_urlencoded::Serializer::new(String::new());
+        for (k, v) in pairs {
+            if k == "access_token" || k == "refresh_token" {
+                ser.append_pair(&k, "[REDACTED]");
+            } else {
+                ser.append_pair(&k, &v);
+            }
+        }
+        return truncate_for_log(&ser.finish(), 4096);
+    }
+
+    if body.contains("access_token") || body.contains("refresh_token") {
+        return "<redacted token response>".to_string();
+    }
+
+    truncate_for_log(body, 4096)
+}
+
+async fn exchange_github_code(
+    client_id: &str,
+    client_secret: &str,
+    code: &str,
+    redirect_uri: &str,
+) -> Result<(String, String)> {
     let form_body = format!(
-        "client_id={}&client_secret={}&code={}",
+        "client_id={}&client_secret={}&code={}&redirect_uri={}",
         urlencoding::encode(client_id),
         urlencoding::encode(client_secret),
-        urlencoding::encode(code)
+        urlencoding::encode(code),
+        urlencoding::encode(redirect_uri)
     );
 
     let mut init = RequestInit::new();
@@ -596,19 +658,35 @@ async fn exchange_github_code(client_id: &str, client_secret: &str, code: &str) 
     let token_req = Request::new_with_init("https://github.com/login/oauth/access_token", &init)?;
     let mut token_resp = Fetch::Request(token_req).send().await?;
 
-    if token_resp.status_code() >= 400 {
-        let status = token_resp.status_code();
-        let body = token_resp.text().await?;
+    let status = token_resp.status_code();
+    let token_body = token_resp.text().await?;
+
+    if status >= 400 {
+        let safe = redact_oauth_token_body_for_log(&token_body);
         return Err(Error::RustError(format!(
-            "GitHub token exchange failed ({status}): {body}"
+            "GitHub token exchange failed ({status}): {safe}"
         )));
     }
 
-    let token_json: serde_json::Value = token_resp.json().await?;
-    let access_token = token_json
-        .get("access_token")
-        .and_then(|v| v.as_str())
-        .ok_or_else(|| Error::RustError("No access_token in GitHub response".to_string()))?;
+    // GitHub sometimes returns HTTP 200 with an error payload.
+    // We must inspect the body, not just the status code.
+    let access_token = match oauth::parse_access_token_from_token_exchange_body(&token_body) {
+        Ok(tok) => tok,
+        Err(oauth::OAuthTokenParseError::ProviderError(e)) => {
+            return Err(Error::RustError(format!(
+                "GitHub token exchange returned error '{}': {}{} (check GITHUB_CLIENT_ID/GITHUB_CLIENT_SECRET and callback URL: {redirect_uri})",
+                e.error,
+                e.error_description.unwrap_or_default(),
+                e.error_uri.map(|u| format!(" ({u})")).unwrap_or_default(),
+            )));
+        }
+        Err(other) => {
+            let safe = redact_oauth_token_body_for_log(&token_body);
+            return Err(Error::RustError(format!(
+                "GitHub token exchange failed (status {status}): {other}. Response: {safe} (check callback URL: {redirect_uri})"
+            )));
+        }
+    };
 
     let mut init = RequestInit::new();
     init.with_method(Method::Get);
@@ -838,7 +916,9 @@ async fn handle_oauth_callback(req: &Request, env: &Env) -> Result<Response> {
             let Some(client_secret) = env_string(env, "GITHUB_CLIENT_SECRET") else {
                 return error_response(req, 503, "oauth_not_configured", "GitHub OAuth is not configured");
             };
-            match exchange_github_code(&client_id, &client_secret, &code).await {
+            let redirect_base = jwt.issuer.trim_end_matches('/');
+            let callback_url = format!("{redirect_base}/api/v1/oauth/callback");
+            match exchange_github_code(&client_id, &client_secret, &code, &callback_url).await {
                 Ok(v) => v,
                 Err(e) => return internal_error_response(req, "GitHub authentication failed", &e),
             }

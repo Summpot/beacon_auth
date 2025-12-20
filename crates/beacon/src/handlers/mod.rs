@@ -474,8 +474,13 @@ async fn exchange_github_code(
 ) -> Result<(String, String), anyhow::Error> {
     let client = reqwest::Client::new();
 
+    let redirect_uri = format!(
+        "{}/api/v1/oauth/callback",
+        app_state.oauth_config.redirect_base.trim_end_matches('/')
+    );
+
     // Exchange code for access token
-    let token_response = client
+    let token_resp = client
         .post("https://github.com/login/oauth/access_token")
         .header("Accept", "application/json")
         .form(&[
@@ -498,15 +503,34 @@ async fn exchange_github_code(
                     .as_str(),
             ),
             ("code", code),
+            ("redirect_uri", &redirect_uri),
         ])
         .send()
-        .await?
-        .json::<serde_json::Value>()
         .await?;
 
-    let access_token = token_response["access_token"]
-        .as_str()
-        .ok_or_else(|| anyhow::anyhow!("No access token in response"))?;
+    let status = token_resp.status();
+    let body = token_resp.text().await?;
+
+    if !status.is_success() {
+        anyhow::bail!("GitHub token exchange failed ({status}): {body}");
+    }
+
+    let access_token = match beacon_core::oauth::parse_access_token_from_token_exchange_body(&body) {
+        Ok(tok) => tok,
+        Err(beacon_core::oauth::OAuthTokenParseError::ProviderError(e)) => {
+            anyhow::bail!(
+                "GitHub token exchange returned error '{}': {}{} (check GITHUB_CLIENT_ID/GITHUB_CLIENT_SECRET and callback URL: {redirect_uri})",
+                e.error,
+                e.error_description.unwrap_or_default(),
+                e.error_uri.map(|u| format!(" ({u})")).unwrap_or_default(),
+            );
+        }
+        Err(other) => {
+            anyhow::bail!(
+                "GitHub token exchange failed (status {status}): {other} (check callback URL: {redirect_uri})"
+            );
+        }
+    };
 
     // Get user info
     let user_response = client
