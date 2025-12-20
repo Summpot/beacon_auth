@@ -37,8 +37,28 @@ static JWT_STATE: OnceLock<JwtState> = OnceLock::new();
 
 static PASSKEY_RP: OnceLock<RpConfig> = OnceLock::new();
 
+fn normalize_env_value(raw: String) -> String {
+    // Cloud provider dashboards and CI often encourage quoting/whitespace.
+    // OAuth client IDs/secrets should not contain surrounding whitespace or quotes;
+    // normalize to reduce configuration foot-guns.
+    let trimmed = raw.trim();
+
+    // Strip a single pair of surrounding quotes if present.
+    if let Some(inner) = trimmed.strip_prefix('"').and_then(|s| s.strip_suffix('"')) {
+        return inner.trim().to_string();
+    }
+    if let Some(inner) = trimmed.strip_prefix('\'').and_then(|s| s.strip_suffix('\'')) {
+        return inner.trim().to_string();
+    }
+
+    trimmed.to_string()
+}
+
 fn env_string(env: &Env, key: &str) -> Option<String> {
-    env.var(key).ok().map(|v| v.to_string()).filter(|s| !s.is_empty())
+    env.var(key)
+        .ok()
+        .map(|v| normalize_env_value(v.to_string()))
+        .filter(|s| !s.is_empty())
 }
 
 fn init_jwt_state(env: &Env) -> Result<JwtState> {
@@ -639,6 +659,12 @@ async fn exchange_github_code(
     code: &str,
     redirect_uri: &str,
 ) -> Result<(String, String)> {
+    let client_id_hint = {
+        // Client ID is not secret, but keep logging conservative.
+        let prefix = client_id.chars().take(6).collect::<String>();
+        format!("len={}, prefix='{}'", client_id.len(), prefix)
+    };
+
     let form_body = format!(
         "client_id={}&client_secret={}&code={}&redirect_uri={}",
         urlencoding::encode(client_id),
@@ -674,7 +700,7 @@ async fn exchange_github_code(
         Ok(tok) => tok,
         Err(oauth::OAuthTokenParseError::ProviderError(e)) => {
             return Err(Error::RustError(format!(
-                "GitHub token exchange returned error '{}': {}{} (check GITHUB_CLIENT_ID/GITHUB_CLIENT_SECRET and callback URL: {redirect_uri})",
+                "GitHub token exchange returned error '{}': {}{} (check GITHUB_CLIENT_ID/GITHUB_CLIENT_SECRET; client_id {client_id_hint}; callback URL: {redirect_uri})",
                 e.error,
                 e.error_description.unwrap_or_default(),
                 e.error_uri.map(|u| format!(" ({u})")).unwrap_or_default(),
@@ -683,7 +709,7 @@ async fn exchange_github_code(
         Err(other) => {
             let safe = redact_oauth_token_body_for_log(&token_body);
             return Err(Error::RustError(format!(
-                "GitHub token exchange failed (status {status}): {other}. Response: {safe} (check callback URL: {redirect_uri})"
+                "GitHub token exchange failed (status {status}): {other}. Response: {safe} (client_id {client_id_hint}; callback URL: {redirect_uri})"
             )));
         }
     };
