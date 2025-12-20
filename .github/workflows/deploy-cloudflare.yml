@@ -228,7 +228,6 @@ jobs:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           PAGES_PROJECT: ${{ steps.cfg.outputs.worker_name }}
-          WRANGLER_PAGES_CONFIG: ${{ steps.cfg.outputs.wrangler_pages_config }}
         shell: bash
         run: |
           set -euo pipefail
@@ -236,7 +235,7 @@ jobs:
           project="${PAGES_PROJECT:?PAGES_PROJECT is required}"
           echo "Deploying Pages project '$project' from ./dist"
 
-          pnpm exec wrangler pages deploy dist --project-name "$project" --branch "main" --experimental-provision --experimental-auto-create --config "${WRANGLER_PAGES_CONFIG}"
+          pnpm exec wrangler pages deploy dist --project-name "$project" --branch "main" --experimental-provision --experimental-auto-create
 
           echo "Pages URL: https://$project.pages.dev" >> "$GITHUB_STEP_SUMMARY"
 
