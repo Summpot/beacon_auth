@@ -14,7 +14,6 @@ on:
 env:
   CARGO_TERM_COLOR: always
   REGISTRY: ghcr.io
-  IMAGE_NAME: ${{ toLower(github.repository) }}
 
 jobs:
   # Build Rust auth server binaries
@@ -24,6 +23,20 @@ jobs:
     with:
       artifact-prefix: ''
       include-docs: false
+
+  normalize-image-name:
+    name: Normalize Docker image name
+    runs-on: ubuntu-latest
+    outputs:
+      image-name: ${{ steps.normalize.outputs.image-name }}
+    steps:
+      - name: Normalize repository name
+        id: normalize
+        run: |
+          set -euo pipefail
+          repo="${GITHUB_REPOSITORY}"
+          image_name=$(echo "$repo" | tr '[:upper:]' '[:lower:]')
+          echo "image-name=$image_name" >> "$GITHUB_OUTPUT"
 
   # Test Rust workspace
   test-rust:
@@ -138,7 +151,9 @@ jobs:
   build-docker-amd64:
     name: Build Docker Image (linux/amd64)
     runs-on: ubuntu-latest
-    needs: build-binaries
+    needs: [build-binaries, normalize-image-name]
+    env:
+      IMAGE_NAME: ${{ needs.normalize-image-name.outputs.image-name }}
     permissions:
       contents: read
       packages: write
@@ -194,7 +209,9 @@ jobs:
   build-docker-arm64:
     name: Build Docker Image (linux/arm64)
     runs-on: ubuntu-latest
-    needs: build-binaries
+    needs: [build-binaries, normalize-image-name]
+    env:
+      IMAGE_NAME: ${{ needs.normalize-image-name.outputs.image-name }}
     permissions:
       contents: read
       packages: write
@@ -250,7 +267,9 @@ jobs:
   build-docker-manifest:
     name: Create Docker Multi-arch Manifest (debug)
     runs-on: ubuntu-latest
-    needs: [build-docker-amd64, build-docker-arm64]
+    needs: [build-docker-amd64, build-docker-arm64, normalize-image-name]
+    env:
+      IMAGE_NAME: ${{ needs.normalize-image-name.outputs.image-name }}
     permissions:
       contents: read
       packages: write
