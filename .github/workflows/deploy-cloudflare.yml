@@ -79,6 +79,7 @@ jobs:
         id: cfg
         env:
           BASE_URL: ${{ secrets.CLOUDFLARE_WORKER_BASE_URL }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
         shell: bash
         run: |
           set -euo pipefail
@@ -92,30 +93,44 @@ jobs:
             throw new Error('Could not resolve Worker name from wrangler.jsonc (expected: { "name": "..." })');
           }
 
+          const accountId = String(process.env.CLOUDFLARE_ACCOUNT_ID ?? '').trim();
+          if (!accountId) {
+            throw new Error('Missing CLOUDFLARE_ACCOUNT_ID (required for Wrangler in CI).');
+          }
+
+          // Generate a CI-only config that pins the account_id so Wrangler does not need to call
+          // the /memberships endpoint to infer it.
+          cfg.account_id = accountId;
+          const ciConfigPath = 'wrangler.ci.json';
+          fs.writeFileSync(ciConfigPath, JSON.stringify(cfg, null, 2) + '\n');
+
           const pagesBaseUrl = `https://${workerName}.pages.dev`;
           const baseUrlFromEnv = String(process.env.BASE_URL ?? '').trim();
           const resolvedBaseUrl = baseUrlFromEnv || pagesBaseUrl;
 
           fs.appendFileSync(
             process.env.GITHUB_OUTPUT,
-            `worker_name=${workerName}\npages_base_url=${pagesBaseUrl}\nresolved_base_url=${resolvedBaseUrl}\n`,
+            `worker_name=${workerName}\npages_base_url=${pagesBaseUrl}\nresolved_base_url=${resolvedBaseUrl}\nwrangler_config=${ciConfigPath}\n`,
           );
 
           console.log(`Worker name: ${workerName}`);
           console.log(`BASE_URL: ${resolvedBaseUrl}`);
+          console.log(`Wrangler config: ${ciConfigPath}`);
           NODE
 
       - name: Deploy worker
         id: deploy_worker
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           BASE_URL: ${{ steps.cfg.outputs.resolved_base_url }}
+          WRANGLER_CONFIG: ${{ steps.cfg.outputs.wrangler_config }}
         shell: bash
         run: |
           set -euo pipefail
 
           out_file="$(mktemp)"
-          wrangler deploy --config wrangler.jsonc --var "BASE_URL:${BASE_URL}" 2>&1 | tee "$out_file"
+          wrangler deploy --config "${WRANGLER_CONFIG}" --var "BASE_URL:${BASE_URL}" 2>&1 | tee "$out_file"
 
           # Try to extract the workers.dev URL from `wrangler deploy` output.
           worker_url="$(grep -Eo 'https://[^ ]+\.workers\.dev' "$out_file" | head -n 1 || true)"
@@ -137,11 +152,15 @@ jobs:
       - name: Apply D1 schema (idempotent)
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-        run: wrangler d1 execute DB --remote --yes --file crates/beacon-worker/migrations/0001_init.sql --config wrangler.jsonc
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          WRANGLER_CONFIG: ${{ steps.cfg.outputs.wrangler_config }}
+        run: wrangler d1 execute DB --remote --yes --file crates/beacon-worker/migrations/0001_init.sql --config "${WRANGLER_CONFIG}"
 
       - name: Sync Worker secrets (optional)
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          WRANGLER_CONFIG: ${{ steps.cfg.outputs.wrangler_config }}
           JWT_PRIVATE_KEY_DER_B64: ${{ secrets.CLOUDFLARE_WORKER_JWT_PRIVATE_KEY_DER_B64 }}
           GITHUB_CLIENT_ID: ${{ secrets.CLOUDFLARE_WORKER_GITHUB_CLIENT_ID }}
           GITHUB_CLIENT_SECRET: ${{ secrets.CLOUDFLARE_WORKER_GITHUB_CLIENT_SECRET }}
@@ -156,7 +175,7 @@ jobs:
             local value="$2"
             if [ -n "$value" ]; then
               echo "Setting secret: $name"
-              printf %s "$value" | wrangler secret put "$name" --config wrangler.jsonc
+              printf %s "$value" | wrangler secret put "$name" --config "${WRANGLER_CONFIG}"
             else
               echo "Skipping secret (not provided): $name"
             fi
@@ -290,6 +309,7 @@ jobs:
       - name: Deploy Pages (UI)
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           PAGES_PROJECT: ${{ steps.cfg.outputs.worker_name }}
         shell: bash
         run: |

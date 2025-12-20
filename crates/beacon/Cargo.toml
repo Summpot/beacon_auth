@@ -11,15 +11,6 @@ path = "src/lib.rs"
 name = "beacon"
 path = "src/main.rs"
 
-[[bin]]
-name = "beacon-lambda"
-path = "src/bin/lambda.rs"
-required-features = ["serverless"]
-
-[features]
-# AWS Lambda / serverless entrypoint support (optional)
-serverless = ["dep:lambda-web"]
-
 [dependencies]
 # Web Framework
 actix-web = { workspace = true }
@@ -78,9 +69,6 @@ redis = { workspace = true }
 
 # Cache
 moka = { workspace = true }
-
-# Serverless (optional)
-lambda-web = { workspace = true, optional = true, features = ["actix4"] }
 
 [build-dependencies]
 which = { workspace = true }

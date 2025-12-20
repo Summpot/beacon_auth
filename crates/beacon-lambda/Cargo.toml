@@ -1,0 +1,16 @@
+[package]
+name = "beacon-lambda"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+anyhow = { workspace = true }
+actix-web = { workspace = true }
+actix-cors = { workspace = true }
+clap = { workspace = true }
+dotenvy = { workspace = true, features = ["clap", "cli"] }
+env_logger = { workspace = true }
+lambda-web = { workspace = true, features = ["actix4"] }
+
+# Reuse the main server crate's library (crate name: beacon_lib)
+beacon-lib = { package = "beacon", path = "../beacon" }

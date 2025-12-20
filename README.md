@@ -160,6 +160,7 @@ Required **GitHub Actions secrets**:
 | Secret | Required | Used for |
 |---|---:|---|
 | `CLOUDFLARE_API_TOKEN` | Yes | Wrangler authentication (deploy + D1 operations + secrets) |
+| `CLOUDFLARE_ACCOUNT_ID` | Yes | Pin the Cloudflare Account ID in CI so Wrangler does not need to infer it via `/memberships` |
 
 Recommended / optional secrets:
 
