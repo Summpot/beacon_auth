@@ -1,3 +1,0 @@
-[submodule "wasm-bindgen"]
-	path = wasm-bindgen
-	url = https://github.com/wasm-bindgen/wasm-bindgen

@@ -1,8 +1,0 @@
-target
-.DS_Store
-test/build
-examples/**/build
-generated
-package-lock.json
-.wrangler
-node_modules

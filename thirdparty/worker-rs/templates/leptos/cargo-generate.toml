@@ -1,5 +1,0 @@
-[placeholders]
-use_nightly = { prompt = "Use nightly features?", default = false, type = "bool" }
-
-[template]
-exclude = ["*.ico"]
