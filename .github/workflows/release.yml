@@ -14,7 +14,6 @@ on:
 env:
   CARGO_TERM_COLOR: always
   REGISTRY: ghcr.io
-  IMAGE_NAME: ${{ toLower(github.repository) }}
 
 jobs:
   create-release:
@@ -173,14 +172,30 @@ jobs:
             fi
           done
 
+  normalize-image-name:
+    name: Normalize Docker image name
+    runs-on: ubuntu-latest
+    outputs:
+      image-name: ${{ steps.normalize.outputs.image-name }}
+    steps:
+      - name: Normalize repository name
+        id: normalize
+        run: |
+          set -euo pipefail
+          repo="${GITHUB_REPOSITORY}"
+          image_name=$(echo "$repo" | tr '[:upper:]' '[:lower:]')
+          echo "image-name=$image_name" >> "$GITHUB_OUTPUT"
+
   # Build and push Docker images
   release-docker-amd64:
     name: Release Docker Image (linux/amd64)
-    needs: [create-release, upload-server-assets]
+    needs: [create-release, upload-server-assets, normalize-image-name]
     runs-on: ubuntu-latest
     permissions:
       contents: read
       packages: write
+    env:
+      IMAGE_NAME: ${{ needs.normalize-image-name.outputs.image-name }}
 
     steps:
       - name: Checkout code
@@ -230,11 +245,13 @@ jobs:
 
   release-docker-arm64:
     name: Release Docker Image (linux/arm64)
-    needs: [create-release, upload-server-assets]
+    needs: [create-release, upload-server-assets, normalize-image-name]
     runs-on: ubuntu-latest
     permissions:
       contents: read
       packages: write
+    env:
+      IMAGE_NAME: ${{ needs.normalize-image-name.outputs.image-name }}
 
     steps:
       - name: Checkout code
@@ -284,11 +301,13 @@ jobs:
 
   release-docker-manifest:
     name: Create Docker Multi-arch Manifest
-    needs: [create-release, release-docker-amd64, release-docker-arm64]
+    needs: [create-release, release-docker-amd64, release-docker-arm64, normalize-image-name]
     runs-on: ubuntu-latest
     permissions:
       contents: read
       packages: write
+    env:
+      IMAGE_NAME: ${{ needs.normalize-image-name.outputs.image-name }}
 
     steps:
       - name: Log in to GitHub Container Registry
