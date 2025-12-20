@@ -572,6 +572,364 @@ async fn handle_get_jwks(req: &Request, env: &Env) -> Result<Response> {
     json_with_cors(req, resp)
 }
 
+fn query_param(url: &Url, key: &str) -> Option<String> {
+    url.query_pairs()
+        .find_map(|(k, v)| if k == key { Some(v.to_string()) } else { None })
+}
+
+async fn exchange_github_code(client_id: &str, client_secret: &str, code: &str) -> Result<(String, String)> {
+    let form_body = format!(
+        "client_id={}&client_secret={}&code={}",
+        urlencoding::encode(client_id),
+        urlencoding::encode(client_secret),
+        urlencoding::encode(code)
+    );
+
+    let mut init = RequestInit::new();
+    init.with_method(Method::Post);
+    init.with_body(Some(form_body.into()));
+    let headers = Headers::new();
+    headers.set("Accept", "application/json")?;
+    headers.set("Content-Type", "application/x-www-form-urlencoded")?;
+    init.with_headers(headers);
+
+    let token_req = Request::new_with_init("https://github.com/login/oauth/access_token", &init)?;
+    let mut token_resp = Fetch::Request(token_req).send().await?;
+
+    if token_resp.status_code() >= 400 {
+        let status = token_resp.status_code();
+        let body = token_resp.text().await?;
+        return Err(Error::RustError(format!(
+            "GitHub token exchange failed ({status}): {body}"
+        )));
+    }
+
+    let token_json: serde_json::Value = token_resp.json().await?;
+    let access_token = token_json
+        .get("access_token")
+        .and_then(|v| v.as_str())
+        .ok_or_else(|| Error::RustError("No access_token in GitHub response".to_string()))?;
+
+    let mut init = RequestInit::new();
+    init.with_method(Method::Get);
+    let headers = Headers::new();
+    headers.set("Accept", "application/json")?;
+    headers.set("Authorization", &format!("Bearer {access_token}"))?;
+    headers.set("User-Agent", "BeaconAuth")?;
+    init.with_headers(headers);
+
+    let user_req = Request::new_with_init("https://api.github.com/user", &init)?;
+    let mut user_resp = Fetch::Request(user_req).send().await?;
+
+    if user_resp.status_code() >= 400 {
+        let status = user_resp.status_code();
+        let body = user_resp.text().await?;
+        return Err(Error::RustError(format!(
+            "GitHub user fetch failed ({status}): {body}"
+        )));
+    }
+
+    let user_json: serde_json::Value = user_resp.json().await?;
+    let user_id = user_json
+        .get("id")
+        .and_then(|v| v.as_i64())
+        .ok_or_else(|| Error::RustError("No user id in GitHub response".to_string()))?
+        .to_string();
+
+    let username_raw = user_json
+        .get("login")
+        .and_then(|v| v.as_str())
+        .ok_or_else(|| Error::RustError("No login in GitHub response".to_string()))?;
+
+    Ok((user_id, format!("gh_{username_raw}")))
+}
+
+async fn exchange_google_code(
+    client_id: &str,
+    client_secret: &str,
+    code: &str,
+    redirect_uri: &str,
+) -> Result<(String, String)> {
+    let form_body = format!(
+        "client_id={}&client_secret={}&code={}&grant_type=authorization_code&redirect_uri={}",
+        urlencoding::encode(client_id),
+        urlencoding::encode(client_secret),
+        urlencoding::encode(code),
+        urlencoding::encode(redirect_uri)
+    );
+
+    let mut init = RequestInit::new();
+    init.with_method(Method::Post);
+    init.with_body(Some(form_body.into()));
+    let headers = Headers::new();
+    headers.set("Accept", "application/json")?;
+    headers.set("Content-Type", "application/x-www-form-urlencoded")?;
+    init.with_headers(headers);
+
+    let token_req = Request::new_with_init("https://oauth2.googleapis.com/token", &init)?;
+    let mut token_resp = Fetch::Request(token_req).send().await?;
+
+    if token_resp.status_code() >= 400 {
+        let status = token_resp.status_code();
+        let body = token_resp.text().await?;
+        return Err(Error::RustError(format!(
+            "Google token exchange failed ({status}): {body}"
+        )));
+    }
+
+    let token_json: serde_json::Value = token_resp.json().await?;
+    let access_token = token_json
+        .get("access_token")
+        .and_then(|v| v.as_str())
+        .ok_or_else(|| Error::RustError("No access_token in Google response".to_string()))?;
+
+    let mut init = RequestInit::new();
+    init.with_method(Method::Get);
+    let headers = Headers::new();
+    headers.set("Accept", "application/json")?;
+    headers.set("Authorization", &format!("Bearer {access_token}"))?;
+    init.with_headers(headers);
+
+    let user_req = Request::new_with_init("https://www.googleapis.com/oauth2/v2/userinfo", &init)?;
+    let mut user_resp = Fetch::Request(user_req).send().await?;
+
+    if user_resp.status_code() >= 400 {
+        let status = user_resp.status_code();
+        let body = user_resp.text().await?;
+        return Err(Error::RustError(format!(
+            "Google user fetch failed ({status}): {body}"
+        )));
+    }
+
+    let user_json: serde_json::Value = user_resp.json().await?;
+    let user_id = user_json
+        .get("id")
+        .and_then(|v| v.as_str())
+        .ok_or_else(|| Error::RustError("No user id in Google response".to_string()))?
+        .to_string();
+
+    let email = user_json
+        .get("email")
+        .and_then(|v| v.as_str())
+        .ok_or_else(|| Error::RustError("No email in Google response".to_string()))?;
+
+    let username_raw = email.split('@').next().unwrap_or(email);
+    Ok((user_id, format!("gg_{username_raw}")))
+}
+
+async fn handle_oauth_start(mut req: Request, env: &Env) -> Result<Response> {
+    let payload: models::OAuthStartPayload = match req.json().await {
+        Ok(p) => p,
+        Err(e) => {
+            console_log!("Invalid JSON in /v1/oauth/start: {e}");
+            return error_response(&req, 400, "invalid_json", "Invalid JSON body");
+        }
+    };
+
+    let jwt = get_jwt_state(env)?;
+
+    // Stateless OAuth state: encode as a signed JWT so callbacks work across instances.
+    let now = Utc::now();
+    let exp = now + chrono::Duration::minutes(10);
+    let state_id = Uuid::new_v4().to_string();
+
+    let claims = models::OAuthStateClaims {
+        iss: jwt.issuer.clone(),
+        sub: state_id,
+        aud: "beaconauth-oauth".to_string(),
+        exp: exp.timestamp(),
+        iat: now.timestamp(),
+        token_type: "oauth_state".to_string(),
+        provider: payload.provider.clone(),
+        challenge: if payload.challenge.is_empty() {
+            None
+        } else {
+            Some(payload.challenge.clone())
+        },
+        redirect_port: if payload.redirect_port == 0 {
+            None
+        } else {
+            Some(payload.redirect_port)
+        },
+    };
+
+    let state_token = match sign_jwt(jwt, &claims) {
+        Ok(t) => t,
+        Err(e) => return internal_error_response(&req, "Failed to encode OAuth state JWT", &e),
+    };
+
+    let redirect_base = jwt.issuer.trim_end_matches('/');
+    let callback_url = format!("{redirect_base}/api/v1/oauth/callback");
+
+    let authorization_url = match payload.provider.as_str() {
+        "github" => {
+            let github_ok = env_string(env, "GITHUB_CLIENT_ID").is_some() && env_string(env, "GITHUB_CLIENT_SECRET").is_some();
+            if !github_ok {
+                return error_response(&req, 503, "oauth_not_configured", "GitHub OAuth is not configured");
+            }
+            let client_id = env_string(env, "GITHUB_CLIENT_ID").expect("checked above");
+            format!(
+                "https://github.com/login/oauth/authorize?client_id={}&redirect_uri={}&scope=read:user%20user:email&state={}",
+                urlencoding::encode(&client_id),
+                urlencoding::encode(&callback_url),
+                urlencoding::encode(&state_token)
+            )
+        }
+        "google" => {
+            let google_ok = env_string(env, "GOOGLE_CLIENT_ID").is_some() && env_string(env, "GOOGLE_CLIENT_SECRET").is_some();
+            if !google_ok {
+                return error_response(&req, 503, "oauth_not_configured", "Google OAuth is not configured");
+            }
+            let client_id = env_string(env, "GOOGLE_CLIENT_ID").expect("checked above");
+            format!(
+                "https://accounts.google.com/o/oauth2/v2/auth?client_id={}&redirect_uri={}&response_type=code&scope=openid%20email%20profile&state={}",
+                urlencoding::encode(&client_id),
+                urlencoding::encode(&callback_url),
+                urlencoding::encode(&state_token)
+            )
+        }
+        _ => {
+            return error_response(&req, 400, "invalid_provider", "Unsupported OAuth provider");
+        }
+    };
+
+    let resp = Response::from_json(&models::OAuthStartResponse { authorization_url })?;
+    json_with_cors(&req, resp)
+}
+
+async fn handle_oauth_callback(req: &Request, env: &Env) -> Result<Response> {
+    let url = req.url()?;
+    let Some(code) = query_param(&url, "code") else {
+        return error_response(req, 400, "missing_code", "Missing OAuth code");
+    };
+    let Some(state_token) = query_param(&url, "state") else {
+        return error_response(req, 400, "missing_state", "Missing OAuth state");
+    };
+
+    let jwt = get_jwt_state(env)?;
+
+    // Validate and decode stateless OAuth state
+    let mut validation = jsonwebtoken::Validation::new(jsonwebtoken::Algorithm::ES256);
+    validation.set_issuer(&[&jwt.issuer]);
+    validation.set_audience(&["beaconauth-oauth"]);
+    validation.validate_exp = true;
+
+    let oauth_state = match jsonwebtoken::decode::<models::OAuthStateClaims>(
+        &state_token,
+        &jwt.decoding_key,
+        &validation,
+    ) {
+        Ok(data) => data.claims,
+        Err(e) => {
+            console_log!("Invalid OAuth state token: {e:?}");
+            return error_response(req, 400, "invalid_oauth_state", "Invalid or expired OAuth state");
+        }
+    };
+
+    if oauth_state.token_type != "oauth_state" {
+        return error_response(req, 400, "invalid_oauth_state", "Invalid OAuth state");
+    }
+
+    let (provider_user_id, username) = match oauth_state.provider.as_str() {
+        "github" => {
+            let Some(client_id) = env_string(env, "GITHUB_CLIENT_ID") else {
+                return error_response(req, 503, "oauth_not_configured", "GitHub OAuth is not configured");
+            };
+            let Some(client_secret) = env_string(env, "GITHUB_CLIENT_SECRET") else {
+                return error_response(req, 503, "oauth_not_configured", "GitHub OAuth is not configured");
+            };
+            match exchange_github_code(&client_id, &client_secret, &code).await {
+                Ok(v) => v,
+                Err(e) => return internal_error_response(req, "GitHub authentication failed", &e),
+            }
+        }
+        "google" => {
+            let Some(client_id) = env_string(env, "GOOGLE_CLIENT_ID") else {
+                return error_response(req, 503, "oauth_not_configured", "Google OAuth is not configured");
+            };
+            let Some(client_secret) = env_string(env, "GOOGLE_CLIENT_SECRET") else {
+                return error_response(req, 503, "oauth_not_configured", "Google OAuth is not configured");
+            };
+
+            let redirect_base = jwt.issuer.trim_end_matches('/');
+            let callback_url = format!("{redirect_base}/api/v1/oauth/callback");
+            match exchange_google_code(&client_id, &client_secret, &code, &callback_url).await {
+                Ok(v) => v,
+                Err(e) => return internal_error_response(req, "Google authentication failed", &e),
+            }
+        }
+        _ => return error_response(req, 400, "invalid_provider", "Invalid provider"),
+    };
+
+    let db = match d1(env).await {
+        Ok(db) => db,
+        Err(e) => return internal_error_response(req, "Failed to open database binding", &e),
+    };
+
+    let user = match d1_user_by_username(&db, &username).await {
+        Ok(Some(user)) => user,
+        Ok(None) => {
+            let password_hash = format!("oauth_{}_{}", oauth_state.provider, provider_user_id);
+            match d1_insert_user(&db, &username, &password_hash).await {
+                Ok(id) => match d1_user_by_id(&db, id).await {
+                    Ok(Some(user)) => user,
+                    Ok(None) => {
+                        return internal_error_response(req, "Failed to create user", &"Inserted user could not be reloaded");
+                    }
+                    Err(e) => return internal_error_response(req, "Failed to reload user", &e),
+                },
+                Err(e) => {
+                    // Handle a potential race on username creation (unique constraint) gracefully.
+                    let msg = e.to_string();
+                    if msg.to_ascii_lowercase().contains("unique") {
+                        match d1_user_by_username(&db, &username).await {
+                            Ok(Some(user)) => user,
+                            Ok(None) => return internal_error_response(req, "Failed to create user", &e),
+                            Err(e2) => return internal_error_response(req, "Failed to reload user", &e2),
+                        }
+                    } else {
+                        return internal_error_response(req, "Failed to create user", &e);
+                    }
+                }
+            }
+        }
+        Err(e) => return internal_error_response(req, "Failed to query user", &e),
+    };
+
+    // Issue session cookies
+    let now = Utc::now();
+    let access_exp = now + chrono::Duration::seconds(jwt.access_token_expiration);
+    let access_claims = models::SessionClaims {
+        iss: jwt.issuer.clone(),
+        sub: (user.id as i32).to_string(),
+        aud: "beaconauth-web".to_string(),
+        exp: access_exp.timestamp(),
+        token_type: "access".to_string(),
+    };
+
+    let access_token = match sign_jwt(jwt, &access_claims) {
+        Ok(t) => t,
+        Err(e) => return internal_error_response(req, "Failed to sign access token", &e),
+    };
+
+    let refresh_token = new_refresh_token();
+    let token_hash = sha256_hex(&refresh_token);
+    let family_id = new_family_id();
+    let refresh_exp = now.timestamp() + jwt.refresh_token_expiration;
+
+    if let Err(e) = d1_insert_refresh_token(&db, user.id, &token_hash, &family_id, refresh_exp).await {
+        return internal_error_response(req, "Failed to persist refresh token", &e);
+    }
+
+    let mut resp = Response::empty()?.with_status(302);
+    let headers = resp.headers_mut();
+    headers.set("Location", "/oauth-complete")?;
+    append_set_cookie(headers, &cookie_kv("access_token", &access_token, jwt.access_token_expiration))?;
+    append_set_cookie(headers, &cookie_kv("refresh_token", &refresh_token, jwt.refresh_token_expiration))?;
+
+    json_with_cors(req, resp)
+}
+
 async fn handle_register(mut req: Request, env: &Env) -> Result<Response> {
     let db = match d1(env).await {
         Ok(db) => db,
@@ -1431,12 +1789,16 @@ pub async fn fetch(req: Request, env: Env, _ctx: Context) -> Result<Response> {
     if method == Method::Post && path == "/v1/minecraft-jwt" {
         return handle_minecraft_jwt(req, &env).await;
     }
+    if method == Method::Post && path == "/v1/oauth/start" {
+        return handle_oauth_start(req, &env).await;
+    }
 
     match (method, path) {
         (Method::Get, "/v1/config") => handle_get_config(&req, &env).await,
         (Method::Post, "/v1/refresh") => handle_refresh(&req, &env).await,
         (Method::Post, "/v1/logout") => handle_logout(&req, &env).await,
         (Method::Get, "/v1/user/me") => handle_user_me(&req, &env).await,
+        (Method::Get, "/v1/oauth/callback") => handle_oauth_callback(&req, &env).await,
         (Method::Get, "/.well-known/jwks.json") => handle_get_jwks(&req, &env).await,
 
         (Method::Get, "/v1/passkey/list") => handle_passkey_list(&req, &env).await,
@@ -1451,23 +1813,6 @@ pub async fn fetch(req: Request, env: Env, _ctx: Context) -> Result<Response> {
             };
 
             handle_passkey_delete_by_id(&req, &env, id).await
-        }
-
-        (Method::Post, p) if p.starts_with("/v1/oauth/") => {
-            let resp = Response::from_json(&models::ErrorResponse {
-                error: "not_supported".to_string(),
-                message: "OAuth endpoints are not enabled in the Workers build yet".to_string(),
-            })?
-            .with_status(501);
-            json_with_cors(&req, resp)
-        }
-        (Method::Get, p) if p.starts_with("/v1/oauth/") => {
-            let resp = Response::from_json(&models::ErrorResponse {
-                error: "not_supported".to_string(),
-                message: "OAuth endpoints are not enabled in the Workers build yet".to_string(),
-            })?
-            .with_status(501);
-            json_with_cors(&req, resp)
         }
 
         (Method::Get, _) | (Method::Post, _) | (Method::Delete, _) => not_found(&req),
