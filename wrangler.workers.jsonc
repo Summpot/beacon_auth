@@ -4,6 +4,9 @@
 	"compatibility_date": "2025-12-18",
 	"main": "crates/beacon-worker/build/worker/shim.mjs",
 	"base_dir": "build",
+	"observability": {
+		"enabled": false
+	},
 	"rules": [
 		{
 			"type": "CompiledWasm",
