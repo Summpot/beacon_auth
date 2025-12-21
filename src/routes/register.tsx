@@ -3,12 +3,14 @@ import { createFileRoute, Link, useNavigate } from '@tanstack/react-router';
 import { useForm } from 'react-hook-form';
 import { z } from 'zod';
 import { ApiError, apiClient } from '../utils/api';
+import { BeaconIcon } from '@/components/beacon-icon';
+import { MinecraftFlowAlert } from '@/components/minecraft/minecraft-flow-alert';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Alert, AlertDescription } from '@/components/ui/alert';
-import { ChevronLeft, Loader2, Gamepad2 } from 'lucide-react';
+import { ChevronLeft, Loader2 } from 'lucide-react';
 
 const searchParamsSchema = z.object({
   challenge: z.string().min(1).optional(),
@@ -27,34 +29,6 @@ const registerFormSchema = z.object({
 });
 
 type RegisterFormData = z.infer<typeof registerFormSchema>;
-
-const BeaconIcon = ({ className = "w-16 h-16" }: { className?: string }) => (
-  <svg className={className} viewBox="0 0 64 64" fill="none" xmlns="http://www.w3.org/2000/svg">
-    <title>Beacon</title>
-    <rect x="20" y="48" width="24" height="8" fill="#4a4a5a" stroke="#3a3a4a" strokeWidth="1"/>
-    <rect x="24" y="40" width="16" height="8" fill="#5a5a6a" stroke="#4a4a5a" strokeWidth="1"/>
-    <rect x="26" y="42" width="12" height="4" fill="#a855f7">
-      <animate attributeName="opacity" values="0.8;1;0.8" dur="2s" repeatCount="indefinite"/>
-    </rect>
-    <path d="M32 42 L24 8 L40 8 Z" fill="url(#beamGradientRegister)" opacity="0.6">
-      <animate attributeName="opacity" values="0.4;0.7;0.4" dur="2s" repeatCount="indefinite"/>
-    </path>
-    <path d="M32 42 L28 8 L36 8 Z" fill="url(#beamGradientInnerRegister)" opacity="0.8">
-      <animate attributeName="opacity" values="0.6;1;0.6" dur="1.5s" repeatCount="indefinite"/>
-    </path>
-    <defs>
-      <linearGradient id="beamGradientRegister" x1="32" y1="42" x2="32" y2="8" gradientUnits="userSpaceOnUse">
-        <stop offset="0%" stopColor="#a855f7"/>
-        <stop offset="100%" stopColor="#a855f7" stopOpacity="0"/>
-      </linearGradient>
-      <linearGradient id="beamGradientInnerRegister" x1="32" y1="42" x2="32" y2="8" gradientUnits="userSpaceOnUse">
-        <stop offset="0%" stopColor="#ffffff"/>
-        <stop offset="50%" stopColor="#a855f7"/>
-        <stop offset="100%" stopColor="#a855f7" stopOpacity="0"/>
-      </linearGradient>
-    </defs>
-  </svg>
-);
 
 function RegisterPage() {
   const searchParams = Route.useSearch();
@@ -109,7 +83,7 @@ function RegisterPage() {
         <Card>
           <CardHeader className="text-center pb-4">
             <div className="flex justify-center mb-4">
-              <BeaconIcon className="w-16 h-16" />
+              <BeaconIcon className="w-16 h-16" accentColor="#a855f7" />
             </div>
             <CardTitle className="text-3xl font-bold">Create Account</CardTitle>
             <CardDescription>Join the BeaconAuth community</CardDescription>
@@ -117,24 +91,11 @@ function RegisterPage() {
 
           <CardContent className="space-y-6">
             {searchParams.challenge && searchParams.redirect_port && (
-              <Alert>
-                <Gamepad2 className="h-4 w-4" />
-                <AlertDescription>
-                  <div className="space-y-2">
-                    <span className="text-primary font-medium">Minecraft Registration</span>
-                    <div className="space-y-1 text-sm">
-                      <div className="flex justify-between">
-                        <span className="text-muted-foreground">Challenge:</span>
-                        <span className="text-foreground font-mono text-xs">{searchParams.challenge.substring(0, 16)}...</span>
-                      </div>
-                      <div className="flex justify-between">
-                        <span className="text-muted-foreground">Port:</span>
-                        <span className="text-foreground">{searchParams.redirect_port}</span>
-                      </div>
-                    </div>
-                  </div>
-                </AlertDescription>
-              </Alert>
+              <MinecraftFlowAlert
+                title="Minecraft Registration"
+                challenge={searchParams.challenge}
+                redirectPort={searchParams.redirect_port}
+              />
             )}
 
             <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
@@ -175,7 +136,7 @@ function RegisterPage() {
         </Card>
 
         <div className="mt-6 text-center">
-          <p className="text-xs text-muted-foreground">🔒 Your password is securely hashed with bcrypt</p>
+          <p className="text-xs text-muted-foreground">🔒 Your password is stored securely</p>
         </div>
       </div>
     </div>

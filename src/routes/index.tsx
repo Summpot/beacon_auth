@@ -1,6 +1,7 @@
 import { createFileRoute, Link } from '@tanstack/react-router';
 import { useQuery } from '@tanstack/react-query';
 import { apiClient, queryKeys } from '../utils/api';
+import { BeaconIcon } from '@/components/beacon-icon';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -10,35 +11,6 @@ interface UserInfo {
   id: number;
   username: string;
 }
-
-// Beacon SVG Component
-const BeaconIcon = ({ className = "w-24 h-24" }: { className?: string }) => (
-  <svg className={className} viewBox="0 0 64 64" fill="none" xmlns="http://www.w3.org/2000/svg">
-    <title>Beacon</title>
-    <rect x="20" y="48" width="24" height="8" fill="#4a4a5a" stroke="#3a3a4a" strokeWidth="1"/>
-    <rect x="24" y="40" width="16" height="8" fill="#5a5a6a" stroke="#4a4a5a" strokeWidth="1"/>
-    <rect x="26" y="42" width="12" height="4" fill="#4eecd6">
-      <animate attributeName="opacity" values="0.8;1;0.8" dur="2s" repeatCount="indefinite"/>
-    </rect>
-    <path d="M32 42 L24 8 L40 8 Z" fill="url(#beamGradient)" opacity="0.6">
-      <animate attributeName="opacity" values="0.4;0.7;0.4" dur="2s" repeatCount="indefinite"/>
-    </path>
-    <path d="M32 42 L28 8 L36 8 Z" fill="url(#beamGradientInner)" opacity="0.8">
-      <animate attributeName="opacity" values="0.6;1;0.6" dur="1.5s" repeatCount="indefinite"/>
-    </path>
-    <defs>
-      <linearGradient id="beamGradient" x1="32" y1="42" x2="32" y2="8" gradientUnits="userSpaceOnUse">
-        <stop offset="0%" stopColor="#4eecd6"/>
-        <stop offset="100%" stopColor="#4eecd6" stopOpacity="0"/>
-      </linearGradient>
-      <linearGradient id="beamGradientInner" x1="32" y1="42" x2="32" y2="8" gradientUnits="userSpaceOnUse">
-        <stop offset="0%" stopColor="#ffffff"/>
-        <stop offset="50%" stopColor="#4eecd6"/>
-        <stop offset="100%" stopColor="#4eecd6" stopOpacity="0"/>
-      </linearGradient>
-    </defs>
-  </svg>
-);
 
 function HomePage() {
   const { data: user } = useQuery({
@@ -120,7 +92,7 @@ function HomePage() {
             <span className="text-primary"> Password</span>,
             <span className="text-secondary-foreground"> OAuth</span>, and
             <span className="text-muted-foreground"> Passkey</span> support
-            with enterprise-grade security.
+            with secure sessions.
           </p>
           
           <div className="flex flex-col sm:flex-row gap-4 justify-center">
@@ -148,16 +120,16 @@ function HomePage() {
           {/* Quick stats */}
           <div className="mt-16 grid grid-cols-3 gap-8 max-w-lg mx-auto">
             <div className="text-center">
-              <Badge variant="outline" className="text-lg px-3 py-1">ES256</Badge>
-              <div className="text-sm text-muted-foreground mt-2">JWT Signing</div>
+              <Badge variant="outline" className="text-lg px-3 py-1">Signed Sessions</Badge>
+              <div className="text-sm text-muted-foreground mt-2">Stay logged in safely</div>
             </div>
             <div className="text-center">
-              <Badge variant="outline" className="text-lg px-3 py-1">OAuth 2</Badge>
-              <div className="text-sm text-muted-foreground mt-2">Providers</div>
+              <Badge variant="outline" className="text-lg px-3 py-1">OAuth Login</Badge>
+              <div className="text-sm text-muted-foreground mt-2">GitHub / Google</div>
             </div>
             <div className="text-center">
-              <Badge variant="outline" className="text-lg px-3 py-1">WebAuthn</Badge>
-              <div className="text-sm text-muted-foreground mt-2">Passkeys</div>
+              <Badge variant="outline" className="text-lg px-3 py-1">Passkeys</Badge>
+              <div className="text-sm text-muted-foreground mt-2">Biometric / PIN</div>
             </div>
           </div>
         </div>
@@ -183,7 +155,7 @@ function HomePage() {
                 </div>
                 <h3 className="text-xl font-bold text-foreground mb-2">Multi-Auth Support</h3>
                 <p className="text-muted-foreground text-sm">
-                  Traditional passwords, OAuth (GitHub & Google), and cutting-edge WebAuthn passkeys for the ultimate flexibility.
+                  Passwords, OAuth (GitHub & Google), and passkeys for the flexibility your server needs.
                 </p>
               </CardContent>
             </Card>
@@ -195,7 +167,7 @@ function HomePage() {
                 </div>
                 <h3 className="text-xl font-bold text-foreground mb-2">Enterprise Security</h3>
                 <p className="text-muted-foreground text-sm">
-                  ES256 JWT signing, secure HttpOnly cookies, PKCE OAuth flows, and automatic token rotation.
+                  Secure sessions, protected cookies, and safe OAuth flows designed for everyday players.
                 </p>
               </CardContent>
             </Card>
@@ -207,68 +179,11 @@ function HomePage() {
                 </div>
                 <h3 className="text-xl font-bold text-foreground mb-2">Seamless Integration</h3>
                 <p className="text-muted-foreground text-sm">
-                  Cross-platform Minecraft mod for Fabric & Forge with automatic authentication and server verification.
+                  Minecraft mod integration with smooth login and server verification.
                 </p>
               </CardContent>
             </Card>
           </div>
-        </div>
-      </section>
-
-      {/* Tech Stack Section */}
-      <section className="py-20 relative">
-        <div className="container mx-auto px-6">
-          <Card className="bg-card/50 border-border max-w-4xl mx-auto">
-            <CardContent className="p-8 md:p-12">
-              <h2 className="text-2xl md:text-3xl font-bold text-foreground mb-8 text-center">
-                Built with Modern Stack
-              </h2>
-              
-              <div className="grid md:grid-cols-2 gap-8">
-                <div>
-                  <h3 className="text-primary font-semibold mb-4 flex items-center gap-2">
-                    <span className="w-2 h-2 bg-primary rounded-full" />
-                    Backend
-                  </h3>
-                  <ul className="space-y-3 text-muted-foreground">
-                    <li className="flex items-center gap-3">
-                      <span className="text-orange-400">🦀</span>
-                      <span>Rust with Actix-web</span>
-                    </li>
-                    <li className="flex items-center gap-3">
-                      <span className="text-blue-400">🗄️</span>
-                      <span>Sea-ORM database layer</span>
-                    </li>
-                    <li className="flex items-center gap-3">
-                      <span className="text-green-400">🔑</span>
-                      <span>ES256 JWT + WebAuthn</span>
-                    </li>
-                  </ul>
-                </div>
-                
-                <div>
-                  <h3 className="text-muted-foreground font-semibold mb-4 flex items-center gap-2">
-                    <span className="w-2 h-2 bg-muted-foreground rounded-full" />
-                    Frontend & Mod
-                  </h3>
-                  <ul className="space-y-3 text-muted-foreground">
-                    <li className="flex items-center gap-3">
-                      <span className="text-primary">⚛️</span>
-                      <span>React + TanStack Router</span>
-                    </li>
-                    <li className="flex items-center gap-3">
-                      <span className="text-yellow-400">⚡</span>
-                      <span>Rsbuild for fast bundling</span>
-                    </li>
-                    <li className="flex items-center gap-3">
-                      <span className="text-muted-foreground">🎮</span>
-                      <span>Kotlin Architectury (Fabric/Forge)</span>
-                    </li>
-                  </ul>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
         </div>
       </section>
 

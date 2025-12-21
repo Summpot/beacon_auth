@@ -3,6 +3,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useEffect, useState } from 'react';
 import { z } from 'zod';
 import { apiClient, queryKeys } from '../utils/api';
+import { BeaconIcon } from '@/components/beacon-icon';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Alert, AlertDescription } from '@/components/ui/alert';
@@ -19,34 +20,6 @@ interface UserInfo {
   id: number;
   username: string;
 }
-
-const BeaconIcon = ({ className = "w-16 h-16" }: { className?: string }) => (
-  <svg className={className} viewBox="0 0 64 64" fill="none" xmlns="http://www.w3.org/2000/svg">
-    <title>Beacon</title>
-    <rect x="20" y="48" width="24" height="8" fill="#4a4a5a" stroke="#3a3a4a" strokeWidth="1"/>
-    <rect x="24" y="40" width="16" height="8" fill="#5a5a6a" stroke="#4a4a5a" strokeWidth="1"/>
-    <rect x="26" y="42" width="12" height="4" fill="#4eecd6">
-      <animate attributeName="opacity" values="0.8;1;0.8" dur="2s" repeatCount="indefinite"/>
-    </rect>
-    <path d="M32 42 L24 8 L40 8 Z" fill="url(#beamGradientProfile)" opacity="0.6">
-      <animate attributeName="opacity" values="0.4;0.7;0.4" dur="2s" repeatCount="indefinite"/>
-    </path>
-    <path d="M32 42 L28 8 L36 8 Z" fill="url(#beamGradientInnerProfile)" opacity="0.8">
-      <animate attributeName="opacity" values="0.6;1;0.6" dur="1.5s" repeatCount="indefinite"/>
-    </path>
-    <defs>
-      <linearGradient id="beamGradientProfile" x1="32" y1="42" x2="32" y2="8" gradientUnits="userSpaceOnUse">
-        <stop offset="0%" stopColor="#4eecd6"/>
-        <stop offset="100%" stopColor="#4eecd6" stopOpacity="0"/>
-      </linearGradient>
-      <linearGradient id="beamGradientInnerProfile" x1="32" y1="42" x2="32" y2="8" gradientUnits="userSpaceOnUse">
-        <stop offset="0%" stopColor="#ffffff"/>
-        <stop offset="50%" stopColor="#4eecd6"/>
-        <stop offset="100%" stopColor="#4eecd6" stopOpacity="0"/>
-      </linearGradient>
-    </defs>
-  </svg>
-);
 
 async function fetchUserInfo(): Promise<UserInfo | null> {
   try {
@@ -273,8 +246,8 @@ function ProfilePage() {
           <AlertDescription>
             <h3 className="font-semibold mb-1">Secure Session</h3>
             <p className="text-sm text-muted-foreground">
-              Your session is protected with ES256 encryption and secure HttpOnly cookies.
-              For enhanced security, consider setting up passkey authentication in your profile settings.
+              Your session is protected with secure, signed cookies.
+              For extra protection, enable passkey sign-in in your settings.
             </p>
           </AlertDescription>
         </Alert>

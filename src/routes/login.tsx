@@ -4,6 +4,8 @@ import { useCallback, useEffect, useState, useRef } from 'react';
 import { useForm } from 'react-hook-form';
 import { z } from 'zod';
 import { ApiError, apiClient } from '../utils/api';
+import { BeaconIcon } from '@/components/beacon-icon';
+import { MinecraftFlowAlert } from '@/components/minecraft/minecraft-flow-alert';
 import {
   startAuthentication,
   browserSupportsWebAuthnAutofill,
@@ -17,7 +19,7 @@ import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Separator } from '@/components/ui/separator';
-import { KeyRound, ChevronLeft, Loader2, Gamepad2 } from 'lucide-react';
+import { KeyRound, ChevronLeft, Loader2 } from 'lucide-react';
 
 const searchParamsSchema = z.object({
   challenge: z.string().min(1).optional(),
@@ -49,34 +51,6 @@ const getErrorMessage = (error: unknown, fallback: string) => {
   }
   return fallback;
 };
-
-const BeaconIcon = ({ className = "w-16 h-16" }: { className?: string }) => (
-  <svg className={className} viewBox="0 0 64 64" fill="none" xmlns="http://www.w3.org/2000/svg">
-    <title>Beacon</title>
-    <rect x="20" y="48" width="24" height="8" fill="#4a4a5a" stroke="#3a3a4a" strokeWidth="1"/>
-    <rect x="24" y="40" width="16" height="8" fill="#5a5a6a" stroke="#4a4a5a" strokeWidth="1"/>
-    <rect x="26" y="42" width="12" height="4" fill="#4eecd6">
-      <animate attributeName="opacity" values="0.8;1;0.8" dur="2s" repeatCount="indefinite"/>
-    </rect>
-    <path d="M32 42 L24 8 L40 8 Z" fill="url(#beamGradientLogin)" opacity="0.6">
-      <animate attributeName="opacity" values="0.4;0.7;0.4" dur="2s" repeatCount="indefinite"/>
-    </path>
-    <path d="M32 42 L28 8 L36 8 Z" fill="url(#beamGradientInnerLogin)" opacity="0.8">
-      <animate attributeName="opacity" values="0.6;1;0.6" dur="1.5s" repeatCount="indefinite"/>
-    </path>
-    <defs>
-      <linearGradient id="beamGradientLogin" x1="32" y1="42" x2="32" y2="8" gradientUnits="userSpaceOnUse">
-        <stop offset="0%" stopColor="#4eecd6"/>
-        <stop offset="100%" stopColor="#4eecd6" stopOpacity="0"/>
-      </linearGradient>
-      <linearGradient id="beamGradientInnerLogin" x1="32" y1="42" x2="32" y2="8" gradientUnits="userSpaceOnUse">
-        <stop offset="0%" stopColor="#ffffff"/>
-        <stop offset="50%" stopColor="#4eecd6"/>
-        <stop offset="100%" stopColor="#4eecd6" stopOpacity="0"/>
-      </linearGradient>
-    </defs>
-  </svg>
-);
 
 function LoginPage() {
   const searchParams = Route.useSearch();
@@ -276,24 +250,11 @@ function LoginPage() {
 
           <CardContent className="space-y-6">
             {searchParams.challenge && searchParams.redirect_port && (
-              <Alert>
-                <Gamepad2 className="h-4 w-4" />
-                <AlertDescription>
-                  <div className="space-y-2">
-                    <span className="text-primary font-medium">Minecraft Login</span>
-                    <div className="space-y-1 text-sm">
-                      <div className="flex justify-between">
-                        <span className="text-muted-foreground">Challenge:</span>
-                        <span className="text-foreground font-mono text-xs">{searchParams.challenge.substring(0, 16)}...</span>
-                      </div>
-                      <div className="flex justify-between">
-                        <span className="text-muted-foreground">Port:</span>
-                        <span className="text-foreground">{searchParams.redirect_port}</span>
-                      </div>
-                    </div>
-                  </div>
-                </AlertDescription>
-              </Alert>
+              <MinecraftFlowAlert
+                title="Minecraft Login"
+                challenge={searchParams.challenge}
+                redirectPort={searchParams.redirect_port}
+              />
             )}
 
             {config?.database_auth && (

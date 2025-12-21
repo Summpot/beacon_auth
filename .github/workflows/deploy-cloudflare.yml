@@ -75,30 +75,6 @@ jobs:
         run:
           worker-build --release crates/beacon-worker
 
-      - name: Ensure D1 database_id in worker config
-        env:
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-        shell: bash
-        run: |
-          set -euo pipefail
-
-          config="wrangler.workers.jsonc"
-          if jq -e '.d1_databases[]? | select(.database_name == "beaconauth-db").database_id' "$config" >/dev/null; then
-            echo "database_id already present in $config"
-          else
-            echo "database_id missing; querying D1 database info"
-            db_uuid=$(pnpm exec wrangler d1 info beaconauth-db --json | awk '/^\s*\{/{flag=1} flag{print}' | jq -r '.uuid')
-            if [ -z "$db_uuid" ] || [ "$db_uuid" = "null" ]; then
-              echo "Failed to obtain D1 database uuid" >&2
-              exit 1
-            fi
-            tmp=$(mktemp)
-            jq --tab --arg uuid "$db_uuid" '.d1_databases |= map(if (.database_name == "beaconauth-db") then . + {database_id: $uuid} else . end)' "$config" > "$tmp"
-            mv "$tmp" "$config"
-            echo "Updated $config with database_id=$db_uuid"
-          fi
-
       - name: Resolve deploy settings
         id: cfg
         env:
@@ -208,6 +184,31 @@ jobs:
           set -euo pipefail
 
           pnpm exec wrangler deploy --config "${WRANGLER_WORKERS_CONFIG}" --var "BASE_URL:${BASE_URL}"
+
+      - name: Ensure D1 database_id in worker config
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          WRANGLER_WORKERS_CONFIG: ${{ steps.cfg.outputs.wrangler_workers_config }}
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          config="${WRANGLER_WORKERS_CONFIG}"
+          if jq -e '.d1_databases[]? | select(.database_name == "beaconauth-db").database_id' "$config" >/dev/null; then
+            echo "database_id already present in $config"
+          else
+            echo "database_id missing; querying D1 database info"
+            db_uuid=$(pnpm exec wrangler d1 info beaconauth-db --json | awk '/^\s*\{/{flag=1} flag{print}' | jq -r '.uuid')
+            if [ -z "$db_uuid" ] || [ "$db_uuid" = "null" ]; then
+              echo "Failed to obtain D1 database uuid" >&2
+              exit 1
+            fi
+            tmp=$(mktemp)
+            jq --tab --arg uuid "$db_uuid" '.d1_databases |= map(if (.database_name == "beaconauth-db") then . + {database_id: $uuid} else . end)' "$config" > "$tmp"
+            mv "$tmp" "$config"
+            echo "Updated $config with database_id=$db_uuid"
+          fi
 
       - name: Apply D1 migrations (remote)
         env:
