@@ -107,7 +107,7 @@ async fn exchange_github_code(
         .and_then(|v| v.as_str())
         .ok_or_else(|| worker::Error::RustError("No login in GitHub response".to_string()))?;
 
-    Ok((user_id, format!("gh_{username_raw}")))
+    Ok((user_id, username_raw.to_string()))
 }
 
 async fn exchange_google_code(
@@ -180,7 +180,7 @@ async fn exchange_google_code(
         .ok_or_else(|| worker::Error::RustError("No email in Google response".to_string()))?;
 
     let username_raw = email.split('@').next().unwrap_or(email);
-    Ok((user_id, format!("gg_{username_raw}")))
+    Ok((user_id, username_raw.to_string()))
 }
 
 pub async fn handle_oauth_start(mut req: Request, env: &Env) -> Result<Response> {
@@ -502,23 +502,24 @@ pub async fn handle_oauth_callback(req: &Request, env: &Env) -> Result<Response>
     } else {
         // Login/register flow: no legacy compatibility. If this OAuth identity is new, create a
         // brand-new user (never implicitly link by username).
-        let mut attempt = 0;
-        let candidate = loop {
-            attempt += 1;
-            let candidate = if attempt == 1 {
-                username.clone()
-            } else {
-                format!("{username}_{attempt}")
-            };
-
-            if d1_user_by_username(&db, &candidate).await?.is_none() {
-                break candidate;
-            }
-
-            if attempt >= 50 {
-                return internal_error_response(req, "Failed to allocate unique username", &"too many collisions");
-            }
+        let prefix = match oauth_state.provider.as_str() {
+            "github" => "gh_",
+            "google" => "gg_",
+            _ => "id_",
         };
+
+        let mut candidate = String::new();
+        for attempt in 0u32..=100u32 {
+            let c = beacon_core::username::make_minecraft_username_with_prefix(prefix, &username, attempt);
+            if d1_user_by_username(&db, &c).await?.is_none() {
+                candidate = c;
+                break;
+            }
+        }
+
+        if candidate.is_empty() {
+            return internal_error_response(req, "Failed to allocate unique username", &"too many collisions");
+        }
 
         let user_id = match d1_insert_user(&db, &candidate).await {
             Ok(id) => id,

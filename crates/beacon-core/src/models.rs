@@ -236,6 +236,19 @@ pub struct ChangePasswordRequest {
     pub new_password: String,
 }
 
+/// Change username request
+#[derive(Debug, Serialize, Deserialize)]
+pub struct ChangeUsernameRequest {
+    pub username: String,
+}
+
+/// Change username response
+#[derive(Debug, Serialize, Deserialize)]
+pub struct ChangeUsernameResponse {
+    pub success: bool,
+    pub username: String,
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

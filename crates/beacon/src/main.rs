@@ -1,4 +1,5 @@
 use bcrypt::hash;
+use beacon_core::username;
 use beacon_lib::{
     config::{Command, Config},
     server::run_server,
@@ -65,9 +66,15 @@ async fn create_user(username: &str, password: &str) -> anyhow::Result<()> {
     log::info!("Connecting to database...");
     let db = Database::connect(&database_url).await?;
 
+    let requested_username = username.trim().to_string();
+    if let Err(msg) = username::validate_minecraft_username(&requested_username) {
+        anyhow::bail!("Invalid username: {msg}");
+    }
+    let requested_username_lower = username::normalize_username(&requested_username);
+
     // Check if user already exists
     let existing = user::Entity::find()
-        .filter(user::Column::Username.eq(username))
+        .filter(user::Column::UsernameLower.eq(&requested_username_lower))
         .one(&db)
         .await?;
 
@@ -82,7 +89,8 @@ async fn create_user(username: &str, password: &str) -> anyhow::Result<()> {
     // Create user
     let now = Utc::now();
     let new_user = user::ActiveModel {
-        username: Set(username.to_string()),
+        username: Set(requested_username.clone()),
+        username_lower: Set(requested_username_lower.clone()),
         created_at: Set(now),
         updated_at: Set(now),
         ..Default::default()
@@ -93,7 +101,7 @@ async fn create_user(username: &str, password: &str) -> anyhow::Result<()> {
     let new_identity = identity::ActiveModel {
         user_id: Set(result.last_insert_id),
         provider: Set("password".to_string()),
-        provider_user_id: Set(username.to_string()),
+        provider_user_id: Set(requested_username_lower.clone()),
         password_hash: Set(Some(password_hash)),
         created_at: Set(now),
         updated_at: Set(now),
@@ -103,7 +111,7 @@ async fn create_user(username: &str, password: &str) -> anyhow::Result<()> {
 
     println!("✅ User created successfully!");
     println!("   ID: {}", result.last_insert_id);
-    println!("   Username: {}", username);
+    println!("   Username: {}", requested_username);
 
     Ok(())
 }
@@ -145,8 +153,9 @@ async fn delete_user(username: &str) -> anyhow::Result<()> {
 
     let db = Database::connect(&database_url).await?;
 
+    let username_lower = username::normalize_username(username);
     let user = user::Entity::find()
-        .filter(user::Column::Username.eq(username))
+        .filter(user::Column::UsernameLower.eq(username_lower))
         .one(&db)
         .await?;
 

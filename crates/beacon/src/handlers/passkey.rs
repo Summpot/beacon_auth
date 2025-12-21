@@ -6,6 +6,8 @@ use serde::de::DeserializeOwned;
 use serde::Serialize;
 use webauthn_rs::prelude::*;
 
+use beacon_core::username;
+
 use crate::app_state::AppState;
 use crate::handlers::extract_session_user;
 use crate::models::{
@@ -204,8 +206,9 @@ pub async fn auth_start(
 
     // Get all passkeys (or filter by username if provided)
     let passkeys = if let Some(ref username) = username {
+        let username_lower = username::normalize_username(username);
         let user_model = user::Entity::find()
-            .filter(user::Column::Username.eq(username))
+            .filter(user::Column::UsernameLower.eq(username_lower))
             .one(&app_state.db)
             .await
             .map_err(actix_web::error::ErrorInternalServerError)?

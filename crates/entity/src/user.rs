@@ -10,6 +10,12 @@ pub struct Model {
     #[sea_orm(unique)]
     pub username: String,
 
+    /// Normalized username for case-insensitive uniqueness and lookups.
+    ///
+    /// This should always be `username.to_ascii_lowercase()`.
+    #[sea_orm(unique)]
+    pub username_lower: String,
+
     pub created_at: ChronoDateTimeUtc,
 
     pub updated_at: ChronoDateTimeUtc,

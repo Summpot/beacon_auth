@@ -86,6 +86,9 @@ pub async fn fetch(req: Request, env: Env, _ctx: Context) -> Result<Response> {
     if method == Method::Post && path == "/v1/user/change-password" {
         return handlers::session::handle_change_password(req, &env).await;
     }
+    if method == Method::Post && path == "/v1/user/change-username" {
+        return handlers::session::handle_change_username(req, &env).await;
+    }
     if method == Method::Post && path == "/v1/minecraft-jwt" {
         return handlers::minecraft::handle_minecraft_jwt(req, &env).await;
     }

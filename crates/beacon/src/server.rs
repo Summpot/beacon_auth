@@ -77,6 +77,10 @@ pub fn build_api_routes() -> actix_web::Scope {
             web::post().to(handlers::user::change_password),
         )
         .route(
+            "/user/change-username",
+            web::post().to(handlers::user::change_username),
+        )
+        .route(
             "/passkey/register/start",
             web::post().to(handlers::passkey::register_start),
         )

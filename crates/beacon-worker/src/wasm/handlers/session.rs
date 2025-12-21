@@ -1,4 +1,5 @@
 use beacon_core::models;
+use beacon_core::username;
 use chrono::Utc;
 use serde_json::json;
 use worker::{Env, Error, Request, Response, Result};
@@ -30,10 +31,11 @@ pub async fn handle_register(mut req: Request, env: &Env) -> Result<Response> {
         }
     };
 
-    if payload.username.is_empty() || payload.username.len() > 50 {
+    let requested_username = payload.username.trim().to_string();
+    if let Err(msg) = username::validate_minecraft_username(&requested_username) {
         let resp = Response::from_json(&models::ErrorResponse {
             error: "invalid_username".to_string(),
-            message: "Username must be between 1 and 50 characters".to_string(),
+            message: msg.to_string(),
         })?
         .with_status(400);
         return json_with_cors(&req, resp);
@@ -48,7 +50,7 @@ pub async fn handle_register(mut req: Request, env: &Env) -> Result<Response> {
         return json_with_cors(&req, resp);
     }
 
-    match d1_user_by_username(&db, &payload.username).await {
+    match d1_user_by_username(&db, &requested_username).await {
         Ok(Some(_)) => {
             return error_response(&req, 409, "username_taken", "Username already exists");
         }
@@ -61,7 +63,7 @@ pub async fn handle_register(mut req: Request, env: &Env) -> Result<Response> {
         Err(e) => return internal_error_response(&req, "Failed to hash password", &e),
     };
 
-    let user_id = match d1_insert_user(&db, &payload.username).await {
+    let user_id = match d1_insert_user(&db, &requested_username).await {
         Ok(id) => id,
         Err(e) => {
             // Handle a potential race on username creation (unique constraint) gracefully.
@@ -74,7 +76,8 @@ pub async fn handle_register(mut req: Request, env: &Env) -> Result<Response> {
     };
 
     // Create the password identity for this user.
-    if let Err(e) = d1_insert_identity(&db, user_id, "password", &payload.username, Some(&password_hash)).await {
+    let identifier = username::normalize_username(&requested_username);
+    if let Err(e) = d1_insert_identity(&db, user_id, "password", &identifier, Some(&password_hash)).await {
         let msg = e.to_string();
         if msg.to_ascii_lowercase().contains("unique") {
             return error_response(&req, 409, "username_taken", "Username already exists");
@@ -371,10 +374,70 @@ pub async fn handle_change_password(mut req: Request, env: &Env) -> Result<Respo
     if existing.is_some() {
         d1_update_password_identity_hash(&db, user_id, &new_hash).await?;
     } else {
-        d1_insert_identity(&db, user_id, "password", &user.username, Some(&new_hash)).await?;
+        d1_insert_identity(
+            &db,
+            user_id,
+            "password",
+            &user.username_lower,
+            Some(&new_hash),
+        )
+        .await?;
     }
 
     let resp = Response::from_json(&json!({ "success": true }))?;
+    json_with_cors(&req, resp)
+}
+
+pub async fn handle_change_username(mut req: Request, env: &Env) -> Result<Response> {
+    let db = d1(env).await?;
+    let jwt = get_jwt_state(env)?;
+
+    let Some(access_token) = get_cookie(&req, "access_token")? else {
+        let resp = Response::from_json(&models::ErrorResponse {
+            error: "unauthorized".to_string(),
+            message: "Not authenticated".to_string(),
+        })?
+        .with_status(401);
+        return json_with_cors(&req, resp);
+    };
+
+    let user_id = match verify_access_token(jwt, &access_token) {
+        Ok(id) => id as i64,
+        Err(e) => {
+            let resp = Response::from_json(&models::ErrorResponse {
+                error: "invalid_token".to_string(),
+                message: e,
+            })?
+            .with_status(401);
+            return json_with_cors(&req, resp);
+        }
+    };
+
+    let payload: models::ChangeUsernameRequest = req.json().await?;
+    let requested_username = payload.username.trim().to_string();
+
+    if let Err(msg) = username::validate_minecraft_username(&requested_username) {
+        return error_response(&req, 400, "invalid_username", msg);
+    }
+
+    let requested_lower = username::normalize_username(&requested_username);
+
+    if let Some(existing) = d1_user_by_username(&db, &requested_lower).await? {
+        if existing.id != user_id {
+            return error_response(&req, 409, "username_taken", "Username already exists");
+        }
+    }
+
+    crate::wasm::db::d1_update_user_username(&db, user_id, &requested_username, &requested_lower)
+        .await?;
+
+    // Keep the password identity's identifier aligned with the normalized username.
+    let _ = crate::wasm::db::d1_update_password_identity_identifier(&db, user_id, &requested_lower).await;
+
+    let resp = Response::from_json(&models::ChangeUsernameResponse {
+        success: true,
+        username: requested_username,
+    })?;
     json_with_cors(&req, resp)
 }
 

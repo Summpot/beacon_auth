@@ -9,7 +9,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/com
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
-import { Settings, LogOut, Shield, Gamepad2, Lock, CheckCircle, ChevronRight, Loader2 } from 'lucide-react';
+import { Settings, LogOut, Shield, Gamepad2, Lock, CheckCircle, Loader2 } from 'lucide-react';
 
 const searchParamsSchema = z.object({
   status: z.enum(['success', 'error']).optional(),
@@ -145,9 +145,6 @@ function ProfilePage() {
                 <h1 className="text-3xl font-bold mb-1">{user.username}</h1>
                 <p className="text-muted-foreground">BeaconAuth User</p>
               </div>
-              <Button variant="secondary" asChild>
-                <Link to="/settings"><Settings className="h-4 w-4 mr-2" />Settings</Link>
-              </Button>
             </div>
           </CardContent>
         </Card>
@@ -195,51 +192,6 @@ function ProfilePage() {
             </CardContent>
           </Card>
         </div>
-
-        <Card className="bg-card/50 border-border">
-          <CardHeader>
-            <CardTitle className="text-xl font-bold flex items-center gap-3">
-              <span className="w-2 h-2 bg-primary rounded-full" />
-              Quick Actions
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="grid md:grid-cols-2 gap-4">
-              <Link to="/settings" className="group p-5 rounded-xl border-2 border-border hover:border-primary/50 bg-card/50 hover:bg-primary/5 transition-all">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-4">
-                    <div className="w-10 h-10 rounded-lg bg-primary/20 flex items-center justify-center group-hover:bg-primary/30 transition-colors">
-                      <Settings className="h-5 w-5 text-primary" />
-                    </div>
-                    <div>
-                      <h3 className="font-semibold group-hover:text-primary transition-colors">Profile Settings</h3>
-                      <p className="text-sm text-muted-foreground">Change password & manage passkeys</p>
-                    </div>
-                  </div>
-                  <ChevronRight className="h-5 w-5 text-muted-foreground group-hover:text-primary transition-colors" />
-                </div>
-              </Link>
-
-              <div className="p-5 rounded-xl border-2 border-border bg-card/50">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-4">
-                    <div className="w-10 h-10 rounded-lg bg-secondary/20 flex items-center justify-center">
-                      <Gamepad2 className="h-5 w-5 text-secondary-foreground" />
-                    </div>
-                    <div>
-                      <h3 className="font-semibold">Minecraft Server</h3>
-                      <p className="text-sm text-muted-foreground">Connected via BeaconAuth Mod</p>
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <span className="w-2 h-2 bg-green-500 rounded-full animate-pulse" />
-                    <span className="text-green-500 text-sm font-medium">Online</span>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
 
         <Alert className="mt-6">
           <Shield className="h-4 w-4" />

@@ -7,6 +7,7 @@ use super::util::{d1_number, now_ts};
 pub struct UserRow {
     pub id: i64,
     pub username: String,
+    pub username_lower: String,
 }
 
 #[derive(Deserialize)]
@@ -47,14 +48,15 @@ pub async fn d1(env: &Env) -> Result<D1Database> {
 }
 
 pub async fn d1_user_by_username(db: &D1Database, username: &str) -> Result<Option<UserRow>> {
-    db.prepare("SELECT id, username FROM users WHERE username = ?1")
-        .bind(&[username.into()])?
+    let username_lower = beacon_core::username::normalize_username(username);
+    db.prepare("SELECT id, username, username_lower FROM users WHERE username_lower = ?1")
+        .bind(&[username_lower.into()])?
         .first::<UserRow>(None)
         .await
 }
 
 pub async fn d1_user_by_id(db: &D1Database, id: i64) -> Result<Option<UserRow>> {
-    db.prepare("SELECT id, username FROM users WHERE id = ?1")
+    db.prepare("SELECT id, username, username_lower FROM users WHERE id = ?1")
         .bind(&[d1_number(id)])?
         .first::<UserRow>(None)
         .await
@@ -62,23 +64,44 @@ pub async fn d1_user_by_id(db: &D1Database, id: i64) -> Result<Option<UserRow>> 
 
 pub async fn d1_insert_user(db: &D1Database, username: &str) -> Result<i64> {
     let ts = now_ts();
+    let username_lower = beacon_core::username::normalize_username(username);
     // NOTE: D1's `last_row_id` metadata is not always available/reliable across environments.
     // Insert and then fetch the created row by unique username.
     db.prepare(
-        "INSERT INTO users (username, created_at, updated_at) VALUES (?1, ?2, ?2)",
+        "INSERT INTO users (username, username_lower, created_at, updated_at) VALUES (?1, ?2, ?3, ?3)",
     )
     .bind(&[
         username.into(),
+        username_lower.clone().into(),
         d1_number(ts),
     ])?
     .run()
     .await?;
 
-    let Some(user) = d1_user_by_username(db, username).await? else {
+    let Some(user) = d1_user_by_username(db, &username_lower).await? else {
         return Err(Error::RustError("Inserted user could not be reloaded".to_string()));
     };
 
     Ok(user.id)
+}
+
+pub async fn d1_update_user_username(
+    db: &D1Database,
+    user_id: i64,
+    username: &str,
+    username_lower: &str,
+) -> Result<()> {
+    let ts = now_ts();
+    db.prepare("UPDATE users SET username = ?1, username_lower = ?2, updated_at = ?3 WHERE id = ?4")
+        .bind(&[
+            username.into(),
+            username_lower.into(),
+            d1_number(ts),
+            d1_number(user_id),
+        ])?
+        .run()
+        .await?;
+    Ok(())
 }
 
 pub async fn d1_passkeys_by_user_id(db: &D1Database, user_id: i64) -> Result<Vec<PasskeyDbRow>> {
@@ -306,10 +329,11 @@ pub async fn d1_password_identity_by_user_id(db: &D1Database, user_id: i64) -> R
 }
 
 pub async fn d1_password_identity_by_identifier(db: &D1Database, identifier: &str) -> Result<Option<IdentityRow>> {
+    let identifier_lower = beacon_core::username::normalize_username(identifier);
     db.prepare(
         "SELECT id, user_id, provider, provider_user_id, password_hash, created_at, updated_at FROM identities WHERE provider = 'password' AND provider_user_id = ?1 LIMIT 1",
     )
-    .bind(&[identifier.into()])?
+    .bind(&[identifier_lower.into()])?
     .first::<IdentityRow>(None)
     .await
 }
@@ -320,6 +344,21 @@ pub async fn d1_update_password_identity_hash(db: &D1Database, user_id: i64, new
         "UPDATE identities SET password_hash = ?1, updated_at = ?2 WHERE user_id = ?3 AND provider = 'password'",
     )
     .bind(&[new_hash.into(), d1_number(ts), d1_number(user_id)])?
+    .run()
+    .await?;
+    Ok(())
+}
+
+pub async fn d1_update_password_identity_identifier(
+    db: &D1Database,
+    user_id: i64,
+    new_identifier: &str,
+) -> Result<()> {
+    let ts = now_ts();
+    db.prepare(
+        "UPDATE identities SET provider_user_id = ?1, updated_at = ?2 WHERE user_id = ?3 AND provider = 'password'",
+    )
+    .bind(&[new_identifier.into(), d1_number(ts), d1_number(user_id)])?
     .run()
     .await?;
     Ok(())

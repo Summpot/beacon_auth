@@ -10,6 +10,7 @@ pub use auth::{get_minecraft_jwt, refresh_token};
 // Keep original handlers here
 use actix_web::{web, HttpRequest, HttpResponse, Responder};
 use chrono::Utc;
+use beacon_core::username;
 use entity::identity as identity_entity;
 use entity::user as user_entity;
 use sea_orm::{ActiveModelTrait, ColumnTrait, EntityTrait, QueryFilter, Set, TransactionTrait};
@@ -53,10 +54,12 @@ pub async fn login(
 ) -> impl Responder {
     log::info!("Login attempt for user: {}", payload.username);
 
+    let identifier = username::normalize_username(&payload.username);
+
     // 1. Resolve the canonical user via the password identity.
     let identity = match identity_entity::Entity::find()
         .filter(identity_entity::Column::Provider.eq("password"))
-        .filter(identity_entity::Column::ProviderUserId.eq(&payload.username))
+        .filter(identity_entity::Column::ProviderUserId.eq(&identifier))
         .one(&app_state.db)
         .await
     {
@@ -146,11 +149,14 @@ pub async fn register(
 ) -> impl Responder {
     log::info!("Registration attempt for user: {}", payload.username);
 
-    // 1. Validate username (basic validation)
-    if payload.username.is_empty() || payload.username.len() > 50 {
+    let requested_username = payload.username.trim().to_string();
+    let requested_username_lower = username::normalize_username(&requested_username);
+
+    // 1. Validate username (Minecraft-style)
+    if let Err(msg) = username::validate_minecraft_username(&requested_username) {
         return HttpResponse::BadRequest().json(ErrorResponse {
             error: "invalid_username".to_string(),
-            message: "Username must be between 1 and 50 characters".to_string(),
+            message: msg.to_string(),
         });
     }
 
@@ -164,7 +170,7 @@ pub async fn register(
 
     // 3. Check if user already exists
     let existing_user = user_entity::Entity::find()
-        .filter(user_entity::Column::Username.eq(&payload.username))
+        .filter(user_entity::Column::UsernameLower.eq(&requested_username_lower))
         .one(&app_state.db)
         .await;
 
@@ -172,7 +178,7 @@ pub async fn register(
         Ok(Some(_)) => {
             log::warn!(
                 "Registration failed: username already exists: {}",
-                payload.username
+                requested_username
             );
             return HttpResponse::Conflict().json(ErrorResponse {
                 error: "username_taken".to_string(),
@@ -218,7 +224,8 @@ pub async fn register(
     };
 
     let new_user = user_entity::ActiveModel {
-        username: Set(payload.username.clone()),
+        username: Set(requested_username.clone()),
+        username_lower: Set(requested_username_lower.clone()),
         created_at: Set(now),
         updated_at: Set(now),
         ..Default::default()
@@ -241,7 +248,7 @@ pub async fn register(
     let new_identity = identity_entity::ActiveModel {
         user_id: Set(user_id),
         provider: Set("password".to_string()),
-        provider_user_id: Set(payload.username.clone()),
+        provider_user_id: Set(requested_username_lower.clone()),
         password_hash: Set(Some(password_hash)),
         created_at: Set(now),
         updated_at: Set(now),
@@ -667,21 +674,32 @@ pub async fn oauth_callback(
         // Login/registration flow: no compatibility behavior. Create a new user if identity is new.
         let now = Utc::now();
 
-        // Allocate a unique username derived from the provider.
-        let base = derived_username.clone();
-        let mut candidate = base.clone();
-        for i in 0..=100 {
+        // Allocate a unique Minecraft-valid username derived from the provider.
+        let prefix = match provider.as_str() {
+            "github" => "gh_",
+            "google" => "gg_",
+            _ => "id_",
+        };
+
+        let mut candidate_username = String::new();
+        let mut candidate_lower = String::new();
+
+        for attempt in 0u32..=100u32 {
+            let candidate = username::make_minecraft_username_with_prefix(prefix, &derived_username, attempt);
+            let lower = username::normalize_username(&candidate);
+
             let existing = user_entity::Entity::find()
-                .filter(user_entity::Column::Username.eq(&candidate))
+                .filter(user_entity::Column::UsernameLower.eq(&lower))
                 .one(&app_state.db)
                 .await;
 
             match existing {
-                Ok(None) => break,
-                Ok(Some(_)) => {
-                    candidate = format!("{}_{}", base, i + 1);
-                    continue;
+                Ok(None) => {
+                    candidate_username = candidate;
+                    candidate_lower = lower;
+                    break;
                 }
+                Ok(Some(_)) => continue,
                 Err(e) => {
                     log::error!("Database error (username check): {}", e);
                     return HttpResponse::InternalServerError().body("Database error");
@@ -689,8 +707,14 @@ pub async fn oauth_callback(
             }
         }
 
+        if candidate_username.is_empty() {
+            log::error!("Failed to allocate a unique username after many collisions");
+            return HttpResponse::InternalServerError().body("Failed to allocate unique username");
+        }
+
         let new_user = user_entity::ActiveModel {
-            username: Set(candidate),
+            username: Set(candidate_username),
+            username_lower: Set(candidate_lower),
             created_at: Set(now),
             updated_at: Set(now),
             ..Default::default()
@@ -896,7 +920,7 @@ async fn exchange_github_code(
         .ok_or_else(|| anyhow::anyhow!("No username in response"))?
         .to_string();
 
-    Ok((user_id, format!("gh_{}", username)))
+    Ok((user_id, username))
 }
 
 // Helper function to exchange Google code for user info
@@ -967,7 +991,7 @@ async fn exchange_google_code(
     // Use email prefix as username
     let username = email.split('@').next().unwrap_or(email);
 
-    Ok((user_id, format!("gg_{}", username)))
+    Ok((user_id, username.to_string()))
 }
 
 /// Helper function to extract user ID from session cookie
