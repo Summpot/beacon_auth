@@ -1,0 +1,36 @@
+modLoader = "javafml"
+loaderVersion = "[1,)"
+license = "All Rights Reserved"
+
+[[mods]]
+modId = "beaconauth"
+version = "${version}"
+displayName = "Beacon Auth"
+authors = "Summpot"
+description = '''
+BeaconAuth integrates a BeaconAuth auth server into the Minecraft login flow.
+'''
+
+[[mixins]]
+config = "beaconauth.mixins.json"
+
+[[dependencies.beaconauth]]
+modId = "neoforge"
+mandatory = true
+versionRange = "[21.1,)"
+ordering = "NONE"
+side = "BOTH"
+
+[[dependencies.beaconauth]]
+modId = "minecraft"
+mandatory = true
+versionRange = "[1.21.1,1.22)"
+ordering = "NONE"
+side = "BOTH"
+
+[[dependencies.beaconauth]]
+modId = "architectury"
+mandatory = true
+versionRange = "[13.0.8,)"
+ordering = "AFTER"
+side = "BOTH"
