@@ -5,7 +5,6 @@ fn main() {
     println!("cargo:rerun-if-changed=../../rsbuild.config.ts");
     println!("cargo:rerun-if-changed=../../package.json");
 
-    // 使用 which 查找 pnpm 可执行文件
     let pnpm_path = which::which("pnpm")
         .expect("pnpm executable not found in PATH. Please ensure pnpm is installed and available in your PATH.");
 
@@ -16,7 +15,7 @@ fn main() {
 
     let status = Command::new(&pnpm_path)
         .arg("build")
-        .current_dir("../../") // 在项目根目录执行
+        .current_dir("../../")
         .status()
         .expect("Failed to execute pnpm build");
 

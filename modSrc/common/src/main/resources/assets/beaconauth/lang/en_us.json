@@ -1,0 +1,39 @@
+{
+  "chat.beaconauth.welcome": "§e━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━",
+  "chat.beaconauth.welcome_title": "§6✦ §eWelcome to the server!",
+  "chat.beaconauth.login_prompt": "§a[BeaconAuth] Please click here to log in.",
+  "chat.beaconauth.divider": "§e━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━",
+  "chat.beaconauth.authenticated": "§a✓ You are already authenticated, welcome back!",
+  "chat.beaconauth.login_click": "§a[Click here to login]",
+  "chat.beaconauth.login_url": "§7Or copy link: %s",
+  "chat.beaconauth.success": "§a✓ Authentication successful: %s",
+  "chat.beaconauth.failed": "§c✗ Authentication failed: %s",
+  "chat.beaconauth.server_not_ready": "§cAuthentication server not started, cannot login",
+  "chat.beaconauth.generating_url": "§7Generating login URL...",
+  "chat.beaconauth.auto_login": "§7Automatic login initiated...",
+  "chat.beaconauth.login_cancelled": "§cAuthentication cancelled",
+  
+  "command.beaconauth.must_be_player": "This command must be run by a player",
+  "command.beaconauth.login_failed": "Failed to start login: %s",
+  "command.beaconauth.login_request_sent": "§7Login request sent to your client",
+  
+  "html.beaconauth.success.title": "Login Successful",
+  "html.beaconauth.success.heading": "Login successful!",
+  "html.beaconauth.success.message": "You can close this page and return to the game",
+  "html.beaconauth.error.title": "Login Error",
+  "html.beaconauth.error.heading": "Login Error",
+  
+  "server.beaconauth.player_joined": "Player %s joined the server",
+  "server.beaconauth.not_authenticated": "Player %s is not authenticated",
+  "server.beaconauth.already_authenticated": "Player %s is already authenticated",
+  "server.beaconauth.auth_successful": "✓ Authentication successful for %s (user: %s, id: %s)",
+  "server.beaconauth.auth_failed": "✗ Authentication failed for %s: %s",
+
+  "disconnect.beaconauth.timeout": "Login timed out while waiting for BeaconAuth",
+  "disconnect.beaconauth.mod_required": "This server requires the BeaconAuth mod in offline mode",
+  "disconnect.beaconauth.invalid_init": "Invalid BeaconAuth login initialization data",
+  "disconnect.beaconauth.server_error": "BeaconAuth server error. Please try again later",
+  "disconnect.beaconauth.invalid_verify": "Invalid BeaconAuth verification payload",
+  "disconnect.beaconauth.failure": "BeaconAuth verification failed: %s",
+  "disconnect.beaconauth.cancelled": "Authentication cancelled: %s"
+}
