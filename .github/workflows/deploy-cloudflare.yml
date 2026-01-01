@@ -188,6 +188,7 @@ jobs:
       - name: Apply SeaORM migrations (Migrator::up)
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_MIGRATIONS_API_TOKEN: ${{ secrets.CLOUDFLARE_MIGRATIONS_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           WORKER_NAME: ${{ steps.cfg.outputs.worker_name }}
         shell: bash
@@ -195,6 +196,15 @@ jobs:
           set -euo pipefail
 
           worker="${WORKER_NAME:?WORKER_NAME is required}"
+
+          # Some Cloudflare API tokens are IP-restricted to CI runners. The migration endpoint
+          # verifies tokens from within the Worker runtime, so you may need a separate token
+          # without restrictive IP policies.
+          token="${CLOUDFLARE_MIGRATIONS_API_TOKEN:-${CLOUDFLARE_API_TOKEN}}"
+          if [ -z "$token" ]; then
+            echo "Missing CLOUDFLARE_API_TOKEN (or CLOUDFLARE_MIGRATIONS_API_TOKEN)." >&2
+            exit 1
+          fi
 
           echo "Resolving workers.dev subdomain for account ${CLOUDFLARE_ACCOUNT_ID}..."
           subdomain=$(curl -sS \
@@ -216,7 +226,7 @@ jobs:
 
           curl -sS --fail-with-body \
             -X POST "$url" \
-            -H "Authorization: Bearer ${CLOUDFLARE_API_TOKEN}" \
+            -H "Authorization: Bearer ${token}" \
             -H "Accept: application/json" \
             -H "Content-Type: application/json" \
             --data '{}' \

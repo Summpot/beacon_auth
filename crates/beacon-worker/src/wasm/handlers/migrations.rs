@@ -59,6 +59,9 @@ fn extract_bearer_token(req: &Request) -> Result<Option<String>> {
 async fn verify_cloudflare_api_token(token: &str) -> Result<CloudflareVerifyResult> {
     let headers = Headers::new();
     headers.set("Authorization", &format!("Bearer {token}"))?;
+    headers.set("Accept", "application/json")?;
+    // Cloudflare API endpoints sometimes behave better with an explicit UA.
+    headers.set("User-Agent", "BeaconAuth/1.0 (Cloudflare Worker)")?;
 
     let mut init = RequestInit::new();
     init.with_method(Method::Get);
@@ -70,17 +73,46 @@ async fn verify_cloudflare_api_token(token: &str) -> Result<CloudflareVerifyResu
     )?;
 
     let mut resp = Fetch::Request(cf_req).send().await?;
-    let parsed: CloudflareEnvelope<CloudflareVerifyResult> = resp.json().await?;
+    let status = resp.status_code();
+    let body = resp.text().await.unwrap_or_default();
+
+    let parsed: CloudflareEnvelope<CloudflareVerifyResult> = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => {
+            let snippet = body.chars().take(512).collect::<String>();
+            return Err(worker::Error::RustError(format!(
+                "Cloudflare verify returned non-JSON body (status={status}): {e}; body_snippet={snippet:?}"
+            )));
+        }
+    };
 
     if !parsed.success {
-        return Err(worker::Error::RustError(
-            "Cloudflare API token verification failed".to_string(),
-        ));
+        let mut details = String::new();
+        if !parsed.errors.is_empty() {
+            details.push_str(" errors=");
+            details.push_str(
+                &parsed
+                    .errors
+                    .iter()
+                    .map(|m| {
+                        let code = m.code.map(|c| c.to_string()).unwrap_or_else(|| "?".to_string());
+                        let msg = m.message.clone().unwrap_or_else(|| "".to_string());
+                        format!("[{code}:{msg}]")
+                    })
+                    .collect::<Vec<_>>()
+                    .join(","),
+            );
+        }
+        return Err(worker::Error::RustError(format!(
+            "Cloudflare API token verification failed (status={status}).{details}"
+        )));
     }
 
-    parsed
-        .result
-        .ok_or_else(|| worker::Error::RustError("Cloudflare verify response missing result".to_string()))
+    parsed.result.ok_or_else(|| {
+        worker::Error::RustError(format!(
+            "Cloudflare verify response missing result (status={status})"
+        ))
+    })
 }
 
 pub async fn handle_migrations_up(req: &Request, env: &worker::Env) -> Result<Response> {
@@ -90,8 +122,10 @@ pub async fn handle_migrations_up(req: &Request, env: &worker::Env) -> Result<Re
 
     let verify = match verify_cloudflare_api_token(&token).await {
         Ok(v) => v,
-        Err(_e) => {
-            // Do not leak token or Cloudflare details to clients.
+        Err(e) => {
+            // Log details server-side (no token included) to diagnose CI issues like IP restrictions.
+            worker::console_log!("/v1/admin/migrations/up token verification failed: {e}");
+            // Do not leak Cloudflare details to clients.
             return error_response(req, 401, "unauthorized", "Invalid Cloudflare API token");
         }
     };
