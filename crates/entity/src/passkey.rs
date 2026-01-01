@@ -4,11 +4,11 @@ use serde::{Deserialize, Serialize};
 #[derive(Clone, Debug, PartialEq, DeriveEntityModel, Eq, Serialize, Deserialize)]
 #[sea_orm(table_name = "passkeys")]
 pub struct Model {
-    #[sea_orm(primary_key)]
-    pub id: i32,
+    #[sea_orm(primary_key, auto_increment = true)]
+    pub id: i64,
 
     /// Foreign key to users table
-    pub user_id: i32,
+    pub user_id: i64,
 
     /// Base64-encoded credential ID (unique identifier for this passkey)
     #[sea_orm(unique)]
@@ -22,9 +22,10 @@ pub struct Model {
     pub name: String,
 
     /// Last time this passkey was used for authentication
-    pub last_used_at: Option<ChronoDateTimeUtc>,
+    pub last_used_at: Option<i64>,
 
-    pub created_at: ChronoDateTimeUtc,
+    /// Unix timestamp (seconds).
+    pub created_at: i64,
 }
 
 #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]
@@ -46,3 +47,4 @@ impl Related<super::user::Entity> for Entity {
 }
 
 impl ActiveModelBehavior for ActiveModel {}
+

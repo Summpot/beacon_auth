@@ -146,7 +146,7 @@ pub async fn change_username(
         }
     }
 
-    let now = Utc::now();
+    let now = Utc::now().timestamp();
     let txn = match app_state.db.begin().await {
         Ok(t) => t,
         Err(e) => {
@@ -328,7 +328,7 @@ pub async fn change_password(
     };
 
     // Upsert password identity.
-    let now = Utc::now();
+    let now = Utc::now().timestamp();
     if let Some(identity_model) = existing_password_identity {
         let mut active: identity::ActiveModel = identity_model.into();
         active.password_hash = Set(Some(new_password_hash));
@@ -401,7 +401,7 @@ pub async fn logout(
     use entity::refresh_token;
     match refresh_token::Entity::update_many()
         .filter(refresh_token::Column::UserId.eq(user_id))
-        .col_expr(refresh_token::Column::Revoked, sea_orm::sea_query::Expr::value(true))
+        .col_expr(refresh_token::Column::Revoked, sea_orm::sea_query::Expr::value(1_i64))
         .exec(&app_state.db)
         .await
     {

@@ -33,10 +33,11 @@ fn generate_jwt<T: serde::Serialize>(
 /// This ensures tokens are always created together with proper family_id tracking
 async fn create_token_pair(
     app_state: &AppState,
-    user_id: i32,
+    user_id: i64,
     family_id: Option<String>,
 ) -> Result<TokenPair, anyhow::Error> {
     let now = Utc::now();
+    let now_ts = now.timestamp();
 
     // Generate access token using the unified JWT generator
     let access_exp = now + chrono::Duration::seconds(app_state.access_token_expiration);
@@ -62,7 +63,7 @@ async fn create_token_pair(
     // Use existing family_id or create new one
     let token_family_id = family_id.unwrap_or_else(|| Uuid::new_v4().to_string());
 
-    let refresh_exp = now + chrono::Duration::seconds(app_state.refresh_token_expiration);
+    let refresh_exp = now_ts + app_state.refresh_token_expiration;
 
     // Store refresh token in database
     let refresh_token_model = refresh_token::ActiveModel {
@@ -70,8 +71,8 @@ async fn create_token_pair(
         token_hash: Set(token_hash),
         family_id: Set(token_family_id.clone()),
         expires_at: Set(refresh_exp),
-        revoked: Set(false),
-        created_at: Set(now),
+        revoked: Set(0_i64),
+        created_at: Set(now_ts),
         ..Default::default()
     };
 
@@ -131,7 +132,7 @@ pub async fn refresh_token(
     };
 
     // Check if token is revoked
-    if token_record.revoked {
+    if token_record.revoked != 0 {
         return HttpResponse::Unauthorized().json(ErrorResponse {
             error: "revoked_token".to_string(),
             message: "Refresh token has been revoked".to_string(),
@@ -139,7 +140,7 @@ pub async fn refresh_token(
     }
 
     // Check if token is expired
-    if token_record.expires_at < Utc::now() {
+    if token_record.expires_at < Utc::now().timestamp() {
         return HttpResponse::Unauthorized().json(ErrorResponse {
             error: "expired_token".to_string(),
             message: "Refresh token has expired".to_string(),
@@ -152,7 +153,7 @@ pub async fn refresh_token(
 
     // Revoke old refresh token (for rotation security)
     let mut token_to_revoke: refresh_token::ActiveModel = token_record.into();
-    token_to_revoke.revoked = Set(true);
+    token_to_revoke.revoked = Set(1_i64);
     if let Err(e) = token_to_revoke.update(&app_state.db).await {
         log::error!("Failed to revoke old refresh token: {}", e);
     }
@@ -292,7 +293,7 @@ pub fn set_auth_cookies(
 /// Returns a tuple of (access_token, refresh_token) for backward compatibility
 pub async fn create_session_for_user(
     app_state: &AppState,
-    user_id: i32,
+    user_id: i64,
 ) -> Result<(String, String), anyhow::Error> {
     let token_pair = create_token_pair(app_state, user_id, None).await?;
     Ok((token_pair.access_token, token_pair.refresh_token))
@@ -305,7 +306,7 @@ pub fn get_access_token_from_cookie(req: &HttpRequest) -> Option<String> {
 }
 
 /// Helper: Verify access token with proper ES256 signature verification
-pub fn verify_access_token(app_state: &AppState, token: &str) -> Result<i32, String> {
+pub fn verify_access_token(app_state: &AppState, token: &str) -> Result<i64, String> {
     // Create validation for ES256 tokens
     let mut validation = jsonwebtoken::Validation::new(jsonwebtoken::Algorithm::ES256);
     validation.set_issuer(&[&app_state.oauth_config.redirect_base]);
@@ -332,7 +333,7 @@ pub fn verify_access_token(app_state: &AppState, token: &str) -> Result<i32, Str
     token_data
         .claims
         .sub
-        .parse::<i32>()
+        .parse::<i64>()
         .map_err(|_| "Invalid user ID in token".to_string())
 }
 

@@ -4,11 +4,11 @@ use serde::{Deserialize, Serialize};
 #[derive(Clone, Debug, PartialEq, DeriveEntityModel, Eq, Serialize, Deserialize)]
 #[sea_orm(table_name = "refresh_tokens")]
 pub struct Model {
-    #[sea_orm(primary_key)]
-    pub id: i32,
+    #[sea_orm(primary_key, auto_increment = true)]
+    pub id: i64,
 
     /// Foreign key to users table
-    pub user_id: i32,
+    pub user_id: i64,
 
     /// SHA-256 hash of the refresh token
     #[sea_orm(unique)]
@@ -18,12 +18,15 @@ pub struct Model {
     pub family_id: String,
 
     /// Expiration time
-    pub expires_at: ChronoDateTimeUtc,
+    /// Unix timestamp (seconds).
+    pub expires_at: i64,
 
     /// Whether this token has been revoked
-    pub revoked: bool,
+    /// D1 schema stores this as INTEGER 0/1.
+    pub revoked: i64,
 
-    pub created_at: ChronoDateTimeUtc,
+    /// Unix timestamp (seconds).
+    pub created_at: i64,
 }
 
 #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]
@@ -45,3 +48,4 @@ impl Related<super::user::Entity> for Entity {
 }
 
 impl ActiveModelBehavior for ActiveModel {}
+

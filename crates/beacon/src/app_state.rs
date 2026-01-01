@@ -46,7 +46,7 @@ pub struct AppState {
 
     /// Temporary passkey registration state storage (user_id -> PasskeyRegistration)
     /// Uses moka cache with 5-minute TTL to avoid state serialization
-    pub passkey_reg_states: Cache<i32, PasskeyRegistration>,
+    pub passkey_reg_states: Cache<i64, PasskeyRegistration>,
 
     /// Temporary passkey authentication state storage (session_id -> PasskeyAuthentication)
     /// Uses moka cache with 5-minute TTL to avoid state serialization

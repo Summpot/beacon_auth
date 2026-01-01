@@ -52,7 +52,7 @@ pub async fn list_identities(
 pub async fn delete_identity_by_id(
     req: HttpRequest,
     app_state: web::Data<AppState>,
-    id: web::Path<i32>,
+    id: web::Path<i64>,
 ) -> actix_web::Result<HttpResponse> {
     let user_id = extract_session_user(&req, &app_state)?;
     let identity_id = id.into_inner();

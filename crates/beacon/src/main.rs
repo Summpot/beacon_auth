@@ -4,7 +4,7 @@ use beacon_lib::{
     config::{Command, Config},
     server::run_server,
 };
-use chrono::Utc;
+use chrono::{TimeZone, Utc};
 use clap::Parser;
 use entity::{identity, user};
 use migration::MigratorTrait;
@@ -87,7 +87,7 @@ async fn create_user(username: &str, password: &str) -> anyhow::Result<()> {
     let password_hash = hash(password, bcrypt::DEFAULT_COST)?;
 
     // Create user
-    let now = Utc::now();
+    let now = Utc::now().timestamp();
     let new_user = user::ActiveModel {
         username: Set(requested_username.clone()),
         username_lower: Set(requested_username_lower.clone()),
@@ -133,11 +133,16 @@ async fn list_users() -> anyhow::Result<()> {
         println!("{:<5} {:<20} {:<30}", "ID", "Username", "Created At");
         println!("{}", "-".repeat(60));
         for user in users {
+            let created_at = Utc
+                .timestamp_opt(user.created_at, 0)
+                .single()
+                .map(|dt| dt.format("%Y-%m-%d %H:%M:%S").to_string())
+                .unwrap_or_else(|| user.created_at.to_string());
             println!(
                 "{:<5} {:<20} {:<30}",
                 user.id,
                 user.username,
-                user.created_at.format("%Y-%m-%d %H:%M:%S")
+                created_at
             );
         }
     }

@@ -81,7 +81,7 @@ pub struct OAuthStateClaims {
 
     /// When present, the OAuth flow is being used to link this provider identity
     /// to an already-authenticated user.
-    pub link_user_id: Option<i32>,
+    pub link_user_id: Option<i64>,
 }
 
 /// JWT Claims structure
@@ -147,7 +147,7 @@ pub struct MinecraftJwtResponse {
 /// Linked identity info (e.g. an OAuth provider account linked to the canonical user).
 #[derive(Debug, Serialize, Deserialize)]
 pub struct IdentityInfo {
-    pub id: i32,
+    pub id: i64,
     pub provider: String,
     pub provider_user_id: String,
 }
@@ -216,7 +216,7 @@ pub struct PasskeyList {
 #[cfg(feature = "passkey")]
 #[derive(Debug, Serialize, Deserialize)]
 pub struct PasskeyInfo {
-    pub id: i32,
+    pub id: i64,
     pub name: String,
     pub created_at: String,
     pub last_used_at: Option<String>,
@@ -226,7 +226,7 @@ pub struct PasskeyInfo {
 #[cfg(feature = "passkey")]
 #[derive(Debug, Serialize, Deserialize)]
 pub struct PasskeyDeleteRequest {
-    pub id: i32,
+    pub id: i64,
 }
 
 /// Change password request

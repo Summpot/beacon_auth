@@ -4,11 +4,11 @@ use serde::{Deserialize, Serialize};
 #[derive(Clone, Debug, PartialEq, DeriveEntityModel, Eq, Serialize, Deserialize)]
 #[sea_orm(table_name = "identities")]
 pub struct Model {
-    #[sea_orm(primary_key)]
-    pub id: i32,
+    #[sea_orm(primary_key, auto_increment = true)]
+    pub id: i64,
 
     /// Foreign key to users table
-    pub user_id: i32,
+    pub user_id: i64,
 
     /// Identity provider (e.g. "github", "google")
     pub provider: String,
@@ -20,9 +20,11 @@ pub struct Model {
     /// For OAuth/passkey providers this is NULL.
     pub password_hash: Option<String>,
 
-    pub created_at: ChronoDateTimeUtc,
+    /// Unix timestamp (seconds).
+    pub created_at: i64,
 
-    pub updated_at: ChronoDateTimeUtc,
+    /// Unix timestamp (seconds).
+    pub updated_at: i64,
 }
 
 #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]
@@ -44,3 +46,4 @@ impl Related<super::user::Entity> for Entity {
 }
 
 impl ActiveModelBehavior for ActiveModel {}
+

@@ -1,5 +1,6 @@
 use actix_web::{web, HttpRequest, HttpResponse};
 use base64::{engine::general_purpose::{STANDARD as BASE64, URL_SAFE_NO_PAD as BASE64URL}, Engine};
+use chrono::{TimeZone, Utc};
 use redis::AsyncCommands;
 use sea_orm::{ActiveModelTrait, ColumnTrait, EntityTrait, QueryFilter, Set};
 use serde::de::DeserializeOwned;
@@ -18,7 +19,7 @@ use entity::{passkey, user};
 
 const PASSKEY_STATE_TTL_SECS: u64 = 5 * 60;
 
-fn redis_reg_key(user_id: i32) -> String {
+fn redis_reg_key(user_id: i64) -> String {
     format!("beaconauth:passkey:reg:{user_id}")
 }
 
@@ -166,12 +167,13 @@ pub async fn register_finish(
         serde_json::to_string(&passkey).map_err(actix_web::error::ErrorInternalServerError)?;
 
     // Save to database
+    let now_ts = Utc::now().timestamp();
     let passkey_model = passkey::ActiveModel {
         user_id: Set(user_id),
         credential_id: Set(BASE64.encode(passkey.cred_id())),
         credential_data: Set(credential_data),
         name: Set(body.name.clone().unwrap_or_else(|| "Passkey".to_string())),
-        created_at: Set(chrono::Utc::now()),
+        created_at: Set(now_ts),
         last_used_at: Set(None),
         ..Default::default()
     };
@@ -327,7 +329,7 @@ pub async fn auth_finish(
 
     // Update last_used_at
     let mut passkey_update: passkey::ActiveModel = passkey_model.clone().into();
-    passkey_update.last_used_at = Set(Some(chrono::Utc::now()));
+    passkey_update.last_used_at = Set(Some(Utc::now().timestamp()));
     passkey_update
         .update(&app_state.db)
         .await
@@ -413,8 +415,17 @@ pub async fn list_passkeys(
         .map(|pk| PasskeyInfo {
             id: pk.id,
             name: pk.name,
-            created_at: pk.created_at.to_rfc3339(),
-            last_used_at: pk.last_used_at.map(|dt| dt.to_rfc3339()),
+            created_at: Utc
+                .timestamp_opt(pk.created_at, 0)
+                .single()
+                .map(|dt| dt.to_rfc3339())
+                .unwrap_or_else(|| pk.created_at.to_string()),
+            last_used_at: pk.last_used_at.map(|ts| {
+                Utc.timestamp_opt(ts, 0)
+                    .single()
+                    .map(|dt| dt.to_rfc3339())
+                    .unwrap_or_else(|| ts.to_string())
+            }),
         })
         .collect();
 
@@ -462,7 +473,7 @@ pub async fn delete_passkey(
 pub async fn delete_passkey_by_id(
     req: HttpRequest,
     app_state: web::Data<AppState>,
-    id: web::Path<i32>,
+    id: web::Path<i64>,
 ) -> actix_web::Result<HttpResponse> {
     let user_id = extract_session_user(&req, &app_state)?;
     let passkey_id = id.into_inner();

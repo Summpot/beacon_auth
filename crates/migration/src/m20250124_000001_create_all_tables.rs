@@ -14,7 +14,7 @@ impl MigrationTrait for Migration {
                     .if_not_exists()
                     .col(
                         ColumnDef::new(Users::Id)
-                            .integer()
+                            .big_integer()
                             .not_null()
                             .auto_increment()
                             .primary_key(),
@@ -33,12 +33,12 @@ impl MigrationTrait for Migration {
                     )
                     .col(
                         ColumnDef::new(Users::CreatedAt)
-                            .timestamp_with_time_zone()
+                            .big_integer()
                             .not_null(),
                     )
                     .col(
                         ColumnDef::new(Users::UpdatedAt)
-                            .timestamp_with_time_zone()
+                            .big_integer()
                             .not_null(),
                     )
                     .to_owned(),
@@ -53,12 +53,12 @@ impl MigrationTrait for Migration {
                     .if_not_exists()
                     .col(
                         ColumnDef::new(Identities::Id)
-                            .integer()
+                            .big_integer()
                             .not_null()
                             .auto_increment()
                             .primary_key(),
                     )
-                    .col(ColumnDef::new(Identities::UserId).integer().not_null())
+                    .col(ColumnDef::new(Identities::UserId).big_integer().not_null())
                     .col(ColumnDef::new(Identities::Provider).string().not_null())
                     .col(
                         ColumnDef::new(Identities::ProviderUserId)
@@ -68,19 +68,13 @@ impl MigrationTrait for Migration {
                     .col(ColumnDef::new(Identities::PasswordHash).string())
                     .col(
                         ColumnDef::new(Identities::CreatedAt)
-                            .timestamp_with_time_zone()
+                            .big_integer()
                             .not_null(),
                     )
                     .col(
                         ColumnDef::new(Identities::UpdatedAt)
-                            .timestamp_with_time_zone()
+                            .big_integer()
                             .not_null(),
-                    )
-                    .index(
-                        Index::create()
-                            .name("idx_identities_user_id")
-                            .table(Identities::Table)
-                            .col(Identities::UserId),
                     )
                     .index(
                         Index::create()
@@ -102,6 +96,18 @@ impl MigrationTrait for Migration {
             )
             .await?;
 
+                // SQLite cannot represent a non-unique index as a table-level CONSTRAINT,
+                // so we create these indexes separately.
+                manager
+                    .create_index(
+                    Index::create()
+                        .name("idx_identities_user_id")
+                        .table(Identities::Table)
+                        .col(Identities::UserId)
+                        .to_owned(),
+                    )
+                    .await?;
+
         // Create passkeys table
         manager
             .create_table(
@@ -110,12 +116,12 @@ impl MigrationTrait for Migration {
                     .if_not_exists()
                     .col(
                         ColumnDef::new(Passkeys::Id)
-                            .integer()
+                            .big_integer()
                             .not_null()
                             .auto_increment()
                             .primary_key(),
                     )
-                    .col(ColumnDef::new(Passkeys::UserId).integer().not_null())
+                    .col(ColumnDef::new(Passkeys::UserId).big_integer().not_null())
                     .col(
                         ColumnDef::new(Passkeys::CredentialId)
                             .string()
@@ -124,10 +130,10 @@ impl MigrationTrait for Migration {
                     )
                     .col(ColumnDef::new(Passkeys::CredentialData).text().not_null())
                     .col(ColumnDef::new(Passkeys::Name).string().not_null())
-                    .col(ColumnDef::new(Passkeys::LastUsedAt).timestamp_with_time_zone())
+                    .col(ColumnDef::new(Passkeys::LastUsedAt).big_integer())
                     .col(
                         ColumnDef::new(Passkeys::CreatedAt)
-                            .timestamp_with_time_zone()
+                            .big_integer()
                             .not_null(),
                     )
                     .foreign_key(
@@ -142,6 +148,16 @@ impl MigrationTrait for Migration {
             )
             .await?;
 
+        manager
+            .create_index(
+                Index::create()
+                    .name("idx_passkeys_user_id")
+                    .table(Passkeys::Table)
+                    .col(Passkeys::UserId)
+                    .to_owned(),
+            )
+            .await?;
+
         // Create refresh_tokens table
         manager
             .create_table(
@@ -150,12 +166,12 @@ impl MigrationTrait for Migration {
                     .if_not_exists()
                     .col(
                         ColumnDef::new(RefreshTokens::Id)
-                            .integer()
+                            .big_integer()
                             .not_null()
                             .auto_increment()
                             .primary_key(),
                     )
-                    .col(ColumnDef::new(RefreshTokens::UserId).integer().not_null())
+                    .col(ColumnDef::new(RefreshTokens::UserId).big_integer().not_null())
                     .col(
                         ColumnDef::new(RefreshTokens::TokenHash)
                             .string()
@@ -165,18 +181,18 @@ impl MigrationTrait for Migration {
                     .col(ColumnDef::new(RefreshTokens::FamilyId).string().not_null())
                     .col(
                         ColumnDef::new(RefreshTokens::ExpiresAt)
-                            .timestamp_with_time_zone()
+                            .big_integer()
                             .not_null(),
                     )
                     .col(
                         ColumnDef::new(RefreshTokens::Revoked)
-                            .boolean()
+                            .big_integer()
                             .not_null()
-                            .default(false),
+                            .default(0),
                     )
                     .col(
                         ColumnDef::new(RefreshTokens::CreatedAt)
-                            .timestamp_with_time_zone()
+                            .big_integer()
                             .not_null(),
                     )
                     .foreign_key(
@@ -187,6 +203,16 @@ impl MigrationTrait for Migration {
                             .on_delete(ForeignKeyAction::Cascade)
                             .on_update(ForeignKeyAction::Cascade),
                     )
+                    .to_owned(),
+            )
+            .await?;
+
+        manager
+            .create_index(
+                Index::create()
+                    .name("idx_refresh_tokens_user_id")
+                    .table(RefreshTokens::Table)
+                    .col(RefreshTokens::UserId)
                     .to_owned(),
             )
             .await?;

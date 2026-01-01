@@ -210,7 +210,7 @@ pub async fn register(
     };
 
     // 5. Create new user and its password identity atomically.
-    let now = Utc::now();
+    let now = Utc::now().timestamp();
 
     let txn = match app_state.db.begin().await {
         Ok(t) => t,
@@ -645,7 +645,7 @@ pub async fn oauth_callback(
             }
         };
 
-        let now = Utc::now();
+        let now = Utc::now().timestamp();
         let new_identity = identity_entity::ActiveModel {
             user_id: Set(link_user_id),
             provider: Set(provider.clone()),
@@ -672,7 +672,7 @@ pub async fn oauth_callback(
         user
     } else {
         // Login/registration flow: no compatibility behavior. Create a new user if identity is new.
-        let now = Utc::now();
+        let now = Utc::now().timestamp();
 
         // Allocate a unique Minecraft-valid username derived from the provider.
         let prefix = match provider.as_str() {
@@ -738,7 +738,7 @@ pub async fn oauth_callback(
             return HttpResponse::InternalServerError().body("Failed to resolve user");
         };
 
-        let now = Utc::now();
+        let now = Utc::now().timestamp();
         let new_identity = identity_entity::ActiveModel {
             user_id: Set(user.id),
             provider: Set(provider.clone()),
@@ -998,7 +998,7 @@ async fn exchange_google_code(
 pub fn extract_session_user(
     req: &HttpRequest,
     app_state: &web::Data<AppState>,
-) -> actix_web::Result<i32> {
+) -> actix_web::Result<i64> {
     use crate::models::SessionClaims;
 
     // Get access token from cookie
@@ -1031,7 +1031,7 @@ pub fn extract_session_user(
     }
 
     // Parse user_id from sub (subject) field
-    let user_id: i32 = token_data.claims.sub.parse().map_err(|e| {
+    let user_id: i64 = token_data.claims.sub.parse().map_err(|e| {
         log::error!("Failed to parse user ID from token: {:?}", e);
         actix_web::error::ErrorInternalServerError("Invalid user ID in token")
     })?;
