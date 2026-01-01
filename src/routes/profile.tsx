@@ -1,8 +1,8 @@
-import { createFileRoute, Link } from '@tanstack/react-router';
+import { createFileRoute, Link, useNavigate } from '@tanstack/react-router';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useEffect, useState } from 'react';
 import { z } from 'zod';
-import { apiClient, queryKeys } from '../utils/api';
+import { apiClient, queryKeys, type ApiError } from '../utils/api';
 import { BeaconIcon } from '@/components/beacon-icon';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardTitle, CardDescription } from '@/components/ui/card';
@@ -21,23 +21,23 @@ interface UserInfo {
   username: string;
 }
 
-async function fetchUserInfo(): Promise<UserInfo | null> {
-  try {
-    return await apiClient<UserInfo>('/api/v1/user/me');
-  } catch (error) {
-    console.error('Failed to load user info', error);
-    return null;
-  }
+async function fetchUserInfo(): Promise<UserInfo> {
+  return apiClient<UserInfo>('/api/v1/user/me');
 }
 
 function ProfilePage() {
   const { status, message } = Route.useSearch();
   const [statusMessage, setStatusMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
   const queryClient = useQueryClient();
+  const navigate = useNavigate();
 
-  const { data: user, isLoading } = useQuery({
+  const { data: user, isLoading, error } = useQuery<UserInfo, ApiError>({
     queryKey: queryKeys.userMe(),
     queryFn: fetchUserInfo,
+    retry: (failureCount, err) => {
+      if (err?.status === 401) return false;
+      return failureCount < 1;
+    },
   });
 
   const logoutMutation = useMutation({
@@ -57,6 +57,12 @@ function ProfilePage() {
     }
   }, [status, message]);
 
+  useEffect(() => {
+    if (error?.status === 401) {
+      navigate({ to: '/login', replace: true });
+    }
+  }, [error, navigate]);
+
   const handleLogout = () => logoutMutation.mutate();
 
   if (isLoading) {
@@ -74,7 +80,7 @@ function ProfilePage() {
     );
   }
 
-  if (!user) {
+  if (error && error.status !== 401) {
     return (
       <div className="flex items-center justify-center min-h-screen p-4">
         <div className="w-full max-w-md">
@@ -83,17 +89,21 @@ function ProfilePage() {
               <div className="inline-block mb-6">
                 <BeaconIcon className="w-20 h-20 opacity-50" />
               </div>
-              <CardTitle className="text-2xl font-bold mb-4">Not Authenticated</CardTitle>
-              <CardDescription className="mb-6">Please log in to access your profile.</CardDescription>
+              <CardTitle className="text-2xl font-bold mb-4">Could not load profile</CardTitle>
+              <CardDescription className="mb-6">{error.message}</CardDescription>
               <div className="flex flex-col gap-3">
-                <Button asChild><Link to="/login">Sign In</Link></Button>
-                <Button variant="secondary" asChild><Link to="/">Back to Home</Link></Button>
+                <Button asChild><Link to="/">Back to Home</Link></Button>
               </div>
             </CardContent>
           </Card>
         </div>
       </div>
     );
+  }
+
+  // If we're redirecting due to a 401, avoid flashing an intermediate UI.
+  if (!user) {
+    return null;
   }
 
   return (

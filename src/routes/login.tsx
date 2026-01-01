@@ -1,9 +1,10 @@
 import { zodResolver } from '@hookform/resolvers/zod';
 import { createFileRoute, Link, useNavigate } from '@tanstack/react-router';
+import { useQueryClient } from '@tanstack/react-query';
 import { useCallback, useEffect, useState, useRef } from 'react';
 import { useForm } from 'react-hook-form';
 import { z } from 'zod';
-import { ApiError, apiClient } from '../utils/api';
+import { ApiError, apiClient, queryKeys } from '../utils/api';
 import { BeaconIcon } from '@/components/beacon-icon';
 import { MinecraftFlowAlert } from '@/components/minecraft/minecraft-flow-alert';
 import {
@@ -55,6 +56,7 @@ const getErrorMessage = (error: unknown, fallback: string) => {
 function LoginPage() {
   const searchParams = Route.useSearch();
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const [config, setConfig] = useState<ServerConfig | null>(null);
   const [configLoading, setConfigLoading] = useState(true);
   const [passkeyError, setPasskeyError] = useState<string>('');
@@ -105,6 +107,8 @@ function LoginPage() {
   const completePasskeyAuth = useCallback(async (credential: unknown) => {
     await apiClient('/api/v1/passkey/auth/finish', { method: 'POST', requiresAuth: false, body: { credential } });
 
+    await queryClient.invalidateQueries({ queryKey: queryKeys.userMe() });
+
     if (searchParams.challenge && searchParams.redirect_port) {
       const result = await apiClient<{ redirectUrl?: string }>('/api/v1/minecraft-jwt', {
         method: 'POST',
@@ -121,7 +125,7 @@ function LoginPage() {
     } else {
       navigate({ to: '/profile' });
     }
-  }, [navigate, searchParams.challenge, searchParams.redirect_port]);
+  }, [navigate, queryClient, searchParams.challenge, searchParams.redirect_port]);
 
   useEffect(() => {
     const initConditionalUI = async () => {
@@ -159,6 +163,8 @@ function LoginPage() {
   const onSubmit = async (data: LoginFormData) => {
     try {
       await apiClient('/api/v1/login', { method: 'POST', requiresAuth: false, body: { username: data.username, password: data.password } });
+
+      await queryClient.invalidateQueries({ queryKey: queryKeys.userMe() });
       tryAutoRegisterPasskey().catch(() => {});
 
       if (searchParams.challenge && searchParams.redirect_port) {

@@ -185,37 +185,44 @@ jobs:
 
           pnpm exec wrangler deploy --config "${WRANGLER_WORKERS_CONFIG}" --var "BASE_URL:${BASE_URL}"
 
-      - name: Ensure D1 database_id in worker config
+      - name: Apply SeaORM migrations (Migrator::up)
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          WRANGLER_WORKERS_CONFIG: ${{ steps.cfg.outputs.wrangler_workers_config }}
+          WORKER_NAME: ${{ steps.cfg.outputs.worker_name }}
         shell: bash
         run: |
           set -euo pipefail
 
-          config="${WRANGLER_WORKERS_CONFIG}"
-          if jq -e '.d1_databases[]? | select(.database_name == "beaconauth-db").database_id' "$config" >/dev/null; then
-            echo "database_id already present in $config"
-          else
-            echo "database_id missing; querying D1 database info"
-            db_uuid=$(pnpm exec wrangler d1 info beaconauth-db --json | awk '/^\s*\{/{flag=1} flag{print}' | jq -r '.uuid')
-            if [ -z "$db_uuid" ] || [ "$db_uuid" = "null" ]; then
-              echo "Failed to obtain D1 database uuid" >&2
-              exit 1
-            fi
-            tmp=$(mktemp)
-            jq --tab --arg uuid "$db_uuid" '.d1_databases |= map(if (.database_name == "beaconauth-db") then . + {database_id: $uuid} else . end)' "$config" > "$tmp"
-            mv "$tmp" "$config"
-            echo "Updated $config with database_id=$db_uuid"
+          worker="${WORKER_NAME:?WORKER_NAME is required}"
+
+          echo "Resolving workers.dev subdomain for account ${CLOUDFLARE_ACCOUNT_ID}..."
+          subdomain=$(curl -sS \
+            -H "Authorization: Bearer ${CLOUDFLARE_API_TOKEN}" \
+            "https://api.cloudflare.com/client/v4/accounts/${CLOUDFLARE_ACCOUNT_ID}/workers/subdomain" \
+            | jq -r '.result.subdomain // empty')
+
+          if [ -z "$subdomain" ]; then
+            echo "Failed to resolve workers.dev subdomain." >&2
+            curl -sS \
+              -H "Authorization: Bearer ${CLOUDFLARE_API_TOKEN}" \
+              "https://api.cloudflare.com/client/v4/accounts/${CLOUDFLARE_ACCOUNT_ID}/workers/subdomain" \
+              | jq -c '{success, errors, messages}' >&2 || true
+            exit 1
           fi
 
-      - name: Apply D1 migrations (remote)
-        env:
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          WRANGLER_WORKERS_CONFIG: ${{ steps.cfg.outputs.wrangler_workers_config }}
-        run: pnpm exec wrangler d1 migrations apply DB --remote --config "${WRANGLER_WORKERS_CONFIG}"
+          url="https://${worker}.${subdomain}.workers.dev/v1/admin/migrations/up"
+          echo "Calling migration endpoint: $url"
+
+          curl -sS --fail-with-body \
+            -X POST "$url" \
+            -H "Authorization: Bearer ${CLOUDFLARE_API_TOKEN}" \
+            -H "Accept: application/json" \
+            -H "Content-Type: application/json" \
+            --data '{}' \
+            | jq -C .
+
+          echo "Applied migrations via Migrator::up" >> "$GITHUB_STEP_SUMMARY"
 
       - name: Sync Worker secrets (optional)
         env:
