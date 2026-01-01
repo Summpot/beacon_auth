@@ -8,9 +8,17 @@ name = "migration"
 path = "src/lib.rs"
 
 [dependencies]
-sea-orm-migration = { workspace = true }
 entity = { workspace = true }
-tokio = { workspace = true }
 
-[dependencies.sea-orm]
-workspace = true
+# We intentionally disable default features (which include the CLI stack) so this crate can be
+# linked into Cloudflare Workers (wasm32) without pulling in native runtime dependencies.
+
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+sea-orm-migration = { git = "https://github.com/Summpot/sea-orm.git", branch = "master", default-features = false, features = ["cloudflare-d1"] }
+
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
+sea-orm-migration = { git = "https://github.com/Summpot/sea-orm.git", branch = "master", default-features = false }
+
+# Native-only tooling (e.g. generate_d1_sql) uses Tokio + direct sea-orm connections.
+tokio = { workspace = true }
+sea-orm = { workspace = true }

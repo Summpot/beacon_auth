@@ -12,6 +12,7 @@ crate-type = ["cdylib", "rlib"]
 beacon-core = { workspace = true }
 beacon-passkey = { workspace = true }
 entity = { workspace = true }
+migration = { workspace = true }
 
 anyhow = { workspace = true }
 base64 = { workspace = true }

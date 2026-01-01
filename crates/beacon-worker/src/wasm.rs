@@ -102,6 +102,9 @@ pub async fn fetch(req: Request, env: Env, _ctx: Context) -> Result<Response> {
 
     match (method, path) {
         (Method::Get, "/v1/config") => handlers::config::handle_get_config(&req, &env).await,
+        (Method::Post, "/v1/admin/migrations/up") => {
+            handlers::migrations::handle_migrations_up(&req, &env).await
+        }
         (Method::Post, "/v1/refresh") => handlers::session::handle_refresh(&req, &env).await,
         (Method::Post, "/v1/logout") => handlers::session::handle_logout(&req, &env).await,
         (Method::Get, "/v1/user/me") => handlers::session::handle_user_me(&req, &env).await,

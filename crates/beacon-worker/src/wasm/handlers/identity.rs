@@ -45,7 +45,7 @@ pub async fn handle_identities_list(req: &Request, env: &Env) -> Result<Response
         identities: identities
             .into_iter()
             .map(|i| models::IdentityInfo {
-                id: i.id as i32,
+                id: i.id,
                 provider: i.provider,
                 provider_user_id: i.provider_user_id,
             })

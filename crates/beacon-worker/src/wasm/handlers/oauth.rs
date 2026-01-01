@@ -288,7 +288,7 @@ pub async fn handle_oauth_link_start(mut req: Request, env: &Env) -> Result<Resp
     };
 
     let link_user_id = match verify_access_token(jwt, &access_token) {
-        Ok(id) => id,
+        Ok(id) => id as i64,
         Err(e) => return error_response(&req, 401, "invalid_token", e),
     };
 
