@@ -1,11 +1,12 @@
 use serde::Deserialize;
 use serde_json::json;
-use worker::{Fetch, Headers, Method, Request, RequestInit, Response, Result};
+use worker::{Env, Fetch, Headers, Method, Request, RequestInit, Response, Result};
 
 use migration::MigratorTrait;
 
 use crate::wasm::{
     db::d1,
+    env::env_string,
     http::{error_response, internal_error_response, json_with_cors},
 };
 
@@ -44,9 +45,12 @@ fn extract_bearer_token(req: &Request) -> Result<Option<String>> {
 
     // Allow some tolerance for casing/whitespace.
     let raw = raw.trim();
-    let Some(rest) = raw.strip_prefix("Bearer ") else {
+    let Some((scheme, rest)) = raw.split_once(' ') else {
         return Ok(None);
     };
+    if !scheme.eq_ignore_ascii_case("bearer") {
+        return Ok(None);
+    }
 
     let token = rest.trim();
     if token.is_empty() {
@@ -56,7 +60,7 @@ fn extract_bearer_token(req: &Request) -> Result<Option<String>> {
     Ok(Some(token.to_string()))
 }
 
-async fn verify_cloudflare_api_token(token: &str) -> Result<CloudflareVerifyResult> {
+async fn verify_cloudflare_api_token_against_url(token: &str, url: &str) -> Result<CloudflareVerifyResult> {
     let headers = Headers::new();
     headers.set("Authorization", &format!("Bearer {token}"))?;
     headers.set("Accept", "application/json")?;
@@ -67,10 +71,7 @@ async fn verify_cloudflare_api_token(token: &str) -> Result<CloudflareVerifyResu
     init.with_method(Method::Get);
     init.with_headers(headers);
 
-    let cf_req = Request::new_with_init(
-        "https://api.cloudflare.com/client/v4/user/tokens/verify",
-        &init,
-    )?;
+    let cf_req = Request::new_with_init(url, &init)?;
 
     let mut resp = Fetch::Request(cf_req).send().await?;
     let status = resp.status_code();
@@ -104,15 +105,47 @@ async fn verify_cloudflare_api_token(token: &str) -> Result<CloudflareVerifyResu
             );
         }
         return Err(worker::Error::RustError(format!(
-            "Cloudflare API token verification failed (status={status}).{details}"
+            "Cloudflare API token verification failed (status={status}, url={url}).{details}"
         )));
     }
 
     parsed.result.ok_or_else(|| {
         worker::Error::RustError(format!(
-            "Cloudflare verify response missing result (status={status})"
+            "Cloudflare verify response missing result (status={status}, url={url})"
         ))
     })
+}
+
+async fn verify_cloudflare_api_token(env: &Env, token: &str) -> Result<CloudflareVerifyResult> {
+    // There are two token “families”:
+    // - User API tokens: verified via `/user/tokens/verify`
+    // - Account API tokens: verified via `/accounts/{account_id}/tokens/verify`
+    // See: https://api.cloudflare.com/client/v4/user/tokens/verify
+    // See: https://api.cloudflare.com/client/v4/accounts/{account_id}/tokens/verify
+
+    let user_url = "https://api.cloudflare.com/client/v4/user/tokens/verify";
+    match verify_cloudflare_api_token_against_url(token, user_url).await {
+        Ok(v) => return Ok(v),
+        Err(user_err) => {
+            if let Some(account_id) = env_string(env, "CLOUDFLARE_ACCOUNT_ID") {
+                let account_url = format!(
+                    "https://api.cloudflare.com/client/v4/accounts/{account_id}/tokens/verify"
+                );
+                match verify_cloudflare_api_token_against_url(token, &account_url).await {
+                    Ok(v) => return Ok(v),
+                    Err(account_err) => {
+                        return Err(worker::Error::RustError(format!(
+                            "Cloudflare token verification failed. user_verify={user_err}; account_verify={account_err}"
+                        )));
+                    }
+                }
+            }
+
+            Err(worker::Error::RustError(format!(
+                "Cloudflare token verification failed using user token endpoint, and CLOUDFLARE_ACCOUNT_ID is not configured for account-token verification: {user_err}"
+            )))
+        }
+    }
 }
 
 pub async fn handle_migrations_up(req: &Request, env: &worker::Env) -> Result<Response> {
@@ -120,7 +153,7 @@ pub async fn handle_migrations_up(req: &Request, env: &worker::Env) -> Result<Re
         return error_response(req, 401, "missing_token", "Missing Authorization Bearer token");
     };
 
-    let verify = match verify_cloudflare_api_token(&token).await {
+    let verify = match verify_cloudflare_api_token(env, &token).await {
         Ok(v) => v,
         Err(e) => {
             // Log details server-side (no token included) to diagnose CI issues like IP restrictions.

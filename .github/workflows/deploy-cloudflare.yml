@@ -183,7 +183,7 @@ jobs:
         run: |
           set -euo pipefail
 
-          pnpm exec wrangler deploy --config "${WRANGLER_WORKERS_CONFIG}" --var "BASE_URL:${BASE_URL}"
+          pnpm exec wrangler deploy --config "${WRANGLER_WORKERS_CONFIG}" --var "BASE_URL:${BASE_URL}" --var "CLOUDFLARE_ACCOUNT_ID:${CLOUDFLARE_ACCOUNT_ID}"
 
       - name: Apply SeaORM migrations (Migrator::up)
         env:
