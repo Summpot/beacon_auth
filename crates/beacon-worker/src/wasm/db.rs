@@ -1,3 +1,4 @@
+// (deprecated) legacy D1 SQL layer; kept temporarily during refactor.
 use serde::Deserialize;
 use worker::{wasm_bindgen::JsValue, D1Database, Env, Error, Result};
 

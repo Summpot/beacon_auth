@@ -2,7 +2,6 @@ use chrono::{TimeZone, Utc};
 use serde_json::json;
 use sha2::{Digest, Sha256};
 use url::Url;
-use worker::wasm_bindgen::JsValue;
 
 pub fn now_ts() -> i64 {
     Utc::now().timestamp()
@@ -30,12 +29,6 @@ pub fn ts_to_rfc3339(ts: i64) -> String {
         .single()
         .map(|dt| dt.to_rfc3339())
         .unwrap_or_else(|| ts.to_string())
-}
-
-pub fn d1_number(value: i64) -> JsValue {
-    // D1 currently rejects JavaScript BigInt parameters, so always pass numeric values.
-    // The `worker` D1 binding expects `JsValue` parameters.
-    JsValue::from_f64(value as f64)
 }
 
 pub fn query_param(url: &Url, key: &str) -> Option<String> {

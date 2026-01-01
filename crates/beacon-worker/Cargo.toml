@@ -31,6 +31,9 @@ uuid = { workspace = true, features = ["js"] }
 worker = { workspace = true }
 console_error_panic_hook = { workspace = true }
 
+# Use the Summpot SeaORM fork that includes native Cloudflare D1 support.
+sea-orm = { git = "https://github.com/Summpot/sea-orm.git", branch = "master", default-features = false, features = ["cloudflare-d1", "macros"] }
+
 # Help rand/getrandom work reliably on wasm.
 getrandom = { workspace = true }
 getrandom02 = { workspace = true }

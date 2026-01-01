@@ -1,6 +1,7 @@
 use worker::*;
 
 mod cookies;
+#[path = "wasm/db/mod.rs"]
 mod db;
 mod env;
 mod handlers;

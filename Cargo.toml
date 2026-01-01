@@ -18,8 +18,9 @@ actix-files = "0.6"
 actix-web-rust-embed-responder = "2.3"
 
 # Database
-sea-orm = { version = "1.1", features = ["sqlx-sqlite", "sqlx-postgres", "runtime-tokio-rustls", "macros"] }
-sea-orm-migration = { version = "1.1", features = ["sqlx-sqlite", "sqlx-postgres", "runtime-tokio-rustls"] }
+# Use Summpot fork (includes Cloudflare D1 support in SeaORM 2.0 RC).
+sea-orm = { git = "https://github.com/Summpot/sea-orm.git", branch = "master", features = ["sqlx-sqlite", "sqlx-postgres", "runtime-tokio-rustls", "macros"] }
+sea-orm-migration = { git = "https://github.com/Summpot/sea-orm.git", branch = "master", features = ["sqlx-sqlite", "sqlx-postgres", "runtime-tokio-rustls"] }
 
 # JWT & Crypto
 jsonwebtoken = { version = "10.2", default-features = false, features = ["rust_crypto"] }
@@ -80,3 +81,12 @@ getrandom02 = { package = "getrandom", version = "0.2", features = ["js"] }
 
 # Build Tools
 which = "8.0"
+
+[patch.crates-io]
+# Needed for SeaORM Cloudflare D1 support (sqlx-d1 binder lives on this fork).
+sea-query = { git = "https://github.com/Summpot/sea-query.git", branch = "master" }
+sea-query-derive = { git = "https://github.com/Summpot/sea-query.git", branch = "master" }
+sea-query-sqlx = { git = "https://github.com/Summpot/sea-query.git", branch = "master" }
+# Keep sea-schema compatible with the forked sea-query/sea-query-sqlx stack.
+sea-schema = { git = "https://github.com/Summpot/sea-schema.git", branch = "master" }
+sea-schema-derive = { git = "https://github.com/Summpot/sea-schema.git", branch = "master" }
