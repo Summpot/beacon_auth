@@ -510,7 +510,7 @@ mod tests {
             google_client_id: None,
             google_client_secret: None,
             redis_url: None,
-            base_url: "http://localhost:8080".to_string(),
+            base_url: "https://beaconauth.pages.dev".to_string(),
             jwt_private_key_der_b64: None,
             jwks_url: None,
             jwt_kid: "beacon-auth-key-1".to_string(),

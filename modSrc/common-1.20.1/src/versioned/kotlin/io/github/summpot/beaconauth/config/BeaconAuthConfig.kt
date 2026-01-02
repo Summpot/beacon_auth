@@ -49,7 +49,7 @@ object BeaconAuthConfig {
         authBaseUrl = builder
             .comment(
                 "Base URL of your authentication server",
-                "Example: http://localhost:8080 (development) or https://auth.example.com (production)",
+                "Example: https://beaconauth.pages.dev (development) or https://auth.example.com (production)",
                 "WARNING: Always use HTTPS in production!"
             )
             .define("base_url", "https://beaconauth.pages.dev")

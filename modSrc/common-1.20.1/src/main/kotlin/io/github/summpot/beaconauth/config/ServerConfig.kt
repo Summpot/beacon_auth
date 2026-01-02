@@ -15,9 +15,9 @@ object ServerConfig {
     private val logger = LoggerFactory.getLogger("BeaconAuth/Config")
     
     // Default values
-    private const val DEFAULT_AUTH_BASE_URL = "http://localhost:8080"
+    private const val DEFAULT_AUTH_BASE_URL = "https://beaconauth.pages.dev"
     private const val DEFAULT_JWKS_URL = "$DEFAULT_AUTH_BASE_URL/.well-known/jwks.json"
-    private const val DEFAULT_ISSUER = "http://localhost:8080"
+    private const val DEFAULT_ISSUER = "https://beaconauth.pages.dev"
     private const val DEFAULT_AUDIENCE = "minecraft-client"
     private const val DEFAULT_BYPASS_ONLINE_MODE = true
     private const val DEFAULT_FORCE_AUTH_OFFLINE = true

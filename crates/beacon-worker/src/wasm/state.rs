@@ -24,7 +24,7 @@ static JWT_STATE: OnceLock<JwtState> = OnceLock::new();
 static PASSKEY_RP: OnceLock<beacon_passkey::RpConfig> = OnceLock::new();
 
 fn init_jwt_state(env: &Env) -> Result<JwtState> {
-    let issuer = env_string(env, "BASE_URL").unwrap_or_else(|| "http://localhost:8080".to_string());
+    let issuer = env_string(env, "BASE_URL").unwrap_or_else(|| "https://beaconauth.pages.dev".to_string());
     let kid = env_string(env, "JWT_KID").unwrap_or_else(|| "beacon-auth-key-1".to_string());
 
     let jwt_private_key_der_b64 = env_string(env, "JWT_PRIVATE_KEY_DER_B64");
@@ -75,7 +75,7 @@ pub fn get_jwt_state(env: &Env) -> Result<&'static JwtState> {
 }
 
 fn init_passkey_rp(env: &Env) -> Result<beacon_passkey::RpConfig> {
-    let base_url = env_string(env, "BASE_URL").unwrap_or_else(|| "http://localhost:8080".to_string());
+    let base_url = env_string(env, "BASE_URL").unwrap_or_else(|| "https://beaconauth.pages.dev".to_string());
     let rp_origin = Url::parse(&base_url)
         .map_err(|e| Error::RustError(format!("Invalid BASE_URL '{base_url}': {e}")))?;
 

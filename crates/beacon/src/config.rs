@@ -104,12 +104,12 @@ pub struct ServeConfig {
     #[arg(long, env = "GOOGLE_CLIENT_SECRET")]
     pub google_client_secret: Option<String>,
 
-    /// Base URL for the server (e.g., http://localhost:8080)
+    /// Base URL for the server (e.g., https://beaconauth.pages.dev)
     /// Used for OAuth redirects, JWT issuer claim, and WebAuthn RP origin
     #[arg(
         long,
         env = "BASE_URL",
-        default_value = "http://localhost:8080"
+        default_value = "https://beaconauth.pages.dev"
     )]
     pub base_url: String,
 

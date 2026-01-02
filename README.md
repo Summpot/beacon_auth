@@ -208,7 +208,7 @@ beacon serve --help
 | `--github-client-secret` | `GITHUB_CLIENT_SECRET` | - | GitHub OAuth client secret |
 | `--google-client-id` | `GOOGLE_CLIENT_ID` | - | Google OAuth client ID |
 | `--google-client-secret` | `GOOGLE_CLIENT_SECRET` | - | Google OAuth client secret |
-| `--oauth-redirect-base` | `OAUTH_REDIRECT_BASE` | `http://localhost:8080` | OAuth redirect base URL |
+| `--oauth-redirect-base` | `OAUTH_REDIRECT_BASE` | `https://beaconauth.pages.dev` | OAuth redirect base URL |
 
 #### Example Configuration
 
@@ -254,8 +254,8 @@ beacon delete-user --username username
 2. Click "New OAuth App"
 3. Fill in the details:
    - **Application name**: BeaconAuth
-   - **Homepage URL**: `http://localhost:8080` (or your domain)
-   - **Authorization callback URL**: `http://localhost:8080/api/v1/oauth/callback`
+   - **Homepage URL**: `https://beaconauth.pages.dev` (or your domain)
+   - **Authorization callback URL**: `https://beaconauth.pages.dev/api/v1/oauth/callback`
 4. Copy the Client ID and Client Secret
 5. Set environment variables:
    ```bash
@@ -272,7 +272,7 @@ beacon delete-user --username username
 5. Configure the OAuth consent screen
 6. Create credentials:
    - **Application type**: Web application
-   - **Authorized redirect URIs**: `http://localhost:8080/api/v1/oauth/callback`
+   - **Authorized redirect URIs**: `https://beaconauth.pages.dev/api/v1/oauth/callback`
 7. Copy the Client ID and Client Secret
 8. Set environment variables:
    ```bash
@@ -370,16 +370,16 @@ After the first server startup, a configuration file will be generated at `confi
 
 # Authentication server base URL
 # This should point to your deployed auth server
-auth_server_url = "http://localhost:8080"
+auth_server_url = "https://beaconauth.pages.dev"
 
 # JWKS URL for JWT validation
 # The mod will fetch the public key from this endpoint
-jwks_url = "http://localhost:8080/.well-known/jwks.json"
+jwks_url = "https://beaconauth.pages.dev/.well-known/jwks.json"
 
 # JWT validation settings
 [jwt]
 # Expected issuer claim
-issuer = "http://localhost:8080"
+issuer = "https://beaconauth.pages.dev"
 # Expected audience claim
 audience = "minecraft-client"
 # Allow clock skew in seconds (for exp validation)

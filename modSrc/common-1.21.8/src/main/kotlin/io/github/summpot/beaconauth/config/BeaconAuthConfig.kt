@@ -10,9 +10,9 @@ package io.github.summpot.beaconauth.config
  *  - applying them here via [apply].
  */
 object BeaconAuthConfig {
-    @Volatile private var authBaseUrl: String = "http://localhost:8080"
-    @Volatile private var jwksUrl: String = "http://localhost:8080/.well-known/jwks.json"
-    @Volatile private var expectedIssuer: String = "http://localhost:8080"
+    @Volatile private var authBaseUrl: String = "https://beaconauth.pages.dev"
+    @Volatile private var jwksUrl: String = "https://beaconauth.pages.dev/.well-known/jwks.json"
+    @Volatile private var expectedIssuer: String = "https://beaconauth.pages.dev"
     @Volatile private var expectedAudience: String = "minecraft-client"
     @Volatile private var bypassIfOnlineModeVerified: Boolean = true
     @Volatile private var forceAuthIfOfflineMode: Boolean = true

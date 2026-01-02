@@ -49,10 +49,10 @@ object BeaconAuthConfig {
         authBaseUrl = builder
             .comment(
                 "Base URL of your authentication server",
-                "Example: http://localhost:8080 (development) or https://auth.example.com (production)",
+                "Example: https://beaconauth.pages.dev (development) or https://auth.example.com (production)",
                 "WARNING: Always use HTTPS in production!"
             )
-            .define("base_url", "http://localhost:8080")
+            .define("base_url", "https://beaconauth.pages.dev")
         
         jwksUrl = builder
             .comment(
@@ -60,7 +60,7 @@ object BeaconAuthConfig {
                 "This endpoint must provide the public keys used to sign JWTs",
                 "Usually: <base_url>/.well-known/jwks.json"
             )
-            .define("jwks_url", "http://localhost:8080/.well-known/jwks.json")
+            .define("jwks_url", "https://beaconauth.pages.dev/.well-known/jwks.json")
         
         builder.pop()
         
@@ -75,7 +75,7 @@ object BeaconAuthConfig {
                 "Expected JWT issuer (iss claim)",
                 "This must match the 'iss' claim in the JWT token"
             )
-            .define("issuer", "http://localhost:8080")
+            .define("issuer", "https://beaconauth.pages.dev")
         
         expectedAudience = builder
             .comment(
