@@ -11,6 +11,7 @@
   ],
   "mixins": [
     "DedicatedServerMixin",
+    "ServerGamePacketListenerImplMixin",
     "ServerLoginPacketListenerImplMixin",
     "ServerboundChatSessionUpdatePacketMixin"
   ],

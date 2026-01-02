@@ -96,6 +96,11 @@ pub struct Claims {
     /// Audience
     pub aud: String,
 
+    /// Minecraft username to apply in-game.
+    ///
+    /// This must follow vanilla Minecraft username rules (3..16 chars, [A-Za-z0-9_]).
+    pub username: String,
+
     /// Expiration time (Unix timestamp)
     pub exp: i64,
 
@@ -298,6 +303,7 @@ mod tests {
             iss: "test-issuer".to_string(),
             sub: "user123".to_string(),
             aud: "test-audience".to_string(),
+            username: "player123".to_string(),
             exp: 1234567890,
             challenge: "challenge123".to_string(),
         };
@@ -305,11 +311,13 @@ mod tests {
         let json = serde_json::to_string(&claims).unwrap();
         assert!(json.contains("test-issuer"));
         assert!(json.contains("user123"));
+        assert!(json.contains("player123"));
         assert!(json.contains("challenge123"));
 
         // Test deserialization
         let decoded: Claims = serde_json::from_str(&json).unwrap();
         assert_eq!(decoded.iss, claims.iss);
+        assert_eq!(decoded.username, claims.username);
         assert_eq!(decoded.challenge, claims.challenge);
     }
 }

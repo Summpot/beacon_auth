@@ -1,6 +1,7 @@
 use actix_web::{web, HttpRequest, HttpResponse, Responder};
 use chrono::Utc;
 use entity::refresh_token;
+use entity::user;
 use jsonwebtoken::{encode, Header};
 use sea_orm::{ActiveModelTrait, ColumnTrait, EntityTrait, QueryFilter, Set};
 use sha2::{Digest, Sha256};
@@ -232,6 +233,23 @@ pub async fn get_minecraft_jwt(
     };
 
     // Create Minecraft JWT with challenge using the unified JWT generator
+    let user_model = match user::Entity::find_by_id(user_id.clone()).one(&app_state.db).await {
+        Ok(Some(u)) => u,
+        Ok(None) => {
+            return HttpResponse::Unauthorized().json(ErrorResponse {
+                error: "unauthorized".to_string(),
+                message: "Not authenticated. Please log in again.".to_string(),
+            });
+        }
+        Err(e) => {
+            log::error!("Database error (user lookup for minecraft-jwt): {e}");
+            return HttpResponse::InternalServerError().json(ErrorResponse {
+                error: "internal_error".to_string(),
+                message: "Database error occurred".to_string(),
+            });
+        }
+    };
+
     let now = Utc::now();
     let exp = now + chrono::Duration::seconds(app_state.jwt_expiration);
 
@@ -239,6 +257,7 @@ pub async fn get_minecraft_jwt(
         iss: app_state.oauth_config.redirect_base.clone(),
         sub: user_id.to_string(),
         aud: "minecraft-client".to_string(),
+        username: user_model.username,
         exp: exp.timestamp(),
         challenge: payload.challenge.clone(),
     };
