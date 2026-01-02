@@ -42,6 +42,16 @@ pub fn generate_ecdsa_keypair(kid: &str) -> anyhow::Result<(EncodingKey, Decodin
     ecdsa_keypair_from_pkcs8_der(pkcs8_der.as_bytes(), kid)
 }
 
+/// Generate a new ES256 (P-256) private key and return it as PKCS#8 DER bytes.
+///
+/// This is useful for environments like Cloudflare Workers where you may want to generate a key
+/// once and persist it in a shared store (e.g. KV) so that all instances serve the same JWKS.
+pub fn generate_ecdsa_pkcs8_der() -> anyhow::Result<Vec<u8>> {
+    let signing_key = SigningKey::random(&mut OsRng);
+    let pkcs8_der = signing_key.to_pkcs8_der()?;
+    Ok(pkcs8_der.as_bytes().to_vec())
+}
+
 /// Load an ES256 (P-256) keypair from PKCS#8 DER bytes and return (EncodingKey, DecodingKey, JWKS JSON).
 pub fn ecdsa_keypair_from_pkcs8_der(
     pkcs8_der: &[u8],
@@ -78,7 +88,7 @@ pub fn ecdsa_keypair_from_pkcs8_der(
 pub fn decode_pkcs8_der_b64(input: &str) -> anyhow::Result<Vec<u8>> {
     let trimmed = input.trim();
     if trimmed.is_empty() {
-        anyhow::bail!("JWT_PRIVATE_KEY_DER_B64 is empty");
+        anyhow::bail!("PKCS#8 DER key material is empty");
     }
 
     // Try base64url (no padding) first, then standard base64.

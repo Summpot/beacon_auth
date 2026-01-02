@@ -137,50 +137,25 @@ fn build_cors(cors_origins: &[String]) -> Cors {
 
 async fn init_jwt_material(
     config: &ServeConfig,
-) -> anyhow::Result<(jsonwebtoken::EncodingKey, jsonwebtoken::DecodingKey, String)> {
-    let (encoding_key, local_decoding_key, local_jwks_json) = if let Some(b64) =
-        &config.jwt_private_key_der_b64
-    {
-        let der = crypto::decode_pkcs8_der_b64(b64)?;
-        crypto::ecdsa_keypair_from_pkcs8_der(&der, &config.jwt_kid)?
-    } else {
-        crypto::generate_ecdsa_keypair(&config.jwt_kid)?
-    };
+) -> anyhow::Result<(jsonwebtoken::EncodingKey, jsonwebtoken::DecodingKey, String, String)> {
+    // This server is JWKS-first: it always serves its public key via `/.well-known/jwks.json`.
+    //
+    // Unlike the Cloudflare Worker deployment, the standalone server does not require shared
+    // storage for JWT keys. Each instance can advertise its own JWKS URL via the `jku` header.
+    // This enables multi-instance deployments without a shared signing key, as long as clients
+    // enforce a strict allow-list for acceptable JKU domains.
+    let der = crypto::generate_ecdsa_pkcs8_der()?;
+    let (encoding_key, decoding_key, jwks_json) =
+        crypto::ecdsa_keypair_from_pkcs8_der(&der, &config.jwt_kid)?;
 
-    if let Some(jwks_url) = &config.jwks_url {
-        if config.jwt_private_key_der_b64.is_none() {
-            anyhow::bail!(
-                "JWKS_URL requires JWT_PRIVATE_KEY_DER_B64 so this instance signs tokens with the same key served by the shared JWKS"
-            );
-        }
+    let advertised_jwks_url = config.jwks_url.clone().unwrap_or_else(|| {
+        format!(
+            "{}/.well-known/jwks.json",
+            config.base_url.trim_end_matches('/')
+        )
+    });
 
-        let client = reqwest::Client::builder()
-            .timeout(Duration::from_secs(5))
-            .build()?;
-
-        let remote_jwks_json = client
-            .get(jwks_url)
-            .send()
-            .await?
-            .error_for_status()?
-            .text()
-            .await?;
-
-        let (remote_decoding_key, selected_kid, remote_x, remote_y) =
-            crypto::decoding_key_from_jwks_json(&remote_jwks_json, Some(&config.jwt_kid))?;
-        let (local_x, local_y) =
-            crypto::ec_components_from_jwks_json(&local_jwks_json, Some(&config.jwt_kid))?;
-
-        if remote_x != local_x || remote_y != local_y {
-            anyhow::bail!(
-                "Remote JWKS key (kid='{selected_kid}') does not match the local signing key. Ensure all instances share the same JWT_PRIVATE_KEY_DER_B64 or point JWKS_URL to the matching key server."
-            );
-        }
-
-        Ok((encoding_key, remote_decoding_key, remote_jwks_json))
-    } else {
-        Ok((encoding_key, local_decoding_key, local_jwks_json))
-    }
+    Ok((encoding_key, decoding_key, jwks_json, advertised_jwks_url))
 }
 
 /// Build shared application state (DB, migrations, JWT keys, WebAuthn, caches).
@@ -189,12 +164,7 @@ async fn init_jwt_material(
 pub async fn build_app_state(config: &ServeConfig) -> anyhow::Result<web::Data<AppState>> {
     log::info!("Starting BeaconAuth API Server initialization...");
 
-    // 1. JWT key material / JWKS
-    log::info!("Initializing ES256 key material...");
-    let (encoding_key, decoding_key, jwks_json) = init_jwt_material(config).await?;
-    log::info!("JWT/JWKS initialized successfully");
-
-    // 2. Connect to database
+    // 1. Connect to database
     log::info!("Connecting to database: {}", config.database_url);
     let db = Database::connect(&config.database_url).await?;
 
@@ -202,6 +172,11 @@ pub async fn build_app_state(config: &ServeConfig) -> anyhow::Result<web::Data<A
     log::info!("Running database migrations...");
     migration::Migrator::up(&db, None).await?;
     log::info!("Database migrations completed");
+
+    // 2. JWT key material / JWKS
+    log::info!("Initializing ES256 key material...");
+    let (encoding_key, decoding_key, jwks_json, jwks_url) = init_jwt_material(config).await?;
+    log::info!("JWT/JWKS initialized successfully");
 
     // 3. Create OAuth configuration
     let oauth_config = OAuthConfig {
@@ -261,6 +236,7 @@ pub async fn build_app_state(config: &ServeConfig) -> anyhow::Result<web::Data<A
         encoding_key,
         decoding_key,
         jwks_json,
+        jwks_url,
         jwt_kid: config.jwt_kid.clone(),
         jwt_expiration: config.jwt_expiration,
         access_token_expiration: 900, // 15 minutes
@@ -511,7 +487,6 @@ mod tests {
             google_client_secret: None,
             redis_url: None,
             base_url: "https://beaconauth.pages.dev".to_string(),
-            jwt_private_key_der_b64: None,
             jwks_url: None,
             jwt_kid: "beacon-auth-key-1".to_string(),
         };

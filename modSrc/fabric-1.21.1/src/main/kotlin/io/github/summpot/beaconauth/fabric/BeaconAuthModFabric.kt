@@ -58,8 +58,8 @@ object BeaconAuthModFabric : ModInitializer {
 private object BeaconAuthServerConfig {
     private val authBaseUrl: ForgeConfigSpec.ConfigValue<String>
     private val jwksUrl: ForgeConfigSpec.ConfigValue<String>
-    private val expectedIssuer: ForgeConfigSpec.ConfigValue<String>
     private val expectedAudience: ForgeConfigSpec.ConfigValue<String>
+    private val jkuAllowedHostPatterns: ForgeConfigSpec.ConfigValue<String>
     private val bypassIfOnlineModeVerified: ForgeConfigSpec.BooleanValue
     private val forceAuthIfOfflineMode: ForgeConfigSpec.BooleanValue
     private val allowVanillaOfflineClients: ForgeConfigSpec.BooleanValue
@@ -90,7 +90,7 @@ private object BeaconAuthServerConfig {
                 "This endpoint must provide the public keys used to sign JWTs",
                 "Usually: <base_url>/.well-known/jwks.json"
             )
-            .define("jwks_url", "https://beaconauth.pages.dev/.well-known/jwks.json")
+            .define("jwks_url", "")
 
         builder.pop()
 
@@ -99,19 +99,31 @@ private object BeaconAuthServerConfig {
             "These values must match your authentication server's configuration"
         ).push("jwt")
 
-        expectedIssuer = builder
-            .comment(
-                "Expected JWT issuer (iss claim)",
-                "This must match the 'iss' claim in the JWT token"
-            )
-            .define("issuer", "https://beaconauth.pages.dev")
-
         expectedAudience = builder
             .comment(
                 "Expected JWT audience (aud claim)",
                 "This must match the 'aud' claim in the JWT token"
             )
             .define("audience", "minecraft-client")
+
+        builder.pop()
+
+        builder.comment(
+            "JWT JWKS Discovery (JKU)",
+            "If allowed_host_patterns is non-empty and the JWT has a 'jku' header, BeaconAuth will fetch keys from that JWKS URL.",
+            "Security: You MUST restrict allowed hosts to avoid SSRF.",
+            "When enabled, JKU ALWAYS requires https://.",
+            "If JKU is disabled, BeaconAuth ignores token 'jku' and falls back to authentication.jwks_url (which defaults to <base_url>/.well-known/jwks.json)."
+        ).push("jku")
+
+        jkuAllowedHostPatterns = builder
+            .comment(
+                "Comma/space-separated allowed host patterns for token 'jku' host matching",
+                "Supported: example.com, *.example.com (both allow subdomains)",
+                "Not supported: bare '*' or mid-string wildcards (auth*.example.com)",
+                "Empty means: JKU disabled"
+            )
+            .define("allowed_host_patterns", "")
 
         builder.pop()
 
@@ -154,8 +166,8 @@ private object BeaconAuthServerConfig {
         BeaconAuthConfig.apply(
             authBaseUrl.get(),
             jwksUrl.get(),
-            expectedIssuer.get(),
             expectedAudience.get(),
+            jkuAllowedHostPatterns.get(),
             bypassIfOnlineModeVerified.get(),
             forceAuthIfOfflineMode.get(),
             allowVanillaOfflineClients.get()

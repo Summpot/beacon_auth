@@ -10,7 +10,7 @@ use crate::wasm::{
 };
 
 pub async fn handle_minecraft_jwt(mut req: Request, env: &Env) -> Result<Response> {
-    let jwt = get_jwt_state(env)?;
+    let jwt = get_jwt_state(env).await?;
 
     let payload: models::MinecraftJwtRequest = req.json().await?;
 

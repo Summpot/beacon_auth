@@ -41,6 +41,22 @@ pub async fn kv_delete(kv: &KvStore, key: &str) -> Result<()> {
     Ok(())
 }
 
+pub async fn kv_put_string(kv: &KvStore, key: &str, value: &str) -> Result<()> {
+    kv.put(key, value.to_string())
+        .map_err(|e| Error::RustError(e.to_string()))?
+        .execute()
+        .await
+        .map_err(|e| Error::RustError(e.to_string()))?;
+    Ok(())
+}
+
+pub async fn kv_get_string(kv: &KvStore, key: &str) -> Result<Option<String>> {
+    kv.get(key)
+        .text()
+        .await
+        .map_err(|e| Error::RustError(e.to_string()))
+}
+
 pub fn passkey_reg_state_key(user_id: &str) -> String {
     format!("passkey:reg:{user_id}")
 }

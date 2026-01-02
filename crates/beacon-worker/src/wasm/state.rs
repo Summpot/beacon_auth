@@ -1,10 +1,12 @@
 use std::sync::OnceLock;
 
 use beacon_core::crypto;
+use base64::{engine::general_purpose::STANDARD, Engine};
 use url::Url;
 use worker::{Env, Error, Result};
 
 use super::env::env_string;
+use super::kv::{kv, kv_get_string, kv_put_string};
 
 #[derive(Clone)]
 pub struct JwtState {
@@ -23,17 +25,38 @@ static JWT_STATE: OnceLock<JwtState> = OnceLock::new();
 
 static PASSKEY_RP: OnceLock<beacon_passkey::RpConfig> = OnceLock::new();
 
-fn init_jwt_state(env: &Env) -> Result<JwtState> {
+const JWT_PKCS8_DER_B64_KV_KEY_PREFIX: &str = "jwt:pkcs8_der_b64:";
+
+async fn load_or_init_jwt_pkcs8_der_b64(env: &Env, kid: &str) -> Result<String> {
+    let kv = kv(env)?;
+    let key = format!("{JWT_PKCS8_DER_B64_KV_KEY_PREFIX}{kid}");
+
+    if let Some(existing) = kv_get_string(&kv, &key).await? {
+        return Ok(existing);
+    }
+
+    // No key persisted yet. Generate a new PKCS#8 private key, persist it, and then read back.
+    // Reading back avoids using a locally-generated key in case multiple instances race during
+    // initial deployment.
+    let der = crypto::generate_ecdsa_pkcs8_der().map_err(|e| Error::RustError(e.to_string()))?;
+    let generated_b64 = STANDARD.encode(der);
+    kv_put_string(&kv, &key, &generated_b64).await?;
+
+    Ok(kv_get_string(&kv, &key).await?.unwrap_or(generated_b64))
+}
+
+async fn init_jwt_state(env: &Env) -> Result<JwtState> {
     let issuer = env_string(env, "BASE_URL").unwrap_or_else(|| "https://beaconauth.pages.dev".to_string());
     let kid = env_string(env, "JWT_KID").unwrap_or_else(|| "beacon-auth-key-1".to_string());
 
-    let jwt_private_key_der_b64 = env_string(env, "JWT_PRIVATE_KEY_DER_B64");
-    let (encoding_key, decoding_key, jwks_json) = if let Some(b64) = jwt_private_key_der_b64 {
-        let der = crypto::decode_pkcs8_der_b64(&b64).map_err(|e| Error::RustError(e.to_string()))?;
-        crypto::ecdsa_keypair_from_pkcs8_der(&der, &kid).map_err(|e| Error::RustError(e.to_string()))?
-    } else {
-        crypto::generate_ecdsa_keypair(&kid).map_err(|e| Error::RustError(e.to_string()))?
-    };
+    // BeaconAuth is JWKS-first: the worker MUST serve a stable JWKS, otherwise signatures will be
+    // invalid when requests hit different isolates.
+    //
+    // We persist the ES256 PKCS#8 private key in Workers KV so all instances share the same key.
+    let key_b64 = load_or_init_jwt_pkcs8_der_b64(env, &kid).await?;
+    let der = crypto::decode_pkcs8_der_b64(&key_b64).map_err(|e| Error::RustError(e.to_string()))?;
+    let (encoding_key, decoding_key, jwks_json) =
+        crypto::ecdsa_keypair_from_pkcs8_der(&der, &kid).map_err(|e| Error::RustError(e.to_string()))?;
 
     let access_token_expiration = env_string(env, "ACCESS_TOKEN_EXPIRATION")
         .and_then(|s| s.parse::<i64>().ok())
@@ -59,7 +82,7 @@ fn init_jwt_state(env: &Env) -> Result<JwtState> {
     })
 }
 
-pub fn get_jwt_state(env: &Env) -> Result<&'static JwtState> {
+pub async fn get_jwt_state(env: &Env) -> Result<&'static JwtState> {
     if let Some(state) = JWT_STATE.get() {
         return Ok(state);
     }
@@ -67,7 +90,7 @@ pub fn get_jwt_state(env: &Env) -> Result<&'static JwtState> {
     // `OnceLock::get_or_try_init` is still unstable on some toolchains/targets.
     // Keep initialization race-safe: if another request initialized it first,
     // we just read the already-set value.
-    let state = init_jwt_state(env)?;
+    let state = init_jwt_state(env).await?;
     let _ = JWT_STATE.set(state);
     Ok(JWT_STATE
         .get()

@@ -21,7 +21,7 @@ pub async fn handle_get_config(req: &Request, env: &Env) -> Result<Response> {
 }
 
 pub async fn handle_get_jwks(req: &Request, env: &Env) -> Result<Response> {
-    let jwt = get_jwt_state(env)?;
+    let jwt = get_jwt_state(env).await?;
     let mut resp = Response::ok(jwt.jwks_json.clone())?;
     resp.headers_mut().set("Content-Type", "application/json")?;
     json_with_cors(req, resp)

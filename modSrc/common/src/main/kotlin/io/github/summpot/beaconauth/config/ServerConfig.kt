@@ -34,6 +34,11 @@ object ServerConfig {
         get() = BeaconAuthConfig.getExpectedIssuer()
     val expectedAudience: String
         get() = BeaconAuthConfig.getExpectedAudience()
+
+	val jkuEnabled: Boolean
+        get() = BeaconAuthConfig.getJkuAllowedHostPatterns().isNotEmpty()
+    val jkuAllowedHostPatterns: Set<String>
+        get() = BeaconAuthConfig.getJkuAllowedHostPatterns()
     val bypassIfOnlineModeVerified: Boolean
         get() = BeaconAuthConfig.shouldBypassIfOnlineModeVerified()
     val forceAuthIfOfflineMode: Boolean

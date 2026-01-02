@@ -170,7 +170,6 @@ Recommended / optional secrets:
 | Secret | Required | Used for |
 |---|---:|---|
 | `CLOUDFLARE_WORKER_BASE_URL` | Recommended | Sets `BASE_URL` for issuer + OAuth redirects + WebAuthn RP origin. If omitted, CI defaults to `https://<workerName>.pages.dev`. |
-| `CLOUDFLARE_WORKER_JWT_PRIVATE_KEY_DER_B64` | Strongly recommended | Stable ES256 signing key (base64-encoded PKCS#8 DER P-256 private key) |
 | `CLOUDFLARE_WORKER_GITHUB_CLIENT_ID` | Optional | GitHub OAuth |
 | `CLOUDFLARE_WORKER_GITHUB_CLIENT_SECRET` | Optional | GitHub OAuth |
 | `CLOUDFLARE_WORKER_GOOGLE_CLIENT_ID` | Optional | Google OAuth |

@@ -8,6 +8,10 @@ use super::state::JwtState;
 pub fn sign_jwt<T: serde::Serialize>(state: &JwtState, claims: &T) -> Result<String> {
     let mut header = Header::new(jsonwebtoken::Algorithm::ES256);
     header.kid = Some(state.kid.clone());
+    header.jku = Some(format!(
+        "{}/.well-known/jwks.json",
+        state.issuer.trim_end_matches('/')
+    ));
     encode(&header, claims, &state.encoding_key).map_err(|e| Error::RustError(e.to_string()))
 }
 

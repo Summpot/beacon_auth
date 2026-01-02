@@ -192,7 +192,7 @@ pub async fn handle_oauth_start(mut req: Request, env: &Env) -> Result<Response>
         }
     };
 
-    let jwt = get_jwt_state(env)?;
+    let jwt = get_jwt_state(env).await?;
 
     // Stateless OAuth state: encode as a signed JWT so callbacks work across instances.
     let now = Utc::now();
@@ -282,7 +282,7 @@ pub async fn handle_oauth_link_start(mut req: Request, env: &Env) -> Result<Resp
         }
     };
 
-    let jwt = get_jwt_state(env)?;
+    let jwt = get_jwt_state(env).await?;
     let Some(access_token) = get_cookie(&req, "access_token")? else {
         return error_response(&req, 401, "unauthorized", "Not authenticated");
     };
@@ -383,7 +383,7 @@ pub async fn handle_oauth_callback(req: &Request, env: &Env) -> Result<Response>
         return error_response(req, 400, "missing_state", "Missing OAuth state");
     };
 
-    let jwt = get_jwt_state(env)?;
+    let jwt = get_jwt_state(env).await?;
 
     // Validate and decode stateless OAuth state
     let mut validation = jsonwebtoken::Validation::new(jsonwebtoken::Algorithm::ES256);

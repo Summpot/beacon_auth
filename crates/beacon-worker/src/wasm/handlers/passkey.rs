@@ -73,7 +73,7 @@ struct PasskeyDeleteRequest {
 
 pub async fn handle_passkey_register_start(mut req: Request, env: &Env) -> Result<Response> {
     let db = d1(env).await?;
-    let jwt = get_jwt_state(env)?;
+    let jwt = get_jwt_state(env).await?;
     let rp = get_passkey_rp(env)?;
     let kv = match kv(env) {
         Ok(kv) => kv,
@@ -147,7 +147,7 @@ pub async fn handle_passkey_register_start(mut req: Request, env: &Env) -> Resul
 
 pub async fn handle_passkey_register_finish(mut req: Request, env: &Env) -> Result<Response> {
     let db = d1(env).await?;
-    let jwt = get_jwt_state(env)?;
+    let jwt = get_jwt_state(env).await?;
     let rp = get_passkey_rp(env)?;
     let kv = match kv(env) {
         Ok(kv) => kv,
@@ -279,7 +279,7 @@ pub async fn handle_passkey_auth_start(mut req: Request, env: &Env) -> Result<Re
 
 pub async fn handle_passkey_auth_finish(mut req: Request, env: &Env) -> Result<Response> {
     let db = d1(env).await?;
-    let jwt = get_jwt_state(env)?;
+    let jwt = get_jwt_state(env).await?;
     let rp = get_passkey_rp(env)?;
     let kv = match kv(env) {
         Ok(kv) => kv,
@@ -370,7 +370,7 @@ pub async fn handle_passkey_auth_finish(mut req: Request, env: &Env) -> Result<R
 
 pub async fn handle_passkey_list(req: &Request, env: &Env) -> Result<Response> {
     let db = d1(env).await?;
-    let jwt = get_jwt_state(env)?;
+    let jwt = get_jwt_state(env).await?;
 
     let Some(access_token) = get_cookie(req, "access_token")? else {
         return error_response(req, 401, "unauthorized", "Not authenticated");
@@ -400,7 +400,7 @@ pub async fn handle_passkey_list(req: &Request, env: &Env) -> Result<Response> {
 
 pub async fn handle_passkey_delete_by_id(req: &Request, env: &Env, id: String) -> Result<Response> {
     let db = d1(env).await?;
-    let jwt = get_jwt_state(env)?;
+    let jwt = get_jwt_state(env).await?;
 
     let Some(access_token) = get_cookie(req, "access_token")? else {
         return error_response(req, 401, "unauthorized", "Not authenticated");

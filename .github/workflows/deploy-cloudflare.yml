@@ -239,7 +239,6 @@ jobs:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           WRANGLER_WORKERS_CONFIG: ${{ steps.cfg.outputs.wrangler_workers_config }}
-          JWT_PRIVATE_KEY_DER_B64: ${{ secrets.CLOUDFLARE_WORKER_JWT_PRIVATE_KEY_DER_B64 }}
           GITHUB_CLIENT_ID: ${{ secrets.CLOUDFLARE_WORKER_GITHUB_CLIENT_ID }}
           GITHUB_CLIENT_SECRET: ${{ secrets.CLOUDFLARE_WORKER_GITHUB_CLIENT_SECRET }}
           GOOGLE_CLIENT_ID: ${{ secrets.CLOUDFLARE_WORKER_GOOGLE_CLIENT_ID }}
@@ -259,7 +258,6 @@ jobs:
             fi
           }
 
-          put_secret JWT_PRIVATE_KEY_DER_B64 "${JWT_PRIVATE_KEY_DER_B64:-}"
           put_secret GITHUB_CLIENT_ID "${GITHUB_CLIENT_ID:-}"
           put_secret GITHUB_CLIENT_SECRET "${GITHUB_CLIENT_SECRET:-}"
           put_secret GOOGLE_CLIENT_ID "${GOOGLE_CLIENT_ID:-}"

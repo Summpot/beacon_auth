@@ -121,17 +121,12 @@ pub struct ServeConfig {
     #[arg(long, env = "REDIS_URL")]
     pub redis_url: Option<String>,
 
-    /// Optional ES256 (P-256) private key in PKCS#8 DER format, encoded as base64.
+    /// Optional JWKS URL to advertise in the JWT header `jku`.
     ///
-    /// When set, JWT signing keys become stable across restarts and multiple instances.
-    /// Accepts standard base64 or base64url (no padding).
-    #[arg(long, env = "JWT_PRIVATE_KEY_DER_B64")]
-    pub jwt_private_key_der_b64: Option<String>,
-
-    /// Optional JWKS URL to mirror at `/.well-known/jwks.json`.
+    /// When unset, BeaconAuth advertises `${BASE_URL}/.well-known/jwks.json`.
     ///
-    /// Intended for distributed deployments where a single, shared JWKS must be served.
-    /// If set, the configured local signing key must match the selected remote JWKS public key.
+    /// This is useful for deployments where the externally-reachable JWKS URL differs from
+    /// `BASE_URL` (reverse proxies, per-instance subdomains, etc.).
     #[arg(long, env = "JWKS_URL")]
     pub jwks_url: Option<String>,
 

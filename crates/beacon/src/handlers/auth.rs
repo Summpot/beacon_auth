@@ -26,6 +26,7 @@ fn generate_jwt<T: serde::Serialize>(
 ) -> Result<String, jsonwebtoken::errors::Error> {
     let mut header = Header::new(jsonwebtoken::Algorithm::ES256);
     header.kid = Some(app_state.jwt_kid.clone());
+    header.jku = Some(app_state.jwks_url.clone());
     encode(&header, claims, &app_state.encoding_key)
 }
 

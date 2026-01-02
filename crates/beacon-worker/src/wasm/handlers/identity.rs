@@ -17,7 +17,7 @@ pub async fn handle_identities_list(req: &Request, env: &Env) -> Result<Response
         Ok(db) => db,
         Err(e) => return internal_error_response(req, "Failed to open database binding", &e),
     };
-    let jwt = match get_jwt_state(env) {
+    let jwt = match get_jwt_state(env).await {
         Ok(jwt) => jwt,
         Err(e) => return internal_error_response(req, "Failed to initialize JWT state", &e),
     };
@@ -62,7 +62,7 @@ pub async fn handle_identity_delete_by_id(req: &Request, env: &Env, identity_id:
         Ok(db) => db,
         Err(e) => return internal_error_response(req, "Failed to open database binding", &e),
     };
-    let jwt = match get_jwt_state(env) {
+    let jwt = match get_jwt_state(env).await {
         Ok(jwt) => jwt,
         Err(e) => return internal_error_response(req, "Failed to initialize JWT state", &e),
     };

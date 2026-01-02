@@ -85,7 +85,7 @@ pub async fn handle_register(mut req: Request, env: &Env) -> Result<Response> {
         return internal_error_response(&req, "Failed to create password identity", &e);
     }
 
-    let jwt = match get_jwt_state(env) {
+    let jwt = match get_jwt_state(env).await {
         Ok(jwt) => jwt,
         Err(e) => return internal_error_response(&req, "Failed to initialize JWT state", &e),
     };
@@ -159,7 +159,7 @@ pub async fn handle_login(mut req: Request, env: &Env) -> Result<Response> {
         return json_with_cors(&req, resp);
     }
 
-    let jwt = get_jwt_state(env)?;
+    let jwt = get_jwt_state(env).await?;
     let now = Utc::now();
 
     let access_exp = now + chrono::Duration::seconds(jwt.access_token_expiration);
@@ -191,7 +191,7 @@ pub async fn handle_login(mut req: Request, env: &Env) -> Result<Response> {
 
 pub async fn handle_refresh(req: &Request, env: &Env) -> Result<Response> {
     let db = d1(env).await?;
-    let jwt = get_jwt_state(env)?;
+    let jwt = get_jwt_state(env).await?;
 
     let Some(refresh_token) = get_cookie(req, "refresh_token")? else {
         let resp = Response::from_json(&models::ErrorResponse {
@@ -262,7 +262,7 @@ pub async fn handle_refresh(req: &Request, env: &Env) -> Result<Response> {
 
 pub async fn handle_user_me(req: &Request, env: &Env) -> Result<Response> {
     let db = d1(env).await?;
-    let jwt = get_jwt_state(env)?;
+    let jwt = get_jwt_state(env).await?;
 
     let Some(access_token) = get_cookie(req, "access_token")? else {
         let resp = Response::from_json(&models::ErrorResponse {
@@ -300,7 +300,7 @@ pub async fn handle_user_me(req: &Request, env: &Env) -> Result<Response> {
 
 pub async fn handle_change_password(mut req: Request, env: &Env) -> Result<Response> {
     let db = d1(env).await?;
-    let jwt = get_jwt_state(env)?;
+    let jwt = get_jwt_state(env).await?;
 
     let Some(access_token) = get_cookie(&req, "access_token")? else {
         let resp = Response::from_json(&models::ErrorResponse {
@@ -382,7 +382,7 @@ pub async fn handle_change_password(mut req: Request, env: &Env) -> Result<Respo
 
 pub async fn handle_change_username(mut req: Request, env: &Env) -> Result<Response> {
     let db = d1(env).await?;
-    let jwt = get_jwt_state(env)?;
+    let jwt = get_jwt_state(env).await?;
 
     let Some(access_token) = get_cookie(&req, "access_token")? else {
         let resp = Response::from_json(&models::ErrorResponse {
@@ -435,7 +435,7 @@ pub async fn handle_change_username(mut req: Request, env: &Env) -> Result<Respo
 
 pub async fn handle_logout(req: &Request, env: &Env) -> Result<Response> {
     let db = d1(env).await?;
-    let jwt = get_jwt_state(env)?;
+    let jwt = get_jwt_state(env).await?;
 
     let Some(access_token) = get_cookie(req, "access_token")? else {
         let resp = Response::from_json(&json!({ "success": true }))?;

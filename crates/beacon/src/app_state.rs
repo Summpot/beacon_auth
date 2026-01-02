@@ -20,6 +20,11 @@ pub struct AppState {
     /// Pre-generated JWKS JSON string containing the public key (EC P-256)
     pub jwks_json: String,
 
+    /// JWKS URL to advertise in the JWT header `jku`.
+    ///
+    /// This lets clients discover the correct JWKS even when instances don't share signing keys.
+    pub jwks_url: String,
+
     /// JWT Key ID (kid) used in JWT headers and JWKS selection
     pub jwt_kid: String,
 
