@@ -8,7 +8,7 @@ import { Badge } from '@/components/ui/badge';
 import { Github, KeyRound, Shield, Gamepad2 } from 'lucide-react';
 
 interface UserInfo {
-  id: number;
+  id: string;
   username: string;
 }
 

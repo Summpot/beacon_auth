@@ -1,4 +1,5 @@
 use worker::*;
+use uuid::Uuid;
 
 mod cookies;
 #[path = "wasm/db/mod.rs"]
@@ -118,12 +119,11 @@ pub async fn fetch(req: Request, env: Env, _ctx: Context) -> Result<Response> {
                 return not_found(&req);
             };
 
-            let id = match id_str.parse::<i64>() {
-                Ok(id) => id,
-                Err(_) => return error_response(&req, 400, "invalid_passkey_id", "Invalid passkey id"),
-            };
+            if Uuid::parse_str(id_str).is_err() {
+                return error_response(&req, 400, "invalid_passkey_id", "Invalid passkey id");
+            }
 
-            handlers::passkey::handle_passkey_delete_by_id(&req, &env, id).await
+            handlers::passkey::handle_passkey_delete_by_id(&req, &env, id_str.to_string()).await
         }
 
         (Method::Delete, p) if p.starts_with("/v1/identities/") => {
@@ -131,12 +131,11 @@ pub async fn fetch(req: Request, env: Env, _ctx: Context) -> Result<Response> {
                 return not_found(&req);
             };
 
-            let id = match id_str.parse::<i64>() {
-                Ok(id) => id,
-                Err(_) => return error_response(&req, 400, "invalid_identity_id", "Invalid identity id"),
-            };
+            if Uuid::parse_str(id_str).is_err() {
+                return error_response(&req, 400, "invalid_identity_id", "Invalid identity id");
+            }
 
-            handlers::identity::handle_identity_delete_by_id(&req, &env, id).await
+            handlers::identity::handle_identity_delete_by_id(&req, &env, id_str.to_string()).await
         }
 
         (Method::Get, _) | (Method::Post, _) | (Method::Delete, _) => not_found(&req),

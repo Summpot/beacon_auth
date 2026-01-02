@@ -17,7 +17,7 @@ const searchParamsSchema = z.object({
 });
 
 interface UserInfo {
-  id: number;
+  id: string;
   username: string;
 }
 
@@ -45,7 +45,9 @@ function ProfilePage() {
       await apiClient('/api/v1/logout', { method: 'POST' });
     },
     onSuccess: () => {
-      queryClient.setQueryData(queryKeys.userMe(), null);
+      // Ensure we don't get stuck rendering a logged-out /profile state.
+      queryClient.removeQueries({ queryKey: queryKeys.userMe() });
+      navigate({ to: '/login', replace: true });
     },
   });
 
@@ -62,6 +64,13 @@ function ProfilePage() {
       navigate({ to: '/login', replace: true });
     }
   }, [error, navigate]);
+
+  useEffect(() => {
+    // If the cached user was cleared (e.g. after logout), redirect rather than rendering nothing.
+    if (!isLoading && !error && !user) {
+      navigate({ to: '/login', replace: true });
+    }
+  }, [error, isLoading, navigate, user]);
 
   const handleLogout = () => logoutMutation.mutate();
 
@@ -101,9 +110,29 @@ function ProfilePage() {
     );
   }
 
-  // If we're redirecting due to a 401, avoid flashing an intermediate UI.
   if (!user) {
-    return null;
+    return (
+      <div className="flex items-center justify-center min-h-screen p-4">
+        <div className="w-full max-w-md">
+          <Card className="text-center">
+            <CardContent className="pt-6">
+              <div className="inline-block mb-6">
+                <BeaconIcon className="w-20 h-20 opacity-50" />
+              </div>
+              <CardTitle className="text-2xl font-bold mb-4">Signed out</CardTitle>
+              <CardDescription className="mb-6">
+                Redirecting to the login page…
+              </CardDescription>
+              <div className="flex flex-col gap-3">
+                <Button asChild>
+                  <Link to="/login">Go to Login</Link>
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+      </div>
+    );
   }
 
   return (

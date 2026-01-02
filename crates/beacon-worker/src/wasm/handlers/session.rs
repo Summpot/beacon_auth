@@ -77,20 +77,12 @@ pub async fn handle_register(mut req: Request, env: &Env) -> Result<Response> {
 
     // Create the password identity for this user.
     let identifier = username::normalize_username(&requested_username);
-    if let Err(e) = d1_insert_identity(&db, user_id, "password", &identifier, Some(&password_hash)).await {
+    if let Err(e) = d1_insert_identity(&db, &user_id, "password", &identifier, Some(&password_hash)).await {
         let msg = e.to_string();
         if msg.to_ascii_lowercase().contains("unique") {
             return error_response(&req, 409, "username_taken", "Username already exists");
         }
         return internal_error_response(&req, "Failed to create password identity", &e);
-    }
-
-    if user_id <= 0 {
-        return internal_error_response(
-            &req,
-            "Failed to create user (invalid inserted id)",
-            &"insert returned non-positive id",
-        );
     }
 
     let jwt = match get_jwt_state(env) {
@@ -102,7 +94,7 @@ pub async fn handle_register(mut req: Request, env: &Env) -> Result<Response> {
     let access_exp = now + chrono::Duration::seconds(jwt.access_token_expiration);
     let access_claims = models::SessionClaims {
         iss: jwt.issuer.clone(),
-        sub: (user_id as i32).to_string(),
+        sub: user_id.clone(),
         aud: "beaconauth-web".to_string(),
         exp: access_exp.timestamp(),
         token_type: "access".to_string(),
@@ -118,7 +110,7 @@ pub async fn handle_register(mut req: Request, env: &Env) -> Result<Response> {
     let family_id = new_family_id();
     let refresh_exp = now.timestamp() + jwt.refresh_token_expiration;
 
-    if let Err(e) = d1_insert_refresh_token(&db, user_id, &token_hash, &family_id, refresh_exp).await {
+    if let Err(e) = d1_insert_refresh_token(&db, &user_id, &token_hash, &family_id, refresh_exp).await {
         return internal_error_response(&req, "Failed to persist refresh token", &e);
     }
 
@@ -153,7 +145,7 @@ pub async fn handle_login(mut req: Request, env: &Env) -> Result<Response> {
         return json_with_cors(&req, resp);
     };
 
-    let Some(user) = d1_user_by_id(&db, identity.user_id).await? else {
+    let Some(user) = d1_user_by_id(&db, &identity.user_id).await? else {
         return internal_error_response(&req, "Identity references missing user", &"user missing");
     };
 
@@ -173,7 +165,7 @@ pub async fn handle_login(mut req: Request, env: &Env) -> Result<Response> {
     let access_exp = now + chrono::Duration::seconds(jwt.access_token_expiration);
     let access_claims = models::SessionClaims {
         iss: jwt.issuer.clone(),
-        sub: (user.id as i32).to_string(),
+        sub: user.id.clone(),
         aud: "beaconauth-web".to_string(),
         exp: access_exp.timestamp(),
         token_type: "access".to_string(),
@@ -186,7 +178,7 @@ pub async fn handle_login(mut req: Request, env: &Env) -> Result<Response> {
     let family_id = new_family_id();
     let refresh_exp = now.timestamp() + jwt.refresh_token_expiration;
 
-    d1_insert_refresh_token(&db, user.id, &token_hash, &family_id, refresh_exp).await?;
+    d1_insert_refresh_token(&db, &user.id, &token_hash, &family_id, refresh_exp).await?;
 
     // The web UI only requires cookies to be set; the body is ignored.
     let mut resp = Response::from_json(&json!({ "success": true }))?;
@@ -239,14 +231,14 @@ pub async fn handle_refresh(req: &Request, env: &Env) -> Result<Response> {
     }
 
     // Revoke old refresh token (rotation)
-    d1_revoke_refresh_token_by_id(&db, record.id).await?;
+    d1_revoke_refresh_token_by_id(&db, &record.id).await?;
 
     // Issue new token pair with same family_id
     let now = Utc::now();
     let access_exp = now + chrono::Duration::seconds(jwt.access_token_expiration);
     let access_claims = models::SessionClaims {
         iss: jwt.issuer.clone(),
-        sub: (record.user_id as i32).to_string(),
+        sub: record.user_id.clone(),
         aud: "beaconauth-web".to_string(),
         exp: access_exp.timestamp(),
         token_type: "access".to_string(),
@@ -258,7 +250,7 @@ pub async fn handle_refresh(req: &Request, env: &Env) -> Result<Response> {
     let new_hash = sha256_hex(&new_refresh_token);
     let refresh_exp = now.timestamp() + jwt.refresh_token_expiration;
 
-    d1_insert_refresh_token(&db, record.user_id, &new_hash, &record.family_id, refresh_exp).await?;
+    d1_insert_refresh_token(&db, &record.user_id, &new_hash, &record.family_id, refresh_exp).await?;
 
     let mut resp = Response::from_json(&json!({ "success": true }))?;
     let headers = resp.headers_mut();
@@ -282,7 +274,7 @@ pub async fn handle_user_me(req: &Request, env: &Env) -> Result<Response> {
     };
 
     let user_id = match verify_access_token(jwt, &access_token) {
-        Ok(id) => id as i64,
+        Ok(id) => id,
         Err(e) => {
             let resp = Response::from_json(&models::ErrorResponse {
                 error: "invalid_token".to_string(),
@@ -293,7 +285,7 @@ pub async fn handle_user_me(req: &Request, env: &Env) -> Result<Response> {
         }
     };
 
-    let Some(user) = d1_user_by_id(&db, user_id).await? else {
+    let Some(user) = d1_user_by_id(&db, &user_id).await? else {
         let resp = Response::from_json(&models::ErrorResponse {
             error: "user_not_found".to_string(),
             message: "User not found".to_string(),
@@ -320,7 +312,7 @@ pub async fn handle_change_password(mut req: Request, env: &Env) -> Result<Respo
     };
 
     let user_id = match verify_access_token(jwt, &access_token) {
-        Ok(id) => id as i64,
+        Ok(id) => id,
         Err(e) => {
             let resp = Response::from_json(&models::ErrorResponse {
                 error: "invalid_token".to_string(),
@@ -342,7 +334,7 @@ pub async fn handle_change_password(mut req: Request, env: &Env) -> Result<Respo
         return json_with_cors(&req, resp);
     }
 
-    let Some(user) = d1_user_by_id(&db, user_id).await? else {
+    let Some(user) = d1_user_by_id(&db, &user_id).await? else {
         let resp = Response::from_json(&models::ErrorResponse {
             error: "user_not_found".to_string(),
             message: "User not found".to_string(),
@@ -351,7 +343,7 @@ pub async fn handle_change_password(mut req: Request, env: &Env) -> Result<Respo
         return json_with_cors(&req, resp);
     };
 
-    let existing = d1_password_identity_by_user_id(&db, user_id).await?;
+    let existing = d1_password_identity_by_user_id(&db, &user_id).await?;
     if let Some(identity) = existing.as_ref() {
         let Some(existing_hash) = identity.password_hash.as_deref() else {
             return internal_error_response(&req, "Password identity is missing password_hash", &"invalid row");
@@ -372,11 +364,11 @@ pub async fn handle_change_password(mut req: Request, env: &Env) -> Result<Respo
         .map_err(|e| Error::RustError(e.to_string()))?;
 
     if existing.is_some() {
-        d1_update_password_identity_hash(&db, user_id, &new_hash).await?;
+        d1_update_password_identity_hash(&db, &user_id, &new_hash).await?;
     } else {
         d1_insert_identity(
             &db,
-            user_id,
+            &user_id,
             "password",
             &user.username_lower,
             Some(&new_hash),
@@ -402,7 +394,7 @@ pub async fn handle_change_username(mut req: Request, env: &Env) -> Result<Respo
     };
 
     let user_id = match verify_access_token(jwt, &access_token) {
-        Ok(id) => id as i64,
+        Ok(id) => id,
         Err(e) => {
             let resp = Response::from_json(&models::ErrorResponse {
                 error: "invalid_token".to_string(),
@@ -428,11 +420,11 @@ pub async fn handle_change_username(mut req: Request, env: &Env) -> Result<Respo
         }
     }
 
-    crate::wasm::db::d1_update_user_username(&db, user_id, &requested_username, &requested_lower)
+    crate::wasm::db::d1_update_user_username(&db, &user_id, &requested_username, &requested_lower)
         .await?;
 
     // Keep the password identity's identifier aligned with the normalized username.
-    let _ = crate::wasm::db::d1_update_password_identity_identifier(&db, user_id, &requested_lower).await;
+    let _ = crate::wasm::db::d1_update_password_identity_identifier(&db, &user_id, &requested_lower).await;
 
     let resp = Response::from_json(&models::ChangeUsernameResponse {
         success: true,
@@ -451,7 +443,7 @@ pub async fn handle_logout(req: &Request, env: &Env) -> Result<Response> {
     };
 
     let user_id = match verify_access_token(jwt, &access_token) {
-        Ok(id) => id as i64,
+        Ok(id) => id,
         Err(_) => {
             let resp = Response::from_json(&json!({ "success": true }))?;
             return json_with_cors(req, resp);
@@ -459,7 +451,7 @@ pub async fn handle_logout(req: &Request, env: &Env) -> Result<Response> {
     };
 
     // Revoke all refresh tokens for the user.
-    let _ = d1_revoke_all_refresh_tokens_for_user(&db, user_id).await;
+    let _ = d1_revoke_all_refresh_tokens_for_user(&db, &user_id).await;
 
     let mut resp = Response::from_json(&json!({ "success": true }))?;
     let headers = resp.headers_mut();

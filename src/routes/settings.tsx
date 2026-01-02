@@ -81,11 +81,11 @@ const usernameChangeSchema = z.object({
 type UsernameChangeData = z.infer<typeof usernameChangeSchema>;
 
 interface UserInfo {
-  id: number;
+  id: string;
   username: string;
 }
 interface PasskeyInfo {
-  id: number;
+  id: string;
   name: string;
   created_at: string;
   last_used_at: string | null;
@@ -98,7 +98,7 @@ interface ServerConfig {
 }
 
 interface IdentityInfo {
-  id: number;
+  id: string;
   provider: string;
   provider_user_id: string;
 }
@@ -252,7 +252,7 @@ function SettingsPage() {
     }
   };
 
-  const handleUnlinkIdentity = async (id: number) => {
+  const handleUnlinkIdentity = async (id: string) => {
     if (!confirm('Are you sure you want to unlink this login method?')) return;
     try {
       await apiClient(`/api/v1/identities/${id}`, { method: 'DELETE' });
@@ -322,7 +322,7 @@ function SettingsPage() {
     }
   };
 
-  const handleDeletePasskey = async (id: number, name: string) => {
+  const handleDeletePasskey = async (id: string, name: string) => {
     if (!confirm(`Are you sure you want to delete passkey "${name}"?`)) return;
     try {
       await apiClient(`/api/v1/passkey/${id}`, { method: 'DELETE' });

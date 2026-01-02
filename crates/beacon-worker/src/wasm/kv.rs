@@ -41,7 +41,7 @@ pub async fn kv_delete(kv: &KvStore, key: &str) -> Result<()> {
     Ok(())
 }
 
-pub fn passkey_reg_state_key(user_id: i64) -> String {
+pub fn passkey_reg_state_key(user_id: &str) -> String {
     format!("passkey:reg:{user_id}")
 }
 

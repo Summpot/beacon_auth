@@ -288,7 +288,7 @@ pub async fn handle_oauth_link_start(mut req: Request, env: &Env) -> Result<Resp
     };
 
     let link_user_id = match verify_access_token(jwt, &access_token) {
-        Ok(id) => id as i64,
+        Ok(id) => id,
         Err(e) => return error_response(&req, 401, "invalid_token", e),
     };
 
@@ -454,11 +454,11 @@ pub async fn handle_oauth_callback(req: &Request, env: &Env) -> Result<Response>
 
     let user = if let Some(identity) = existing_identity {
         // Existing linked identity -> canonical user
-        match d1_user_by_id(&db, identity.user_id).await {
+        match d1_user_by_id(&db, &identity.user_id).await {
             Ok(Some(u)) => {
                 if let Some(link_user_id) = oauth_state.link_user_id {
                     // Link flow: ensure the identity is linked to the intended user.
-                    if identity.user_id != link_user_id as i64 {
+                    if identity.user_id != link_user_id {
                         return error_response(
                             req,
                             409,
@@ -476,13 +476,13 @@ pub async fn handle_oauth_callback(req: &Request, env: &Env) -> Result<Response>
         }
     } else if let Some(link_user_id) = oauth_state.link_user_id {
         // Link flow: attach this identity to the intended user.
-        let target_user = match d1_user_by_id(&db, link_user_id as i64).await {
+        let target_user = match d1_user_by_id(&db, &link_user_id).await {
             Ok(Some(u)) => u,
             Ok(None) => return error_response(req, 404, "user_not_found", "User not found"),
             Err(e) => return internal_error_response(req, "Failed to load link target user", &e),
         };
 
-        match d1_insert_identity(&db, target_user.id, &oauth_state.provider, &provider_user_id, None).await {
+        match d1_insert_identity(&db, &target_user.id, &oauth_state.provider, &provider_user_id, None).await {
             Ok(_) => {}
             Err(e) => {
                 let msg = e.to_string();
@@ -525,13 +525,13 @@ pub async fn handle_oauth_callback(req: &Request, env: &Env) -> Result<Response>
             Ok(id) => id,
             Err(e) => return internal_error_response(req, "Failed to create user", &e),
         };
-        let Some(new_user) = d1_user_by_id(&db, user_id).await? else {
+        let Some(new_user) = d1_user_by_id(&db, &user_id).await? else {
             return internal_error_response(req, "Failed to reload new user", &"user missing");
         };
 
         let canonical_user = match d1_insert_identity(
             &db,
-            new_user.id,
+            &new_user.id,
             &oauth_state.provider,
             &provider_user_id,
             None,
@@ -552,7 +552,7 @@ pub async fn handle_oauth_callback(req: &Request, env: &Env) -> Result<Response>
                     else {
                         return internal_error_response(req, "Failed to reload identity after race", &e);
                     };
-                    let Some(u) = d1_user_by_id(&db, identity.user_id).await? else {
+                    let Some(u) = d1_user_by_id(&db, &identity.user_id).await? else {
                         return internal_error_response(req, "Linked user not found", &"user missing");
                     };
                     u
@@ -570,7 +570,7 @@ pub async fn handle_oauth_callback(req: &Request, env: &Env) -> Result<Response>
     let access_exp = now + chrono::Duration::seconds(jwt.access_token_expiration);
     let access_claims = models::SessionClaims {
         iss: jwt.issuer.clone(),
-        sub: (user.id as i32).to_string(),
+        sub: user.id.clone(),
         aud: "beaconauth-web".to_string(),
         exp: access_exp.timestamp(),
         token_type: "access".to_string(),
@@ -586,7 +586,7 @@ pub async fn handle_oauth_callback(req: &Request, env: &Env) -> Result<Response>
     let family_id = new_family_id();
     let refresh_exp = now.timestamp() + jwt.refresh_token_expiration;
 
-    if let Err(e) = d1_insert_refresh_token(&db, user.id, &token_hash, &family_id, refresh_exp).await {
+    if let Err(e) = d1_insert_refresh_token(&db, &user.id, &token_hash, &family_id, refresh_exp).await {
         return internal_error_response(req, "Failed to persist refresh token", &e);
     }
 
