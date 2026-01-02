@@ -7,7 +7,6 @@ import net.minecraft.network.chat.Component;
 import net.minecraft.network.protocol.cookie.ServerboundCookieResponsePacket;
 import net.minecraft.network.protocol.login.ServerboundHelloPacket;
 import net.minecraft.server.MinecraftServer;
-import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.server.network.ServerLoginPacketListenerImpl;
 import org.jetbrains.annotations.Nullable;
 import org.slf4j.LoggerFactory;
@@ -17,7 +16,6 @@ import org.spongepowered.asm.mixin.Shadow;
 import org.spongepowered.asm.mixin.Unique;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
-import org.spongepowered.asm.mixin.injection.Redirect;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
 import java.util.UUID;
@@ -38,14 +36,13 @@ public abstract class ServerLoginPacketListenerImplMixin {
     @Shadow @Final private MinecraftServer server;
     @Shadow @Final Connection connection;
     @Shadow private int tick;
-    @Shadow @Nullable GameProfile gameProfile;
-    @Shadow @Nullable private ServerPlayer delayedAcceptPlayer;
 
-    @Shadow protected abstract void disconnect(Component reason);
+    @Shadow public abstract void disconnect(Component reason);
 
     @Unique private ServerLoginHandler beaconAuth$handler;
     @Unique private boolean beaconAuth$negotiationStarted = false;
-    @Unique private boolean beaconAuth$shouldUseBeaconAuth = false;
+    @Unique private boolean beaconAuth$interceptedHello = false;
+    @Unique @Nullable private GameProfile beaconAuth$loginProfile;
 
     /**
      * Intercept handleHello to decide whether to use BeaconAuth or Mojang authentication.
@@ -81,7 +78,8 @@ public abstract class ServerLoginPacketListenerImplMixin {
         BEACON_LOGGER.info("Player {} attempting to connect: online-mode={}, memory={}", 
             packet.name(), serverOnlineMode, isMemoryConnection);
 
-        // If server is NOT in online-mode or it's a memory connection, let vanilla handle it
+        // If server is NOT in online-mode or it's a memory connection, let vanilla handle it.
+        // (For offline-mode servers, we'll start negotiation later during VERIFYING in tick().)
         if (!serverOnlineMode || isMemoryConnection) {
             BEACON_LOGGER.info("Allowing vanilla authentication flow");
             return;
@@ -90,60 +88,23 @@ public abstract class ServerLoginPacketListenerImplMixin {
         // Server is in online-mode. BeaconAuth is designed for this scenario.
         // Skip Mojang authentication and let BeaconAuth handle authentication instead.
         BEACON_LOGGER.info("Intercepting handleHello for {} - starting BeaconAuth flow", packet.name());
-        
-        beaconAuth$shouldUseBeaconAuth = true;
-        
-        // Set up the game profile with no UUID (will be generated later if needed)
-        this.gameProfile = new GameProfile((UUID)null, packet.name());
-        
-        // Transition directly to NEGOTIATING state, bypassing Mojang authentication
+
+        beaconAuth$interceptedHello = true;
+
+        // Mirror vanilla bookkeeping so log messages include the username.
+        beaconAuth$setStringFieldIfPresent("requestedUsername", packet.name());
+
+        // Create a profile WITHOUT UUID to mark that Mojang auth was skipped.
+        // A stable UUID will be installed after BeaconAuth verification.
+        GameProfile loginProfile = new GameProfile((UUID) null, packet.name());
+        beaconAuth$loginProfile = loginProfile;
+
+        // Enter NEGOTIATING and start BeaconAuth cookie negotiation.
         beaconAuth$setState("NEGOTIATING");
-        
-        // CRITICAL: Start BeaconAuth negotiation immediately
-        // We can't wait for READY_TO_ACCEPT since we skipped Mojang auth
-        beaconAuth$startNegotiationNow();
-        
-        // Cancel the original handleHello execution
+        beaconAuth$startNegotiation(loginProfile);
+
+        // Cancel the original handleHello execution.
         ci.cancel();
-    }
-
-    /**
-     * Redirect Forge's NetworkHooks.tickNegotiation() call to prevent NPE.
-     * When we're handling BeaconAuth, we return false to keep vanilla in NEGOTIATING state.
-     * Otherwise, we call the original Forge method.
-     */
-    @Redirect(
-        method = "tick",
-        at = @At(
-            value = "INVOKE",
-            target = "Lnet/minecraftforge/network/NetworkHooks;tickNegotiation(Lnet/minecraft/server/network/ServerLoginPacketListenerImpl;Lnet/minecraft/network/Connection;Lnet/minecraft/server/level/ServerPlayer;)Z",
-            remap = false
-        ),
-        require = 0
-    )
-    private boolean beaconAuth$redirectForgeNegotiation(
-        ServerLoginPacketListenerImpl listener,
-        Connection connection,
-        ServerPlayer delayedPlayer
-    ) {
-        // If we're handling BeaconAuth, prevent Forge from proceeding
-        if (beaconAuth$handler != null) {
-            return false; // Keep vanilla in NEGOTIATING state
-        }
-
-        // Otherwise, let Forge handle it normally
-        try {
-            Class<?> networkHooks = Class.forName("net.minecraftforge.network.NetworkHooks");
-            java.lang.reflect.Method method = networkHooks.getMethod(
-                "tickNegotiation",
-                ServerLoginPacketListenerImpl.class,
-                Connection.class,
-                ServerPlayer.class
-            );
-            return (boolean) method.invoke(null, listener, connection, delayedPlayer);
-        } catch (Exception e) {
-            return true; // Fallback: assume negotiation is complete
-        }
     }
 
     /**
@@ -159,10 +120,17 @@ public abstract class ServerLoginPacketListenerImplMixin {
             return;
         }
 
-        // Check if we should start negotiation (for cases where we didn't intercept handleHello)
-        if (!beaconAuth$negotiationStarted && !beaconAuth$shouldUseBeaconAuth && beaconAuth$isReadyToAccept()) {
-            BEACON_LOGGER.info("Starting BeaconAuth negotiation at READY_TO_ACCEPT state");
-            beaconAuth$startNegotiation();
+        // Start negotiation for flows where we did NOT intercept handleHello:
+        // - offline-mode servers (game profile already assigned)
+        // - online-mode players already verified by Mojang (UUID present)
+        if (!beaconAuth$negotiationStarted && beaconAuth$isInState("VERIFYING")) {
+            GameProfile profile = beaconAuth$getAuthenticatedProfile();
+            if (profile != null) {
+                BEACON_LOGGER.info("Starting BeaconAuth negotiation at VERIFYING state");
+                beaconAuth$loginProfile = profile;
+                beaconAuth$setState("NEGOTIATING");
+                beaconAuth$startNegotiation(profile);
+            }
         }
     }
 
@@ -174,18 +142,6 @@ public abstract class ServerLoginPacketListenerImplMixin {
         boolean handled = beaconAuth$handler.handleCookieResponse(packet.key(), packet.payload());
         if (handled) {
             ci.cancel();
-        }
-    }
-
-    @Unique
-    private boolean beaconAuth$isReadyToAccept() {
-        try {
-            java.lang.reflect.Field stateField = ServerLoginPacketListenerImpl.class.getDeclaredField("state");
-            stateField.setAccessible(true);
-            Object stateValue = stateField.get(this);
-            return stateValue.toString().equals("READY_TO_ACCEPT") && gameProfile != null;
-        } catch (Exception e) {
-            return false;
         }
     }
 
@@ -202,60 +158,47 @@ public abstract class ServerLoginPacketListenerImplMixin {
     }
 
     @Unique
-    private void beaconAuth$startNegotiation() {
-        if (gameProfile == null) {
-            BEACON_LOGGER.warn("Cannot start negotiation: gameProfile is null");
+    private void beaconAuth$startNegotiation(GameProfile profile) {
+        if (beaconAuth$negotiationStarted) {
             return;
         }
-        
-        BEACON_LOGGER.info("Starting BeaconAuth negotiation for {}", gameProfile.getName());
+
         beaconAuth$negotiationStarted = true;
+        BEACON_LOGGER.info("Starting BeaconAuth negotiation for {}", profile.getName());
+
         beaconAuth$handler = new ServerLoginHandler(
             server,
             connection,
-            gameProfile,
+            profile,
             (Component reason) -> {
-                BEACON_LOGGER.info("BeaconAuth negotiation failed for {}: {}", gameProfile.getName(), reason.getString());
+                BEACON_LOGGER.info("BeaconAuth negotiation failed for {}: {}", profile.getName(), reason.getString());
                 disconnect(reason);
                 beaconAuth$handler = null;
+                // Mark terminal state to avoid additional processing after disconnect.
                 beaconAuth$setState("ACCEPTED");
                 return kotlin.Unit.INSTANCE;
             },
             () -> {
-                BEACON_LOGGER.info("BeaconAuth negotiation finished successfully for {}", gameProfile.getName());
+                BEACON_LOGGER.info("BeaconAuth negotiation finished successfully for {}", profile.getName());
 
-                // IMPORTANT: ServerLoginHandler may update the GameProfile UUID after BeaconAuth verification.
-                // Copy it back so the server uses a stable per-account UUID (not username-derived).
+                GameProfile updated = null;
                 if (beaconAuth$handler != null) {
-                    GameProfile updated = beaconAuth$handler.getCurrentGameProfile();
-                    if (updated != null) {
-                        this.gameProfile = updated;
-                    }
+                    updated = beaconAuth$handler.getCurrentGameProfile();
+                }
+                if (updated != null) {
+                    beaconAuth$loginProfile = updated;
+                }
+                if (beaconAuth$loginProfile != null) {
+                    beaconAuth$setAuthenticatedProfile(beaconAuth$loginProfile);
                 }
 
                 beaconAuth$handler = null;
-                beaconAuth$setState("READY_TO_ACCEPT");
+                // Continue vanilla flow: tick() will verify and finish login.
+                beaconAuth$setState("VERIFYING");
                 return kotlin.Unit.INSTANCE;
             }
         );
-        beaconAuth$setState("NEGOTIATING");
         beaconAuth$handler.start();
-    }
-
-    @Unique
-    private void beaconAuth$startNegotiationNow() {
-        if (gameProfile == null) {
-            BEACON_LOGGER.error("CRITICAL: Cannot start negotiation immediately - gameProfile is null!");
-            return;
-        }
-        
-        if (beaconAuth$negotiationStarted) {
-            BEACON_LOGGER.warn("Negotiation already started, skipping duplicate start");
-            return;
-        }
-        
-        BEACON_LOGGER.info("Starting immediate BeaconAuth negotiation for {}", gameProfile.getName());
-        beaconAuth$startNegotiation();
     }
 
     @Unique
@@ -273,6 +216,58 @@ public abstract class ServerLoginPacketListenerImplMixin {
             }
         } catch (Exception e) {
             e.printStackTrace();
+        }
+    }
+
+    @Unique
+    @Nullable
+    private GameProfile beaconAuth$getAuthenticatedProfile() {
+        // Vanilla 1.21.x uses "authenticatedProfile".
+        // Some loaders may patch in "gameProfile".
+        GameProfile profile = (GameProfile) beaconAuth$getFieldIfPresent("authenticatedProfile");
+        if (profile != null) {
+            return profile;
+        }
+        return (GameProfile) beaconAuth$getFieldIfPresent("gameProfile");
+    }
+
+    @Unique
+    private void beaconAuth$setAuthenticatedProfile(@Nullable GameProfile profile) {
+        if (profile == null) {
+            return;
+        }
+        if (beaconAuth$setFieldIfPresent("authenticatedProfile", profile)) {
+            return;
+        }
+        beaconAuth$setFieldIfPresent("gameProfile", profile);
+    }
+
+    @Unique
+    private void beaconAuth$setStringFieldIfPresent(String fieldName, String value) {
+        beaconAuth$setFieldIfPresent(fieldName, value);
+    }
+
+    @Unique
+    @Nullable
+    private Object beaconAuth$getFieldIfPresent(String fieldName) {
+        try {
+            java.lang.reflect.Field f = ServerLoginPacketListenerImpl.class.getDeclaredField(fieldName);
+            f.setAccessible(true);
+            return f.get(this);
+        } catch (Throwable ignored) {
+            return null;
+        }
+    }
+
+    @Unique
+    private boolean beaconAuth$setFieldIfPresent(String fieldName, Object value) {
+        try {
+            java.lang.reflect.Field f = ServerLoginPacketListenerImpl.class.getDeclaredField(fieldName);
+            f.setAccessible(true);
+            f.set(this, value);
+            return true;
+        } catch (Throwable ignored) {
+            return false;
         }
     }
 }

@@ -8,16 +8,20 @@ import io.github.summpot.beaconauth.BeaconAuthMod
 import io.github.summpot.beaconauth.config.BeaconAuthConfig
 import fuzs.forgeconfigapiport.api.config.v2.ForgeConfigRegistry
 import net.minecraftforge.fml.config.ModConfig
+import net.minecraftforge.common.ForgeConfigSpec
 
 object BeaconAuthModFabric : ModInitializer, DedicatedServerModInitializer {
     override fun onInitialize() {
         // Register configuration
-        val configPair = BeaconAuthConfig.buildConfig()
         ForgeConfigRegistry.INSTANCE.register(
-            BeaconAuthMod.MOD_ID, 
-            ModConfig.Type.SERVER, 
-            configPair.right
+            BeaconAuthMod.MOD_ID,
+            ModConfig.Type.SERVER,
+            BeaconAuthServerConfig.spec
         )
+
+        // On 1.20.1 + ForgeConfigApiPort v2, configs are typically available immediately after
+        // registration. Apply now so common code sees configured values even before server init.
+        BeaconAuthServerConfig.applyToCommon()
         
         // Run common setup (network packet registration)
         BeaconAuthMod.init()
@@ -34,8 +38,115 @@ object BeaconAuthModFabric : ModInitializer, DedicatedServerModInitializer {
     }
 
     override fun onInitializeServer() {
+        // Ensure config values are applied before server-side logic runs.
+        BeaconAuthServerConfig.applyToCommon()
+
         // Initialize server-side logic (JWT validation) for dedicated servers
         // For integrated servers, lazy initialization will handle it
         BeaconAuthMod.initServer()
+    }
+}
+
+private object BeaconAuthServerConfig {
+    private val authBaseUrl: ForgeConfigSpec.ConfigValue<String>
+    private val jwksUrl: ForgeConfigSpec.ConfigValue<String>
+    private val expectedIssuer: ForgeConfigSpec.ConfigValue<String>
+    private val expectedAudience: ForgeConfigSpec.ConfigValue<String>
+    private val bypassIfOnlineModeVerified: ForgeConfigSpec.BooleanValue
+    private val forceAuthIfOfflineMode: ForgeConfigSpec.BooleanValue
+    private val allowVanillaOfflineClients: ForgeConfigSpec.BooleanValue
+
+    val spec: ForgeConfigSpec
+
+    init {
+        val builder = ForgeConfigSpec.Builder()
+
+        builder.comment(
+            "BeaconAuth Server Configuration",
+            "",
+            "IMPORTANT: Configure these values to match your authentication server!",
+            "The default values point to https://beaconauth.pages.dev."
+        ).push("authentication")
+
+        authBaseUrl = builder
+            .comment(
+                "Base URL of your authentication server",
+                "Example: https://beaconauth.pages.dev (development) or https://auth.example.com (production)",
+                "WARNING: Always use HTTPS in production!"
+            )
+            .define("base_url", "https://beaconauth.pages.dev")
+
+        jwksUrl = builder
+            .comment(
+                "JWKS (JSON Web Key Set) URL for JWT signature verification",
+                "This endpoint must provide the public keys used to sign JWTs",
+                "Usually: <base_url>/.well-known/jwks.json"
+            )
+            .define("jwks_url", "https://beaconauth.pages.dev/.well-known/jwks.json")
+
+        builder.pop()
+
+        builder.comment(
+            "JWT Token Validation Settings",
+            "These values must match your authentication server's configuration"
+        ).push("jwt")
+
+        expectedIssuer = builder
+            .comment(
+                "Expected JWT issuer (iss claim)",
+                "This must match the 'iss' claim in the JWT token"
+            )
+            .define("issuer", "https://beaconauth.pages.dev")
+
+        expectedAudience = builder
+            .comment(
+                "Expected JWT audience (aud claim)",
+                "This must match the 'aud' claim in the JWT token"
+            )
+            .define("audience", "minecraft-client")
+
+        builder.pop()
+
+        builder.comment(
+            "Authentication Behavior Settings",
+            "Configure how BeaconAuth interacts with Minecraft's authentication system"
+        ).push("behavior")
+
+        bypassIfOnlineModeVerified = builder
+            .comment(
+                "Bypass BeaconAuth for players verified by Mojang online-mode",
+                "Recommended: true"
+            )
+            .define("bypass_if_online_mode_verified", true)
+
+        forceAuthIfOfflineMode = builder
+            .comment(
+                "Force BeaconAuth for modded clients when server is in offline-mode",
+                "Recommended: true"
+            )
+            .define("force_auth_if_offline_mode", true)
+
+        allowVanillaOfflineClients = builder
+            .comment(
+                "Allow vanilla clients (without BeaconAuth mod) in offline-mode",
+                "Only applies when force_auth_if_offline_mode is true"
+            )
+            .define("allow_vanilla_offline_clients", false)
+
+        builder.pop()
+
+        spec = builder.build()
+    }
+
+    fun applyToCommon() {
+        BeaconAuthConfig.apply(
+            authBaseUrl.get(),
+            jwksUrl.get(),
+            expectedIssuer.get(),
+            expectedAudience.get(),
+            bypassIfOnlineModeVerified.get(),
+            forceAuthIfOfflineMode.get(),
+            allowVanillaOfflineClients.get()
+        )
     }
 }

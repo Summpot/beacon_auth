@@ -55,9 +55,15 @@ class ServerLoginHandler(
         sendRequest(LoginQueryType.PROBE)
     }
 
-    fun handleCookieResponse(key: ResourceLocation, payload: ByteArray): Boolean {
+    fun handleCookieResponse(key: ResourceLocation, payload: ByteArray?): Boolean {
         val type = negotiation.consume(key) ?: return false
-        val data = FriendlyByteBuf(Unpooled.wrappedBuffer(payload))
+        // Vanilla clients may reply to unknown cookie requests with a null payload.
+        // Treat null/empty payload as "not modded" for PROBE, and as invalid for INIT/VERIFY.
+        val data = if (payload == null || payload.isEmpty()) {
+            null
+        } else {
+            FriendlyByteBuf(Unpooled.wrappedBuffer(payload))
+        }
         when (type) {
             LoginQueryType.PROBE -> handleProbeResponse(data)
             LoginQueryType.INIT -> handleInitResponse(data)
@@ -80,11 +86,21 @@ class ServerLoginHandler(
         logger.info("Server online-mode: $onlineMode")
         
         if (!modded) {
-            if (onlineMode || BeaconAuthConfig.shouldAllowVanillaOfflineClients()) {
+            // On online-mode servers: only allow vanilla clients if they already passed Mojang verification.
+            // If we intercepted handleHello (UUID is null), allowing vanilla would effectively downgrade
+            // online-mode to offline-mode, which is unsafe.
+            val hasMojangVerifiedUUID = gameProfile?.id != null
+            val allowVanilla = if (onlineMode) {
+                hasMojangVerifiedUUID
+            } else {
+                BeaconAuthConfig.shouldAllowVanillaOfflineClients()
+            }
+
+            if (allowVanilla) {
                 logger.info("Vanilla client allowed; finishing negotiation")
                 finish()
             } else {
-                logger.warn("Vanilla client rejected (offline mode, mod required)")
+                logger.warn("Vanilla client rejected (mod required)")
                 fail(Component.translatable("disconnect.beaconauth.mod_required"))
             }
             return

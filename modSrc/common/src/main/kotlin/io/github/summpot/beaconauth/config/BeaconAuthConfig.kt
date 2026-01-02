@@ -1,12 +1,49 @@
 package io.github.summpot.beaconauth.config
 
-// Intentionally empty.
-//
-// This folder (`modSrc/common/src/main/**`) is compiled into every Minecraft-versioned
-// `common-*` module via Gradle sourceSets. Configuration APIs differ between 1.20.1 and
-// 1.21.x targets, so `BeaconAuthConfig` must remain version-specific.
-//
-// The real `io.github.summpot.beaconauth.config.BeaconAuthConfig` is defined in:
-// - modSrc/common-1.20.1/src/...
-// - modSrc/common-1.21.1/src/...
-// - modSrc/common-1.21.8/src/...
+/**
+ * BeaconAuth configuration values used by common code.
+ *
+ * This object is version-agnostic and compiled into every Minecraft target.
+ *
+ * Platform modules (Fabric/Forge/NeoForge) are responsible for:
+ *  - registering a config spec (ForgeConfigSpec / ModConfigSpec)
+ *  - reading the loaded values
+ *  - applying them here via [apply]
+ */
+object BeaconAuthConfig {
+	// Defaults are development-friendly. Platform config should overwrite these on load.
+	@Volatile private var authBaseUrl: String = "https://beaconauth.pages.dev"
+	@Volatile private var jwksUrl: String = "https://beaconauth.pages.dev/.well-known/jwks.json"
+	@Volatile private var expectedIssuer: String = "https://beaconauth.pages.dev"
+	@Volatile private var expectedAudience: String = "minecraft-client"
+	@Volatile private var bypassIfOnlineModeVerified: Boolean = true
+	@Volatile private var forceAuthIfOfflineMode: Boolean = true
+	@Volatile private var allowVanillaOfflineClients: Boolean = false
+
+	@JvmStatic
+	fun apply(
+		authBaseUrl: String,
+		jwksUrl: String,
+		expectedIssuer: String,
+		expectedAudience: String,
+		bypassIfOnlineModeVerified: Boolean,
+		forceAuthIfOfflineMode: Boolean,
+		allowVanillaOfflineClients: Boolean
+	) {
+		this.authBaseUrl = authBaseUrl
+		this.jwksUrl = jwksUrl
+		this.expectedIssuer = expectedIssuer
+		this.expectedAudience = expectedAudience
+		this.bypassIfOnlineModeVerified = bypassIfOnlineModeVerified
+		this.forceAuthIfOfflineMode = forceAuthIfOfflineMode
+		this.allowVanillaOfflineClients = allowVanillaOfflineClients
+	}
+
+	fun getAuthBaseUrl(): String = authBaseUrl
+	fun getJwksUrl(): String = jwksUrl
+	fun getExpectedIssuer(): String = expectedIssuer
+	fun getExpectedAudience(): String = expectedAudience
+	fun shouldBypassIfOnlineModeVerified(): Boolean = bypassIfOnlineModeVerified
+	fun shouldForceAuthIfOfflineMode(): Boolean = forceAuthIfOfflineMode
+	fun shouldAllowVanillaOfflineClients(): Boolean = allowVanillaOfflineClients
+}
