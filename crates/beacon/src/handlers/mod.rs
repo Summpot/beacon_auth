@@ -88,7 +88,7 @@ pub async fn login(
         });
     };
 
-    let user = match user_entity::Entity::find_by_id(identity.user_id)
+    let user = match user_entity::Entity::find_by_id(identity.user_id.clone())
         .one(&app_state.db)
         .await
     {
@@ -124,7 +124,7 @@ pub async fn login(
 
     // 3. Create session tokens
     let (access_token, refresh_token) =
-        match auth::create_session_for_user(&app_state, user.id).await {
+        match auth::create_session_for_user(&app_state, &user.id).await {
             Ok(tokens) => tokens,
             Err(e) => {
                 log::error!("Failed to create session: {}", e);
@@ -223,7 +223,10 @@ pub async fn register(
         }
     };
 
+    let user_id = Uuid::now_v7().to_string();
+
     let new_user = user_entity::ActiveModel {
+        id: Set(user_id.clone()),
         username: Set(requested_username.clone()),
         username_lower: Set(requested_username_lower.clone()),
         created_at: Set(now),
@@ -231,22 +234,20 @@ pub async fn register(
         ..Default::default()
     };
 
-    let insert_result = user_entity::Entity::insert(new_user).exec(&txn).await;
-
-    let user_id = match insert_result {
-        Ok(result) => result.last_insert_id,
-        Err(e) => {
+    if let Err(e) = user_entity::Entity::insert(new_user).exec_without_returning(&txn).await {
             let _ = txn.rollback().await;
             log::error!("Failed to insert user: {}", e);
             return HttpResponse::InternalServerError().json(ErrorResponse {
                 error: "internal_error".to_string(),
                 message: "Failed to create user".to_string(),
             });
-        }
-    };
+    }
+
+    let identity_id = Uuid::now_v7().to_string();
 
     let new_identity = identity_entity::ActiveModel {
-        user_id: Set(user_id),
+        id: Set(identity_id),
+        user_id: Set(user_id.clone()),
         provider: Set("password".to_string()),
         provider_user_id: Set(requested_username_lower.clone()),
         password_hash: Set(Some(password_hash)),
@@ -280,7 +281,7 @@ pub async fn register(
 
     // 6. Create session tokens for auto-login
     let (access_token, refresh_token) =
-        match auth::create_session_for_user(&app_state, user_id).await {
+        match auth::create_session_for_user(&app_state, &user_id).await {
             Ok(tokens) => tokens,
             Err(e) => {
                 log::error!("Failed to create session: {}", e);
@@ -450,7 +451,7 @@ pub async fn oauth_link_start(
         iat: now.timestamp(),
         token_type: "oauth_state".to_string(),
         provider: payload.provider.clone(),
-        link_user_id: Some(user_id),
+        link_user_id: Some(user_id.clone()),
         challenge: if payload.challenge.is_empty() {
             None
         } else {
@@ -612,7 +613,7 @@ pub async fn oauth_callback(
             }
         }
 
-        match user_entity::Entity::find_by_id(identity.user_id)
+        match user_entity::Entity::find_by_id(identity.user_id.clone())
             .one(&app_state.db)
             .await
         {
@@ -628,7 +629,7 @@ pub async fn oauth_callback(
         }
     } else if let Some(link_user_id) = oauth_state.link_user_id {
         // Link flow: attach identity to the specified existing user.
-        let user = match user_entity::Entity::find_by_id(link_user_id)
+        let user = match user_entity::Entity::find_by_id(link_user_id.clone())
             .one(&app_state.db)
             .await
         {
@@ -646,7 +647,9 @@ pub async fn oauth_callback(
         };
 
         let now = Utc::now().timestamp();
+        let identity_id = Uuid::now_v7().to_string();
         let new_identity = identity_entity::ActiveModel {
+            id: Set(identity_id),
             user_id: Set(link_user_id),
             provider: Set(provider.clone()),
             provider_user_id: Set(provider_user_id.clone()),
@@ -712,7 +715,9 @@ pub async fn oauth_callback(
             return HttpResponse::InternalServerError().body("Failed to allocate unique username");
         }
 
+        let new_user_id = Uuid::now_v7().to_string();
         let new_user = user_entity::ActiveModel {
+            id: Set(new_user_id.clone()),
             username: Set(candidate_username),
             username_lower: Set(candidate_lower),
             created_at: Set(now),
@@ -720,15 +725,15 @@ pub async fn oauth_callback(
             ..Default::default()
         };
 
-        let inserted = match user_entity::Entity::insert(new_user).exec(&app_state.db).await {
-            Ok(r) => r.last_insert_id,
-            Err(e) => {
-                log::error!("Failed to create user: {}", e);
-                return HttpResponse::InternalServerError().body("Failed to create user");
-            }
-        };
+        if let Err(e) = user_entity::Entity::insert(new_user)
+            .exec_without_returning(&app_state.db)
+            .await
+        {
+            log::error!("Failed to create user: {}", e);
+            return HttpResponse::InternalServerError().body("Failed to create user");
+        }
 
-        let Some(user) = (match user_entity::Entity::find_by_id(inserted).one(&app_state.db).await {
+        let Some(user) = (match user_entity::Entity::find_by_id(new_user_id).one(&app_state.db).await {
             Ok(u) => u,
             Err(e) => {
                 log::error!("Failed to reload inserted user: {}", e);
@@ -739,8 +744,10 @@ pub async fn oauth_callback(
         };
 
         let now = Utc::now().timestamp();
+        let identity_id = Uuid::now_v7().to_string();
         let new_identity = identity_entity::ActiveModel {
-            user_id: Set(user.id),
+            id: Set(identity_id),
+            user_id: Set(user.id.clone()),
             provider: Set(provider.clone()),
             provider_user_id: Set(provider_user_id.clone()),
             password_hash: Set(None),
@@ -773,7 +780,7 @@ pub async fn oauth_callback(
                         return HttpResponse::InternalServerError().body("Failed to persist identity");
                     };
 
-                    match user_entity::Entity::find_by_id(identity.user_id)
+                    match user_entity::Entity::find_by_id(identity.user_id.clone())
                         .one(&app_state.db)
                         .await
                     {
@@ -794,7 +801,7 @@ pub async fn oauth_callback(
 
     // 4. Create session tokens
     let (access_token, refresh_token) =
-        match auth::create_session_for_user(&app_state, db_user.id).await {
+        match auth::create_session_for_user(&app_state, &db_user.id).await {
             Ok(tokens) => tokens,
             Err(e) => {
                 log::error!("Failed to create session: {}", e);
@@ -998,7 +1005,7 @@ async fn exchange_google_code(
 pub fn extract_session_user(
     req: &HttpRequest,
     app_state: &web::Data<AppState>,
-) -> actix_web::Result<i64> {
+) -> actix_web::Result<String> {
     use crate::models::SessionClaims;
 
     // Get access token from cookie
@@ -1030,11 +1037,12 @@ pub fn extract_session_user(
         return Err(actix_web::error::ErrorUnauthorized("Invalid token type"));
     }
 
-    // Parse user_id from sub (subject) field
-    let user_id: i64 = token_data.claims.sub.parse().map_err(|e| {
-        log::error!("Failed to parse user ID from token: {:?}", e);
-        actix_web::error::ErrorInternalServerError("Invalid user ID in token")
-    })?;
+    let user_id = uuid::Uuid::parse_str(&token_data.claims.sub)
+        .map_err(|e| {
+            log::error!("Failed to parse user ID from token: {:?}", e);
+            actix_web::error::ErrorInternalServerError("Invalid user ID in token")
+        })?
+        .to_string();
 
     Ok(user_id)
 }

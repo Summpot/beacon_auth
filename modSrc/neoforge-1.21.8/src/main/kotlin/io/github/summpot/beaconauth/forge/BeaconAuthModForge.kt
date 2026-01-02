@@ -72,7 +72,7 @@ private class BeaconAuthServerConfig(builder: ModConfigSpec.Builder) {
             "BeaconAuth Server Configuration",
             "",
             "IMPORTANT: Configure these values to match your authentication server!",
-            "The default values point to localhost:8080 for development."
+            "The default values point to https://beaconauth.pages.dev."
         ).push("authentication")
 
         authBaseUrl = builder
@@ -81,7 +81,7 @@ private class BeaconAuthServerConfig(builder: ModConfigSpec.Builder) {
                 "Example: http://localhost:8080 (development) or https://auth.example.com (production)",
                 "WARNING: Always use HTTPS in production!"
             )
-            .define("base_url", "http://localhost:8080")
+            .define("base_url", "https://beaconauth.pages.dev")
 
         jwksUrl = builder
             .comment(
@@ -89,7 +89,7 @@ private class BeaconAuthServerConfig(builder: ModConfigSpec.Builder) {
                 "This endpoint must provide the public keys used to sign JWTs",
                 "Usually: <base_url>/.well-known/jwks.json"
             )
-            .define("jwks_url", "http://localhost:8080/.well-known/jwks.json")
+            .define("jwks_url", "https://beaconauth.pages.dev/.well-known/jwks.json")
 
         builder.pop()
 
@@ -103,7 +103,7 @@ private class BeaconAuthServerConfig(builder: ModConfigSpec.Builder) {
                 "Expected JWT issuer (iss claim)",
                 "This must match the 'iss' claim in the JWT token"
             )
-            .define("issuer", "http://localhost:8080")
+            .define("issuer", "https://beaconauth.pages.dev")
 
         expectedAudience = builder
             .comment(

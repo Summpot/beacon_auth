@@ -6,6 +6,7 @@ use sea_orm::{ActiveModelTrait, ColumnTrait, EntityTrait, QueryFilter, Set};
 use serde::de::DeserializeOwned;
 use serde::Serialize;
 use webauthn_rs::prelude::*;
+use uuid::Uuid;
 
 use beacon_core::username;
 
@@ -19,7 +20,7 @@ use entity::{passkey, user};
 
 const PASSKEY_STATE_TTL_SECS: u64 = 5 * 60;
 
-fn redis_reg_key(user_id: i64) -> String {
+fn redis_reg_key(user_id: &str) -> String {
     format!("beaconauth:passkey:reg:{user_id}")
 }
 
@@ -80,7 +81,7 @@ pub async fn register_start(
     let user_id = extract_session_user(&req, &app_state)?;
 
     // Find user in database
-    let user_model = user::Entity::find_by_id(user_id)
+    let user_model = user::Entity::find_by_id(user_id.clone())
         .one(&app_state.db)
         .await
         .map_err(actix_web::error::ErrorInternalServerError)?
@@ -88,7 +89,7 @@ pub async fn register_start(
 
     // Get existing passkeys for this user
     let existing_passkeys = passkey::Entity::find()
-        .filter(passkey::Column::UserId.eq(user_id))
+        .filter(passkey::Column::UserId.eq(user_id.clone()))
         .all(&app_state.db)
         .await
         .map_err(actix_web::error::ErrorInternalServerError)?;
@@ -101,7 +102,8 @@ pub async fn register_start(
         .collect();
 
     // Start registration
-    let user_uuid = uuid::Uuid::from_u128(user_model.id as u128);
+    let user_uuid = Uuid::parse_str(&user_model.id)
+        .map_err(|_| actix_web::error::ErrorInternalServerError("Invalid user id"))?;
     let (ccr, passkey_registration) = app_state
         .webauthn
         .start_passkey_registration(
@@ -117,11 +119,11 @@ pub async fn register_start(
 
     // Store registration state (5-minute TTL)
     if let Some(redis) = &app_state.passkey_redis {
-        redis_set_json(redis, &redis_reg_key(user_id), &passkey_registration).await?;
+        redis_set_json(redis, &redis_reg_key(&user_id), &passkey_registration).await?;
     } else {
         app_state
             .passkey_reg_states
-            .insert(user_id, passkey_registration);
+            .insert(user_id.clone(), passkey_registration);
     }
 
     Ok(HttpResponse::Ok().json(PasskeyRegisterStartResponse {
@@ -139,7 +141,7 @@ pub async fn register_finish(
 
     // Retrieve registration state
     let passkey_registration = if let Some(redis) = &app_state.passkey_redis {
-        let key = redis_reg_key(user_id);
+        let key = redis_reg_key(&user_id);
         let state: Option<PasskeyRegistration> = redis_get_json(redis, &key).await?;
         // Remove after retrieval to prevent replays.
         let _ = redis_del(redis, &key).await;
@@ -168,8 +170,10 @@ pub async fn register_finish(
 
     // Save to database
     let now_ts = Utc::now().timestamp();
+    let passkey_id = Uuid::now_v7().to_string();
     let passkey_model = passkey::ActiveModel {
-        user_id: Set(user_id),
+        id: Set(passkey_id),
+        user_id: Set(user_id.clone()),
         credential_id: Set(BASE64.encode(passkey.cred_id())),
         credential_data: Set(credential_data),
         name: Set(body.name.clone().unwrap_or_else(|| "Passkey".to_string())),
@@ -352,8 +356,8 @@ pub async fn auth_finish(
         .map_err(actix_web::error::ErrorInternalServerError)?;
 
     // Create session for this user
-    let user_id = passkey_model.user_id;
-    let user_model = user::Entity::find_by_id(user_id)
+    let user_id = passkey_model.user_id.clone();
+    let user_model = user::Entity::find_by_id(user_id.clone())
         .one(&app_state.db)
         .await
         .map_err(actix_web::error::ErrorInternalServerError)?
@@ -362,7 +366,7 @@ pub async fn auth_finish(
     // Generate tokens
     let (access_token, refresh_token) = crate::handlers::auth::create_session_for_user(
         &app_state,
-        user_id,
+        &user_id,
     )
     .await
     .map_err(actix_web::error::ErrorInternalServerError)?;
@@ -405,7 +409,7 @@ pub async fn list_passkeys(
     let user_id = extract_session_user(&req, &app_state)?;
 
     let passkeys = passkey::Entity::find()
-        .filter(passkey::Column::UserId.eq(user_id))
+        .filter(passkey::Column::UserId.eq(user_id.clone()))
         .all(&app_state.db)
         .await
         .map_err(actix_web::error::ErrorInternalServerError)?;
@@ -441,10 +445,10 @@ pub async fn delete_passkey(
     body: web::Json<PasskeyDeleteRequest>,
 ) -> actix_web::Result<HttpResponse> {
     let user_id = extract_session_user(&req, &app_state)?;
-    let passkey_id = body.id;
+    let passkey_id = body.id.clone();
 
     // Find passkey and verify ownership
-    let passkey_model = passkey::Entity::find_by_id(passkey_id)
+    let passkey_model = passkey::Entity::find_by_id(passkey_id.clone())
         .one(&app_state.db)
         .await
         .map_err(actix_web::error::ErrorInternalServerError)?
@@ -455,7 +459,7 @@ pub async fn delete_passkey(
     }
 
     // Delete passkey
-    passkey::Entity::delete_by_id(passkey_id)
+    passkey::Entity::delete_by_id(passkey_id.clone())
         .exec(&app_state.db)
         .await
         .map_err(actix_web::error::ErrorInternalServerError)?;
@@ -473,13 +477,16 @@ pub async fn delete_passkey(
 pub async fn delete_passkey_by_id(
     req: HttpRequest,
     app_state: web::Data<AppState>,
-    id: web::Path<i64>,
+    id: web::Path<String>,
 ) -> actix_web::Result<HttpResponse> {
     let user_id = extract_session_user(&req, &app_state)?;
-    let passkey_id = id.into_inner();
+    let passkey_id = match Uuid::parse_str(&id.into_inner()) {
+        Ok(u) => u.to_string(),
+        Err(_) => return Err(actix_web::error::ErrorBadRequest("Invalid passkey id")),
+    };
 
     // Find passkey and verify ownership
-    let passkey_model = passkey::Entity::find_by_id(passkey_id)
+    let passkey_model = passkey::Entity::find_by_id(passkey_id.clone())
         .one(&app_state.db)
         .await
         .map_err(actix_web::error::ErrorInternalServerError)?
@@ -490,7 +497,7 @@ pub async fn delete_passkey_by_id(
     }
 
     // Delete passkey
-    passkey::Entity::delete_by_id(passkey_id)
+    passkey::Entity::delete_by_id(passkey_id.clone())
         .exec(&app_state.db)
         .await
         .map_err(actix_web::error::ErrorInternalServerError)?;

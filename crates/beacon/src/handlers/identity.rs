@@ -1,6 +1,7 @@
 use actix_web::{web, HttpRequest, HttpResponse};
 use entity::{identity, passkey};
 use sea_orm::{ColumnTrait, EntityTrait, PaginatorTrait, QueryFilter, QueryOrder, TransactionTrait};
+use uuid::Uuid;
 
 use crate::{
     app_state::AppState,
@@ -16,14 +17,14 @@ pub async fn list_identities(
     let user_id = extract_session_user(&req, &app_state)?;
 
     let identities = identity::Entity::find()
-        .filter(identity::Column::UserId.eq(user_id))
+        .filter(identity::Column::UserId.eq(user_id.clone()))
         .order_by_desc(identity::Column::CreatedAt)
         .all(&app_state.db)
         .await
         .map_err(actix_web::error::ErrorInternalServerError)?;
 
     let passkey_count = passkey::Entity::find()
-        .filter(passkey::Column::UserId.eq(user_id))
+        .filter(passkey::Column::UserId.eq(user_id.clone()))
         .count(&app_state.db)
         .await
         .map_err(actix_web::error::ErrorInternalServerError)? as i64;
@@ -52,10 +53,18 @@ pub async fn list_identities(
 pub async fn delete_identity_by_id(
     req: HttpRequest,
     app_state: web::Data<AppState>,
-    id: web::Path<i64>,
+    id: web::Path<String>,
 ) -> actix_web::Result<HttpResponse> {
     let user_id = extract_session_user(&req, &app_state)?;
-    let identity_id = id.into_inner();
+    let identity_id = match Uuid::parse_str(&id.into_inner()) {
+        Ok(u) => u.to_string(),
+        Err(_) => {
+            return Ok(HttpResponse::BadRequest().json(ErrorResponse {
+                error: "invalid_identity_id".to_string(),
+                message: "Invalid identity id".to_string(),
+            }));
+        }
+    };
 
     let txn = app_state
         .db
@@ -63,7 +72,7 @@ pub async fn delete_identity_by_id(
         .await
         .map_err(actix_web::error::ErrorInternalServerError)?;
 
-    let identity_model = match identity::Entity::find_by_id(identity_id)
+    let identity_model = match identity::Entity::find_by_id(identity_id.clone())
         .one(&txn)
         .await
         .map_err(actix_web::error::ErrorInternalServerError)?
@@ -87,13 +96,13 @@ pub async fn delete_identity_by_id(
     }
 
     let identities_count = identity::Entity::find()
-        .filter(identity::Column::UserId.eq(user_id))
+        .filter(identity::Column::UserId.eq(&user_id))
         .count(&txn)
         .await
         .map_err(actix_web::error::ErrorInternalServerError)? as i64;
 
     let passkey_count = passkey::Entity::find()
-        .filter(passkey::Column::UserId.eq(user_id))
+        .filter(passkey::Column::UserId.eq(&user_id))
         .count(&txn)
         .await
         .map_err(actix_web::error::ErrorInternalServerError)? as i64;

@@ -9,6 +9,7 @@ use clap::Parser;
 use entity::{identity, user};
 use migration::MigratorTrait;
 use sea_orm::{ActiveModelTrait, ColumnTrait, Database, EntityTrait, QueryFilter, Set};
+use uuid::Uuid;
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
@@ -88,7 +89,9 @@ async fn create_user(username: &str, password: &str) -> anyhow::Result<()> {
 
     // Create user
     let now = Utc::now().timestamp();
+    let user_id = Uuid::now_v7().to_string();
     let new_user = user::ActiveModel {
+        id: Set(user_id.clone()),
         username: Set(requested_username.clone()),
         username_lower: Set(requested_username_lower.clone()),
         created_at: Set(now),
@@ -96,10 +99,12 @@ async fn create_user(username: &str, password: &str) -> anyhow::Result<()> {
         ..Default::default()
     };
 
-    let result = user::Entity::insert(new_user).exec(&db).await?;
+    user::Entity::insert(new_user).exec_without_returning(&db).await?;
 
+    let identity_id = Uuid::now_v7().to_string();
     let new_identity = identity::ActiveModel {
-        user_id: Set(result.last_insert_id),
+        id: Set(identity_id),
+        user_id: Set(user_id.clone()),
         provider: Set("password".to_string()),
         provider_user_id: Set(requested_username_lower.clone()),
         password_hash: Set(Some(password_hash)),
@@ -110,7 +115,7 @@ async fn create_user(username: &str, password: &str) -> anyhow::Result<()> {
     new_identity.insert(&db).await?;
 
     println!("✅ User created successfully!");
-    println!("   ID: {}", result.last_insert_id);
+    println!("   ID: {}", user_id);
     println!("   Username: {}", requested_username);
 
     Ok(())
@@ -130,7 +135,7 @@ async fn list_users() -> anyhow::Result<()> {
         println!("No users found.");
     } else {
         println!("Users:");
-        println!("{:<5} {:<20} {:<30}", "ID", "Username", "Created At");
+        println!("{:<36} {:<20} {:<30}", "ID", "Username", "Created At");
         println!("{}", "-".repeat(60));
         for user in users {
             let created_at = Utc
@@ -139,7 +144,7 @@ async fn list_users() -> anyhow::Result<()> {
                 .map(|dt| dt.format("%Y-%m-%d %H:%M:%S").to_string())
                 .unwrap_or_else(|| user.created_at.to_string());
             println!(
-                "{:<5} {:<20} {:<30}",
+                "{:<36} {:<20} {:<30}",
                 user.id,
                 user.username,
                 created_at

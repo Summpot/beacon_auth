@@ -39,7 +39,7 @@ pub async fn get_user_info(
     };
 
     // Query user from database
-    let user_result = user::Entity::find_by_id(user_id)
+    let user_result = user::Entity::find_by_id(user_id.clone())
         .one(&app_state.db)
         .await;
 
@@ -104,7 +104,7 @@ pub async fn change_username(
     let requested_lower = username::normalize_username(&requested_username);
 
     // Load current user
-    let user_model = match user::Entity::find_by_id(user_id).one(&app_state.db).await {
+    let user_model = match user::Entity::find_by_id(user_id.clone()).one(&app_state.db).await {
         Ok(Some(u)) => u,
         Ok(None) => {
             return HttpResponse::NotFound().json(ErrorResponse {
@@ -175,7 +175,7 @@ pub async fn change_username(
 
     // Keep the password identity identifier aligned with the normalized username.
     let password_identity = match identity::Entity::find()
-        .filter(identity::Column::UserId.eq(user_id))
+        .filter(identity::Column::UserId.eq(user_id.clone()))
         .filter(identity::Column::Provider.eq("password"))
         .one(&txn)
         .await
@@ -248,7 +248,7 @@ pub async fn change_password(
     };
 
     // Query user from database
-    let user_result = user::Entity::find_by_id(user_id)
+    let user_result = user::Entity::find_by_id(user_id.clone())
         .one(&app_state.db)
         .await;
 
@@ -271,7 +271,7 @@ pub async fn change_password(
 
     // Load existing password identity if present.
     let existing_password_identity = match identity::Entity::find()
-        .filter(identity::Column::UserId.eq(user_id))
+        .filter(identity::Column::UserId.eq(user_id.clone()))
         .filter(identity::Column::Provider.eq("password"))
         .one(&app_state.db)
         .await
@@ -348,8 +348,10 @@ pub async fn change_password(
             }
         }
     } else {
+        let identity_id = uuid::Uuid::now_v7().to_string();
         let new_identity = identity::ActiveModel {
-            user_id: Set(user_id),
+            id: Set(identity_id),
+            user_id: Set(user_id.clone()),
             provider: Set("password".to_string()),
             provider_user_id: Set(user.username_lower.clone()),
             password_hash: Set(Some(new_password_hash)),
@@ -400,7 +402,7 @@ pub async fn logout(
     // Revoke all refresh tokens for this user
     use entity::refresh_token;
     match refresh_token::Entity::update_many()
-        .filter(refresh_token::Column::UserId.eq(user_id))
+        .filter(refresh_token::Column::UserId.eq(user_id.clone()))
         .col_expr(refresh_token::Column::Revoked, sea_orm::sea_query::Expr::value(1_i64))
         .exec(&app_state.db)
         .await

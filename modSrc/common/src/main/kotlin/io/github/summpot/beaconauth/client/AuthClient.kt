@@ -2,7 +2,6 @@ package io.github.summpot.beaconauth.client
 
 import com.sun.net.httpserver.HttpExchange
 import com.sun.net.httpserver.HttpServer
-import io.github.summpot.beaconauth.config.ServerConfig
 import io.github.summpot.beaconauth.util.PKCEUtils
 import io.github.summpot.beaconauth.util.TranslationHelper
 import net.minecraft.Util

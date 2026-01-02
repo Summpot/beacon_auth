@@ -75,9 +75,9 @@ tasks.processResources {
 }
 
 tasks.shadowJar {
+    from(sourceSets.main.get().output)
     configurations = listOf(shadowBundle)
     archiveClassifier.set("dev-shadow")
-    minimize()
 }
 
 tasks.remapJar {

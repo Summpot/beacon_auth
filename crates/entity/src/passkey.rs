@@ -4,11 +4,11 @@ use serde::{Deserialize, Serialize};
 #[derive(Clone, Debug, PartialEq, DeriveEntityModel, Eq, Serialize, Deserialize)]
 #[sea_orm(table_name = "passkeys")]
 pub struct Model {
-    #[sea_orm(primary_key, auto_increment = true)]
-    pub id: i64,
+    #[sea_orm(primary_key)]
+    pub id: String,
 
     /// Foreign key to users table
-    pub user_id: i64,
+    pub user_id: String,
 
     /// Base64-encoded credential ID (unique identifier for this passkey)
     #[sea_orm(unique)]

@@ -4,11 +4,11 @@ use serde::{Deserialize, Serialize};
 #[derive(Clone, Debug, PartialEq, DeriveEntityModel, Eq, Serialize, Deserialize)]
 #[sea_orm(table_name = "refresh_tokens")]
 pub struct Model {
-    #[sea_orm(primary_key, auto_increment = true)]
-    pub id: i64,
+    #[sea_orm(primary_key)]
+    pub id: String,
 
     /// Foreign key to users table
-    pub user_id: i64,
+    pub user_id: String,
 
     /// SHA-256 hash of the refresh token
     #[sea_orm(unique)]

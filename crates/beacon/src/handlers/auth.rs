@@ -33,7 +33,7 @@ fn generate_jwt<T: serde::Serialize>(
 /// This ensures tokens are always created together with proper family_id tracking
 async fn create_token_pair(
     app_state: &AppState,
-    user_id: i64,
+    user_id: &str,
     family_id: Option<String>,
 ) -> Result<TokenPair, anyhow::Error> {
     let now = Utc::now();
@@ -65,9 +65,12 @@ async fn create_token_pair(
 
     let refresh_exp = now_ts + app_state.refresh_token_expiration;
 
+    let refresh_token_id = Uuid::now_v7().to_string();
+
     // Store refresh token in database
     let refresh_token_model = refresh_token::ActiveModel {
-        user_id: Set(user_id),
+        id: Set(refresh_token_id),
+        user_id: Set(user_id.to_string()),
         token_hash: Set(token_hash),
         family_id: Set(token_family_id.clone()),
         expires_at: Set(refresh_exp),
@@ -148,7 +151,7 @@ pub async fn refresh_token(
     }
 
     // Save user_id and family_id for token rotation
-    let user_id = token_record.user_id;
+    let user_id = token_record.user_id.clone();
     let family_id = token_record.family_id.clone();
 
     // Revoke old refresh token (for rotation security)
@@ -159,7 +162,7 @@ pub async fn refresh_token(
     }
 
     // Generate new token pair with same family_id (token rotation)
-    let token_pair = match create_token_pair(&app_state, user_id, Some(family_id)).await {
+    let token_pair = match create_token_pair(&app_state, &user_id, Some(family_id)).await {
         Ok(pair) => pair,
         Err(e) => {
             log::error!("Failed to generate token pair: {}", e);
@@ -293,7 +296,7 @@ pub fn set_auth_cookies(
 /// Returns a tuple of (access_token, refresh_token) for backward compatibility
 pub async fn create_session_for_user(
     app_state: &AppState,
-    user_id: i64,
+    user_id: &str,
 ) -> Result<(String, String), anyhow::Error> {
     let token_pair = create_token_pair(app_state, user_id, None).await?;
     Ok((token_pair.access_token, token_pair.refresh_token))
@@ -306,7 +309,7 @@ pub fn get_access_token_from_cookie(req: &HttpRequest) -> Option<String> {
 }
 
 /// Helper: Verify access token with proper ES256 signature verification
-pub fn verify_access_token(app_state: &AppState, token: &str) -> Result<i64, String> {
+pub fn verify_access_token(app_state: &AppState, token: &str) -> Result<String, String> {
     // Create validation for ES256 tokens
     let mut validation = jsonwebtoken::Validation::new(jsonwebtoken::Algorithm::ES256);
     validation.set_issuer(&[&app_state.oauth_config.redirect_base]);
@@ -329,12 +332,13 @@ pub fn verify_access_token(app_state: &AppState, token: &str) -> Result<i64, Str
         return Err("Invalid token type".to_string());
     }
 
-    // Parse user ID from subject claim
-    token_data
-        .claims
-        .sub
-        .parse::<i64>()
-        .map_err(|_| "Invalid user ID in token".to_string())
+    // Parse and normalize user ID from subject claim.
+    // We store user ids as UUIDv7 strings.
+    let user_id = Uuid::parse_str(&token_data.claims.sub)
+        .map_err(|_| "Invalid user ID in token".to_string())?
+        .to_string();
+
+    Ok(user_id)
 }
 
 

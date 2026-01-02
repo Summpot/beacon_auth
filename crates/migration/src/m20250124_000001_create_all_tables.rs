@@ -14,9 +14,8 @@ impl MigrationTrait for Migration {
                     .if_not_exists()
                     .col(
                         ColumnDef::new(Users::Id)
-                            .big_integer()
+                            .string()
                             .not_null()
-                            .auto_increment()
                             .primary_key(),
                     )
                     .col(
@@ -53,12 +52,11 @@ impl MigrationTrait for Migration {
                     .if_not_exists()
                     .col(
                         ColumnDef::new(Identities::Id)
-                            .big_integer()
+                            .string()
                             .not_null()
-                            .auto_increment()
                             .primary_key(),
                     )
-                    .col(ColumnDef::new(Identities::UserId).big_integer().not_null())
+                    .col(ColumnDef::new(Identities::UserId).string().not_null())
                     .col(ColumnDef::new(Identities::Provider).string().not_null())
                     .col(
                         ColumnDef::new(Identities::ProviderUserId)
@@ -116,12 +114,11 @@ impl MigrationTrait for Migration {
                     .if_not_exists()
                     .col(
                         ColumnDef::new(Passkeys::Id)
-                            .big_integer()
+                            .string()
                             .not_null()
-                            .auto_increment()
                             .primary_key(),
                     )
-                    .col(ColumnDef::new(Passkeys::UserId).big_integer().not_null())
+                    .col(ColumnDef::new(Passkeys::UserId).string().not_null())
                     .col(
                         ColumnDef::new(Passkeys::CredentialId)
                             .string()
@@ -166,12 +163,11 @@ impl MigrationTrait for Migration {
                     .if_not_exists()
                     .col(
                         ColumnDef::new(RefreshTokens::Id)
-                            .big_integer()
+                            .string()
                             .not_null()
-                            .auto_increment()
                             .primary_key(),
                     )
-                    .col(ColumnDef::new(RefreshTokens::UserId).big_integer().not_null())
+                    .col(ColumnDef::new(RefreshTokens::UserId).string().not_null())
                     .col(
                         ColumnDef::new(RefreshTokens::TokenHash)
                             .string()
