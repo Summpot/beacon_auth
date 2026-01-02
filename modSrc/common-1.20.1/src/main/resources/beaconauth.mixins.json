@@ -4,10 +4,15 @@
   "compatibilityLevel": "JAVA_17",
   "minVersion": "0.8",
   "client": [
-    "ClientHandshakePacketListenerImplMixin"
+    "ClientHandshakePacketListenerImplMixin",
+    "ClientCommonPacketListenerImplMixin",
+    "ServerboundChatPacketMixin",
+    "ServerboundChatCommandSignedPacketMixin"
   ],
   "mixins": [
-    "ServerLoginPacketListenerImplMixin"
+    "DedicatedServerMixin",
+    "ServerLoginPacketListenerImplMixin",
+    "ServerboundChatSessionUpdatePacketMixin"
   ],
   "injectors": {
     "defaultRequire": 1

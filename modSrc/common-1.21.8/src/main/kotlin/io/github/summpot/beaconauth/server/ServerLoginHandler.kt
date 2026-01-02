@@ -35,6 +35,18 @@ class ServerLoginHandler @JvmOverloads constructor(
         const val NEGOTIATION_TIMEOUT_TICKS = 20 * 90 // 90 seconds
     }
 
+    private fun sanitizeMinecraftUsername(raw: String?): String? {
+        val s = raw?.trim() ?: return null
+        if (s.length !in 3..16) {
+            return null
+        }
+        // Vanilla usernames are limited to [A-Za-z0-9_] and 3..16 chars.
+        if (!s.all { it.isLetterOrDigit() || it == '_' }) {
+            return null
+        }
+        return s
+    }
+
     private val negotiation = ServerLoginNegotiation()
 
     /**
@@ -161,12 +173,19 @@ class ServerLoginHandler @JvmOverloads constructor(
                 val verifier = data.readUtf(512)
                 val result = AuthServer.verifyForProfile(profile.name, jwt, verifier)
                 if (result.success) {
+                    val effectiveName = sanitizeMinecraftUsername(result.username) ?: profile.name
                     val stableUuid = result.stableUuid
                     if (stableUuid != null) {
                         // Replace the login profile UUID with a stable per-account UUID.
                         // This prevents account takeover on offline-mode servers via username changes.
-                        gameProfile = GameProfile(stableUuid, profile.name)
-                        logger.info("Using stable UUID for ${profile.name}: $stableUuid")
+                        gameProfile = GameProfile(stableUuid, effectiveName)
+                        logger.info(
+                            "Using BeaconAuth identity for ${profile.name}: name=$effectiveName stableUuid=$stableUuid"
+                        )
+                    } else if (effectiveName != profile.name && profile.id != null) {
+                        // Best-effort: still apply the BeaconAuth username even if stableUuid was not returned.
+                        gameProfile = GameProfile(profile.id, effectiveName)
+                        logger.info("Using BeaconAuth username for ${profile.name}: $effectiveName")
                     }
                     logger.info("✓ Verification successful for ${profile.name}")
                     finish()

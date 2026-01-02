@@ -783,11 +783,19 @@ beacon migrate --database-url sqlite://./data/beacon_auth.db
 
 Minecraft 1.19+ uses signed chat. BeaconAuth accounts are not Mojang accounts, so they do not have the normal chat signing keys.
 
-On supported 1.21.x builds, BeaconAuth will send **unsigned** chat packets for BeaconAuth-authenticated sessions to improve compatibility.
+On supported builds, BeaconAuth will send **unsigned** chat packets for BeaconAuth-authenticated sessions to improve compatibility.
 
-If your server enforces signed chat / secure profiles, it may still reject chat from unsigned clients. In that case:
-- adjust your server configuration to allow unsigned chat, or
-- use a server-side compatibility mod/plugin that relaxes secure chat requirements.
+Additionally, when installed on a dedicated server, BeaconAuth disables vanilla "secure profile" enforcement (the `enforce-secure-profile` check),
+because BeaconAuth-authenticated players do not have Mojang-signed profile public keys.
+
+If you still cannot chat, double-check that the BeaconAuth mod is present on both client and server for that Minecraft version.
+
+#### Username shown in-game is not the BeaconAuth username
+
+BeaconAuth can provide a separate Minecraft username via the JWT claim `username`.
+
+If present and valid (3..16 chars, `[A-Za-z0-9_]`), the server will use it as the in-game `GameProfile` name (tab list / chat name).
+If it is missing or invalid, BeaconAuth falls back to the launcher-provided username.
 
 #### OAuth redirect fails
 

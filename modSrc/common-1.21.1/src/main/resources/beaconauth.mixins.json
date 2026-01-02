@@ -10,7 +10,9 @@
     "ServerboundChatCommandSignedPacketMixin"
   ],
   "mixins": [
-    "ServerLoginPacketListenerImplMixin"
+    "DedicatedServerMixin",
+    "ServerLoginPacketListenerImplMixin",
+    "ServerboundChatSessionUpdatePacketMixin"
   ],
   "injectors": {
     "defaultRequire": 1
