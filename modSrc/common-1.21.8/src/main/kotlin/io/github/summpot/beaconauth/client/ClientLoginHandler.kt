@@ -24,6 +24,10 @@ object ClientLoginHandler {
 
     @JvmStatic
     fun handleCookieRequest(connection: Connection, key: ResourceLocation): Boolean {
+        // Each login handshake is tied to a specific network Connection.
+        // Reset per-connection flags whenever we receive cookie requests.
+        BeaconAuthClientSession.noteHandshake(connection)
+
         return when (key) {
             LoginQueryType.PROBE.id() -> {
                 respondProbe(connection)
@@ -81,6 +85,7 @@ object ClientLoginHandler {
 
         AuthClient.registerLoginPhaseCallback(object : AuthClient.LoginPhaseCallback {
             override fun onAuthSuccess(jwt: String, verifier: String) {
+                BeaconAuthClientSession.markAuthenticated(connection)
                 sendVerifyResponse(connection, LoginVerificationStatus.SUCCESS, jwt, verifier, null)
                 logger.info("OAuth flow succeeded; sent JWT & verifier")
             }

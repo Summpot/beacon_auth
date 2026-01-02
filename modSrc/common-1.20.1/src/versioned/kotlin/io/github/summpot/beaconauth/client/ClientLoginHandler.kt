@@ -24,6 +24,7 @@ object ClientLoginHandler {
 
     @JvmStatic
     fun respondProbe(connection: Connection, transactionId: Int) {
+        BeaconAuthClientSession.noteHandshake(connection)
         val buf = FriendlyByteBuf(Unpooled.buffer())
         buf.writeBoolean(true)
         buf.writeUtf("beaconauth", 64)
@@ -33,6 +34,7 @@ object ClientLoginHandler {
 
     @JvmStatic
     fun respondInit(connection: Connection, transactionId: Int) {
+        BeaconAuthClientSession.noteHandshake(connection)
         val payload = AuthClient.prepareLoginPhaseCredentials()
         val buf = FriendlyByteBuf(Unpooled.buffer())
         buf.writeUtf(payload.codeChallenge, 512)
@@ -43,6 +45,7 @@ object ClientLoginHandler {
 
     @JvmStatic
     fun handleLoginUrl(connection: Connection, transactionId: Int, data: FriendlyByteBuf?) {
+        BeaconAuthClientSession.noteHandshake(connection)
         val loginUrl = data?.readUtf(2048) ?: ""
 
         // Acknowledge receipt immediately
@@ -60,6 +63,7 @@ object ClientLoginHandler {
 
     @JvmStatic
     fun handleVerifyRequest(connection: Connection, transactionId: Int) {
+        BeaconAuthClientSession.noteHandshake(connection)
         if (cancelledBeforeVerify) {
             sendVerifyResponse(connection, transactionId, LoginVerificationStatus.CANCELLED, null, null, cancelReason)
             cancelledBeforeVerify = false
@@ -73,6 +77,7 @@ object ClientLoginHandler {
 
         AuthClient.registerLoginPhaseCallback(object : AuthClient.LoginPhaseCallback {
             override fun onAuthSuccess(jwt: String, verifier: String) {
+                BeaconAuthClientSession.markAuthenticated(connection)
                 sendVerifyResponse(connection, transactionId, LoginVerificationStatus.SUCCESS, jwt, verifier, null)
                 logger.info("OAuth flow succeeded; sent JWT & verifier")
             }

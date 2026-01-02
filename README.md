@@ -357,8 +357,8 @@ certbot --nginx -d auth.example.com
    - The mod will automatically handle the client-side authentication flow
 
 3. **Requirements**:
-   - Fabric Loader 0.18.0+ or Forge 47.4.10+
-   - Minecraft 1.20.1
+  - Fabric / Forge / NeoForge (pick the correct jar for your loader)
+  - Supported Minecraft versions: 1.20.1, 1.21.1, 1.21.8
 
 ### Mod Configuration
 
@@ -367,35 +367,64 @@ After the first server startup, a configuration file will be generated at `confi
 ```toml
 # BeaconAuth Server Configuration
 
-# Authentication server base URL
-# This should point to your deployed auth server
-auth_server_url = "https://beaconauth.pages.dev"
+[authentication]
+# Base URL of your authentication server
+# Example: https://beaconauth.pages.dev (development) or https://auth.example.com (production)
+# WARNING: Always use HTTPS in production!
+base_url = "https://beaconauth.pages.dev"
 
-# JWKS URL for JWT validation
-# The mod will fetch the public key from this endpoint
-jwks_url = "https://beaconauth.pages.dev/.well-known/jwks.json"
+# JWKS (JSON Web Key Set) URL for JWT signature verification (fallback)
+# Usually: <base_url>/.well-known/jwks.json
+# Empty means: derive from base_url
+jwks_url = ""
 
-# JWT validation settings
 [jwt]
-# Expected issuer claim
-issuer = "https://beaconauth.pages.dev"
-# Expected audience claim
+# Expected JWT audience (aud claim)
 audience = "minecraft-client"
-# Allow clock skew in seconds (for exp validation)
-clock_skew = 60
+
+[jku]
+# JWT JWKS Discovery (JKU)
+# If allowed_host_patterns is non-empty and the JWT has a 'jku' header, BeaconAuth will fetch keys from that JWKS URL.
+# Security: You MUST restrict allowed hosts to avoid SSRF.
+# When enabled, JKU ALWAYS requires https://.
+# Empty means: JKU disabled (BeaconAuth will ignore token 'jku' and only use authentication.jwks_url).
+allowed_host_patterns = "beaconauth.pages.dev, *.beaconauth.pages.dev"
+
+[behavior]
+# If true: Players with valid Mojang accounts skip BeaconAuth when server is in online-mode
+bypass_if_online_mode_verified = true
+# If true: Modded clients MUST authenticate when server is offline-mode
+force_auth_if_offline_mode = true
+# Only applies when force_auth_if_offline_mode is true
+allow_vanilla_offline_clients = false
 ```
 
-**Important**: Update `auth_server_url` and `jwks_url` to match your deployed auth server's address.
+#### Notes
+
+- `authentication.base_url` is used for:
+  - building the web login URL
+  - the expected JWT issuer (`iss`) (derived from `base_url`)
+  Make sure it matches your auth server's configured `BASE_URL`.
+- `authentication.jwks_url` is the fallback JWKS endpoint.
+  If empty, BeaconAuth derives it as `${base_url}/.well-known/jwks.json`.
+- `jku.allowed_host_patterns` controls whether BeaconAuth will trust a JWT header `jku`:
+  - non-empty: JKU enabled and **must be https://**
+  - empty: JKU disabled, token `jku` is ignored
+  - patterns are comma/space-separated
+  - supported: `example.com`, `*.example.com` (both match the base domain and subdomains)
+  - not supported: bare `*` or mid-string wildcards like `auth*.example.com`
 
 For production deployments:
 ```toml
-auth_server_url = "https://auth.example.com"
-jwks_url = "https://auth.example.com/.well-known/jwks.json"
+[authentication]
+base_url = "https://auth.example.com"
+jwks_url = ""
 
 [jwt]
-issuer = "https://auth.example.com"
 audience = "minecraft-client"
-clock_skew = 60
+
+[jku]
+allowed_host_patterns = "auth.example.com, *.auth.example.com"
 ```
 
 ## Development Guide
@@ -740,10 +769,25 @@ beacon migrate --database-url sqlite://./data/beacon_auth.db
 **Problem**: "Failed to validate JWT"
 
 **Solutions**:
-1. Check that `jwks_url` in mod config matches your server
-2. Verify server is accessible from client
-3. Check server logs for JWT validation errors
-4. Ensure system clocks are synchronized (use NTP)
+1. Check `authentication.base_url` in `config/beaconauth-server.toml` matches your deployed auth server (`BASE_URL`)
+2. Check `authentication.jwks_url`:
+  - if empty, BeaconAuth uses `${authentication.base_url}/.well-known/jwks.json`
+  - if set, ensure it is reachable from the game server
+3. If you enabled JKU (non-empty `jku.allowed_host_patterns`):
+  - the token `jku` must be `https://...`
+  - the `jku` host must match your allowlist patterns (to prevent SSRF)
+4. Verify the auth server is accessible from the Minecraft server/client network
+5. Check Minecraft server logs for `[BeaconAuth]` and JWT verification errors
+
+#### Multiplayer chat cannot be sent (secure chat)
+
+Minecraft 1.19+ uses signed chat. BeaconAuth accounts are not Mojang accounts, so they do not have the normal chat signing keys.
+
+On supported 1.21.x builds, BeaconAuth will send **unsigned** chat packets for BeaconAuth-authenticated sessions to improve compatibility.
+
+If your server enforces signed chat / secure profiles, it may still reject chat from unsigned clients. In that case:
+- adjust your server configuration to allow unsigned chat, or
+- use a server-side compatibility mod/plugin that relaxes secure chat requirements.
 
 #### OAuth redirect fails
 
