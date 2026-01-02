@@ -20,6 +20,7 @@ import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.Redirect;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
+import java.nio.charset.StandardCharsets;
 import java.util.UUID;
 
 /**
@@ -92,9 +93,11 @@ public abstract class ServerLoginPacketListenerImplMixin {
         BEACON_LOGGER.info("Intercepting handleHello for {} - starting BeaconAuth flow", packet.name());
         
         beaconAuth$shouldUseBeaconAuth = true;
-        
-        // Set up the game profile with no UUID (will be generated later if needed)
-        this.gameProfile = new GameProfile((UUID)null, packet.name());
+
+        // IMPORTANT: Some vanilla/loader codepaths require a non-null profile ID.
+        // Use the standard offline UUID as a placeholder until BeaconAuth verification
+        // installs the stable per-account UUID.
+        this.gameProfile = new GameProfile(beaconAuth$offlineUuid(packet.name()), packet.name());
         
         // Transition directly to NEGOTIATING state, bypassing Mojang authentication
         beaconAuth$setState("NEGOTIATING");
@@ -105,6 +108,12 @@ public abstract class ServerLoginPacketListenerImplMixin {
         
         // Cancel the original handleHello execution
         ci.cancel();
+    }
+
+    @Unique
+    private static UUID beaconAuth$offlineUuid(String username) {
+        // Matches vanilla offline-mode UUID computation.
+        return UUID.nameUUIDFromBytes(("OfflinePlayer:" + username).getBytes(StandardCharsets.UTF_8));
     }
 
     /**
@@ -236,7 +245,8 @@ public abstract class ServerLoginPacketListenerImplMixin {
                 beaconAuth$handler = null;
                 beaconAuth$setState("READY_TO_ACCEPT");
                 return kotlin.Unit.INSTANCE;
-            }
+            },
+            beaconAuth$shouldUseBeaconAuth
         );
         beaconAuth$setState("NEGOTIATING");
         beaconAuth$handler.start();

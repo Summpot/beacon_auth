@@ -18,12 +18,17 @@ import org.slf4j.LoggerFactory
  * Kotlin helper for server-side login-phase custom query negotiation.
  * Called by ServerLoginPacketListenerImplMixin (Java).
  */
-class ServerLoginHandler(
+class ServerLoginHandler @JvmOverloads constructor(
     private val server: MinecraftServer,
     private val connection: Connection,
     private var gameProfile: GameProfile?,
     private val disconnectCallback: (Component) -> Unit,
-    private val finishCallback: () -> Unit
+    private val finishCallback: () -> Unit,
+    /**
+     * True if BeaconAuth intercepted HELLO on an online-mode server and skipped Mojang auth.
+     * In that case, the profile UUID may be a placeholder and MUST NOT be treated as Mojang-verified.
+     */
+    private val helloWasIntercepted: Boolean = false,
 ) {
     companion object {
         private val logger = LoggerFactory.getLogger("BeaconAuth/ServerLogin")
@@ -95,7 +100,7 @@ class ServerLoginHandler(
         // the gameProfile.id will be null because Mojang authentication was skipped.
         // A non-null UUID indicates the player passed through Mojang verification
         // (either because BeaconAuth didn't intercept, or on offline-mode servers).
-        val hasMojangVerifiedUUID = gameProfile?.id != null
+        val hasMojangVerifiedUUID = !helloWasIntercepted && gameProfile?.id != null
         
         val bypassOnlineMode = onlineMode && BeaconAuthConfig.shouldBypassIfOnlineModeVerified() && hasMojangVerifiedUUID
         val bypassOfflineMode = !onlineMode && !BeaconAuthConfig.shouldForceAuthIfOfflineMode()

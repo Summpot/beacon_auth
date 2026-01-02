@@ -18,6 +18,7 @@ import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
+import java.nio.charset.StandardCharsets;
 import java.util.UUID;
 
 /**
@@ -94,9 +95,11 @@ public abstract class ServerLoginPacketListenerImplMixin {
         // Mirror vanilla bookkeeping so log messages include the username.
         beaconAuth$setStringFieldIfPresent("requestedUsername", packet.name());
 
-        // Create a profile WITHOUT UUID to mark that Mojang auth was skipped.
-        // A stable UUID will be installed after BeaconAuth verification.
-        GameProfile loginProfile = new GameProfile((UUID) null, packet.name());
+        // IMPORTANT: Some vanilla/loader codepaths require a non-null profile ID.
+        // Use the standard offline UUID as a placeholder until BeaconAuth verification
+        // installs the stable per-account UUID.
+        // We still record that Mojang auth was skipped via beaconAuth$interceptedHello.
+        GameProfile loginProfile = new GameProfile(beaconAuth$offlineUuid(packet.name()), packet.name());
         beaconAuth$loginProfile = loginProfile;
 
         // Enter NEGOTIATING and start BeaconAuth cookie negotiation.
@@ -105,6 +108,12 @@ public abstract class ServerLoginPacketListenerImplMixin {
 
         // Cancel the original handleHello execution.
         ci.cancel();
+    }
+
+    @Unique
+    private static UUID beaconAuth$offlineUuid(String username) {
+        // Matches vanilla offline-mode UUID computation.
+        return UUID.nameUUIDFromBytes(("OfflinePlayer:" + username).getBytes(StandardCharsets.UTF_8));
     }
 
     /**
@@ -196,7 +205,8 @@ public abstract class ServerLoginPacketListenerImplMixin {
                 // Continue vanilla flow: tick() will verify and finish login.
                 beaconAuth$setState("VERIFYING");
                 return kotlin.Unit.INSTANCE;
-            }
+            },
+            beaconAuth$interceptedHello
         );
         beaconAuth$handler.start();
     }
