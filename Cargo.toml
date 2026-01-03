@@ -87,6 +87,3 @@ which = "8.0"
 sea-query = { git = "https://github.com/Summpot/sea-query.git", branch = "master" }
 sea-query-derive = { git = "https://github.com/Summpot/sea-query.git", branch = "master" }
 sea-query-sqlx = { git = "https://github.com/Summpot/sea-query.git", branch = "master" }
-# Keep sea-schema compatible with the forked sea-query/sea-query-sqlx stack.
-sea-schema = { git = "https://github.com/Summpot/sea-schema.git", branch = "master" }
-sea-schema-derive = { git = "https://github.com/Summpot/sea-schema.git", branch = "master" }
