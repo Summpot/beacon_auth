@@ -6,13 +6,25 @@ import { apiClient, queryKeys, type ApiError } from '../utils/api';
 import * as m from '@/paraglide/messages';
 import { BeaconIcon } from '@/components/beacon-icon';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardTitle, CardDescription } from '@/components/ui/card';
+import {
+  Card,
+  CardContent,
+  CardTitle,
+  CardDescription,
+} from '@/components/ui/card';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
 import { ThemeToggle } from '@/components/theme-toggle';
 import { LanguageToggle } from '@/components/language-toggle';
-import { Settings, LogOut, Shield, Gamepad2, Lock, CheckCircle, Loader2 } from 'lucide-react';
+import {
+  Settings,
+  LogOut,
+  Shield,
+  Gamepad2,
+  CheckCircle,
+  Loader2,
+} from 'lucide-react';
 
 const searchParamsSchema = z.object({
   status: z.enum(['success', 'error']).optional(),
@@ -30,11 +42,18 @@ async function fetchUserInfo(): Promise<UserInfo> {
 
 function ProfilePage() {
   const { status, message } = Route.useSearch();
-  const [statusMessage, setStatusMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+  const [statusMessage, setStatusMessage] = useState<{
+    type: 'success' | 'error';
+    text: string;
+  } | null>(null);
   const queryClient = useQueryClient();
   const navigate = useNavigate();
 
-  const { data: user, isLoading, error } = useQuery<UserInfo, ApiError>({
+  const {
+    data: user,
+    isLoading,
+    error,
+  } = useQuery<UserInfo, ApiError>({
     queryKey: queryKeys.userMe(),
     queryFn: fetchUserInfo,
     retry: (failureCount, err) => {
@@ -56,7 +75,10 @@ function ProfilePage() {
 
   useEffect(() => {
     if (status && message) {
-      setStatusMessage({ type: status, text: decodeURIComponent(message.replace(/\+/g, ' ')) });
+      setStatusMessage({
+        type: status,
+        text: decodeURIComponent(message.replace(/\+/g, ' ')),
+      });
       const timer = setTimeout(() => setStatusMessage(null), 5000);
       return () => clearTimeout(timer);
     }
@@ -79,12 +101,14 @@ function ProfilePage() {
 
   if (isLoading) {
     return (
-      <div className="flex items-center justify-center min-h-screen p-4">
-        <Card>
+      <div className="flex items-center justify-center min-h-screen p-4 bg-background">
+        <Card className="border-0 shadow-lg">
           <CardContent className="pt-6">
             <div className="flex flex-col items-center gap-4">
               <Loader2 className="h-8 w-8 animate-spin text-primary" />
-              <span className="text-muted-foreground">{m.profile_loading()}</span>
+              <span className="text-muted-foreground">
+                {m.profile_loading()}
+              </span>
             </div>
           </CardContent>
         </Card>
@@ -94,17 +118,23 @@ function ProfilePage() {
 
   if (error && error.status !== 401) {
     return (
-      <div className="flex items-center justify-center min-h-screen p-4">
+      <div className="flex items-center justify-center min-h-screen p-6 bg-background">
         <div className="w-full max-w-md">
-          <Card className="text-center">
-            <CardContent className="pt-6">
-              <div className="inline-block mb-6">
-                <BeaconIcon className="w-20 h-20 opacity-50" />
+          <Card className="text-center shadow-lg border-muted">
+            <CardContent className="pt-10 pb-10">
+              <div className="inline-block mb-6 p-4 rounded-full bg-red-50 text-red-500">
+                <BeaconIcon className="w-12 h-12" />
               </div>
-              <CardTitle className="text-2xl font-bold mb-4">{m.profile_error_title()}</CardTitle>
-              <CardDescription className="mb-6">{error.message}</CardDescription>
+              <CardTitle className="text-2xl font-bold mb-4">
+                {m.profile_error_title()}
+              </CardTitle>
+              <CardDescription className="mb-8">
+                {error.message}
+              </CardDescription>
               <div className="flex flex-col gap-3">
-                <Button asChild><Link to="/">{m.profile_back_home()}</Link></Button>
+                <Button asChild size="lg" className="rounded-full">
+                  <Link to="/">{m.profile_back_home()}</Link>
+                </Button>
               </div>
             </CardContent>
           </Card>
@@ -114,138 +144,162 @@ function ProfilePage() {
   }
 
   if (!user) {
-    return (
-      <div className="flex items-center justify-center min-h-screen p-4">
-        <div className="w-full max-w-md">
-          <Card className="text-center">
-            <CardContent className="pt-6">
-              <div className="inline-block mb-6">
-                <BeaconIcon className="w-20 h-20 opacity-50" />
-              </div>
-              <CardTitle className="text-2xl font-bold mb-4">{m.profile_signed_out()}</CardTitle>
-              <CardDescription className="mb-6">
-                {m.profile_redirecting()}
-              </CardDescription>
-              <div className="flex flex-col gap-3">
-                <div className="flex items-center gap-2">
-              <Button variant="ghost" asChild>
-                <Link to="/profile">{m.settings_nav_profile()}</Link>
-              </Button>
-              <ThemeToggle />
-              <LanguageToggle />
-            </div>
-          </div>
-            </CardContent>
-          </Card>
-        </div>
-      </div>
-    );
+    return null; // Will redirect
   }
 
   return (
-    <div className="min-h-screen p-4">
-      <nav className="fixed top-0 left-0 right-0 z-50 bg-background/80 backdrop-blur-md border-b border-border">
+    <div className="min-h-screen bg-background pb-20">
+      <nav className="sticky top-0 z-50 bg-background/95 backdrop-blur-sm border-b border-border">
         <div className="container mx-auto px-6 py-4">
           <div className="flex items-center justify-between">
             <Link to="/" className="flex items-center gap-3 group">
-              <BeaconIcon className="w-8 h-8" />
+              <BeaconIcon className="w-8 h-8 text-primary" />
               <span className="text-xl text-primary font-bold">BeaconAuth</span>
             </Link>
             <div className="flex items-center gap-2">
-              <Button variant="ghost" asChild>
-                <Link to="/settings"><Settings className="h-4 w-4 mr-2" />{m.profile_nav_settings()}</Link>
+              <Button variant="ghost" asChild className="hidden sm:inline-flex">
+                <Link to="/settings">
+                  <Settings className="h-4 w-4 mr-2" />
+                  {m.profile_nav_settings()}
+                </Link>
               </Button>
+              <Link to="/settings" className="sm:hidden">
+                <Button variant="ghost" size="icon">
+                  <Settings className="h-5 w-5" />
+                </Button>
+              </Link>
               <ThemeToggle />
               <LanguageToggle />
-              <Button variant="destructive" size="sm" onClick={handleLogout} disabled={logoutMutation.isPending}>
+              <Button
+                variant="destructive"
+                size="sm"
+                onClick={handleLogout}
+                disabled={logoutMutation.isPending}
+              >
                 <LogOut className="h-4 w-4 mr-2" />
-                {logoutMutation.isPending ? m.profile_logging_out() : m.profile_logout()}
+                <span className="hidden sm:inline">
+                  {logoutMutation.isPending
+                    ? m.profile_logging_out()
+                    : m.profile_logout()}
+                </span>
+                <span className="sm:hidden">
+                  {m.profile_logout().split(' ')[0]}
+                </span>
               </Button>
             </div>
           </div>
         </div>
       </nav>
 
-      <div className="max-w-4xl mx-auto pt-24 pb-8">
+      <div className="container max-w-4xl mx-auto px-4 md:px-6 pt-12">
         {statusMessage && (
-          <Alert variant={statusMessage.type === 'success' ? 'default' : 'destructive'} className="mb-6">
+          <Alert
+            variant={
+              statusMessage.type === 'success' ? 'default' : 'destructive'
+            }
+            className="mb-8 shadow-sm"
+          >
             <AlertDescription className="flex items-center gap-3">
-              <span className="text-xl">{statusMessage.type === 'success' ? '✓' : '✗'}</span>
-              <p>{statusMessage.text}</p>
+              <span className="text-xl">
+                {statusMessage.type === 'success' ? '✓' : '✗'}
+              </span>
+              <p className="font-medium">{statusMessage.text}</p>
             </AlertDescription>
           </Alert>
         )}
 
-        <Card className="mb-6">
-          <CardContent className="pt-6">
-            <div className="flex items-center gap-6">
-              <div className="relative">
-                <Avatar className="h-24 w-24 border-2 border-primary/30">
-                  <AvatarFallback className="bg-linear-to-br from-primary/20 to-secondary/20 text-4xl text-primary">
-                    {user.username.charAt(0).toUpperCase()}
-                  </AvatarFallback>
-                </Avatar>
-                <div className="absolute -bottom-1 -right-1 w-6 h-6 bg-green-500 rounded-full border-2 border-background flex items-center justify-center">
-                  <CheckCircle className="h-3 w-3 text-white" />
-                </div>
-              </div>
-              <div className="flex-1">
-                <h1 className="text-3xl font-bold mb-1">{user.username}</h1>
-                <p className="text-muted-foreground">{m.profile_user_role()}</p>
-              </div>
+        <div className="flex flex-col md:flex-row gap-8 mb-12 items-center md:items-start text-center md:text-left">
+          <div className="relative group">
+            <Avatar className="h-32 w-32 border-4 border-background shadow-xl">
+              <AvatarFallback className="bg-primary text-5xl text-primary-foreground font-bold">
+                {user.username.charAt(0).toUpperCase()}
+              </AvatarFallback>
+            </Avatar>
+            <div
+              className="absolute bottom-2 right-2 w-8 h-8 bg-green-500 rounded-full border-4 border-background flex items-center justify-center shadow-sm"
+              title={m.profile_status_authenticated()}
+            >
+              <CheckCircle className="h-4 w-4 text-white" />
             </div>
-          </CardContent>
-        </Card>
+          </div>
+          <div className="flex-1 pt-4">
+            <h1 className="text-4xl font-extrabold tracking-tight mb-2 text-foreground">
+              {user.username}
+            </h1>
+            <div className="flex flex-wrap items-center justify-center md:justify-start gap-4 text-muted-foreground">
+              <Badge
+                variant="secondary"
+                className="px-3 py-1 text-sm font-medium rounded-full bg-secondary text-secondary-foreground hover:bg-secondary/80"
+              >
+                {m.profile_user_role()}
+              </Badge>
+              <span className="flex items-center gap-2 text-sm font-mono bg-muted/50 px-3 py-1 rounded-full">
+                ID: {user.id}
+              </span>
+            </div>
+          </div>
+          <Button
+            asChild
+            size="lg"
+            className="rounded-full px-8 shadow-lg shadow-primary/10"
+          >
+            <Link to="/settings">{m.button_manage_settings()}</Link>
+          </Button>
+        </div>
 
-        <div className="grid md:grid-cols-3 gap-4 mb-6">
-          <Card className="bg-card/50 border-border">
-            <CardContent className="pt-6">
-              <div className="flex items-center gap-4">
-                <div className="w-12 h-12 rounded-xl bg-primary/20 flex items-center justify-center">
-                  <Lock className="h-6 w-6 text-primary" />
-                </div>
-                <div>
-                  <p className="text-muted-foreground text-sm">{m.profile_account_id()}</p>
-                  <p className="font-mono text-xs break-all">#{user.id}</p>
-                </div>
+        <div className="grid md:grid-cols-2 gap-6 mb-8">
+          <Card className="border-0 shadow-md hover:shadow-lg transition-shadow bg-card">
+            <CardContent className="p-8 flex items-start gap-5">
+              <div className="w-12 h-12 rounded-2xl bg-green-100 dark:bg-green-900/30 flex items-center justify-center shrink-0 text-green-600 dark:text-green-400">
+                <CheckCircle className="h-6 w-6" />
+              </div>
+              <div>
+                <h3 className="font-semibold text-lg mb-1">
+                  {m.profile_status()}
+                </h3>
+                <p className="text-muted-foreground mb-3 leading-relaxed">
+                  Your account is active and verified.
+                </p>
+                <Badge
+                  variant="outline"
+                  className="text-green-600 border-green-200 bg-green-50 dark:bg-green-900/10 dark:text-green-400 dark:border-green-800"
+                >
+                  {m.profile_status_authenticated()}
+                </Badge>
               </div>
             </CardContent>
           </Card>
 
-          <Card className="bg-card/50 border-border">
-            <CardContent className="pt-6">
-              <div className="flex items-center gap-4">
-                <div className="w-12 h-12 rounded-xl bg-green-500/20 flex items-center justify-center">
-                  <CheckCircle className="h-6 w-6 text-green-500" />
-                </div>
-                <div>
-                  <p className="text-muted-foreground text-sm">{m.profile_status()}</p>
-                  <Badge variant="outline" className="text-green-500 border-green-500/30">{m.profile_status_authenticated()}</Badge>
-                </div>
+          <Card className="border-0 shadow-md hover:shadow-lg transition-shadow bg-card">
+            <CardContent className="p-8 flex items-start gap-5">
+              <div className="w-12 h-12 rounded-2xl bg-purple-100 dark:bg-purple-900/30 flex items-center justify-center shrink-0 text-purple-600 dark:text-purple-400">
+                <Gamepad2 className="h-6 w-6" />
               </div>
-            </CardContent>
-          </Card>
-
-          <Card className="bg-card/50 border-border">
-            <CardContent className="pt-6">
-              <div className="flex items-center gap-4">
-                <div className="w-12 h-12 rounded-xl bg-secondary/20 flex items-center justify-center">
-                  <Gamepad2 className="h-6 w-6 text-secondary-foreground" />
-                </div>
-                <div>
-                  <p className="text-muted-foreground text-sm">{m.profile_minecraft()}</p>
-                  <Badge variant="outline">{m.profile_connected()}</Badge>
-                </div>
+              <div>
+                <h3 className="font-semibold text-lg mb-1">
+                  {m.profile_minecraft()}
+                </h3>
+                <p className="text-muted-foreground mb-3 leading-relaxed">
+                  Connected to the Minecraft network.
+                </p>
+                <Badge
+                  variant="outline"
+                  className="text-purple-600 border-purple-200 bg-purple-50 dark:bg-purple-900/10 dark:text-purple-400 dark:border-purple-800"
+                >
+                  {m.profile_connected()}
+                </Badge>
               </div>
             </CardContent>
           </Card>
         </div>
 
-        <Alert className="mt-6">
-          <Shield className="h-4 w-4" />
-          <AlertDescription>
-            <h3 className="font-semibold mb-1">{m.profile_secure_session_title()}</h3>
-            <p className="text-sm text-muted-foreground">
+        <Alert className="bg-primary/5 border-primary/10 text-primary-foreground mb-12">
+          <Shield className="h-5 w-5 text-primary" />
+          <AlertDescription className="ml-2">
+            <h3 className="font-semibold text-foreground mb-1">
+              {m.profile_secure_session_title()}
+            </h3>
+            <p className="text-sm text-foreground/70 leading-relaxed">
               {m.profile_secure_session_desc()}
             </p>
           </AlertDescription>

@@ -3,12 +3,12 @@
     "app_name": "BeaconAuth",
     "home_hero_title_1": "为每位玩家打造的",
     "home_hero_title_2": "安全验证",
-    "home_hero_subtitle": "连接离线与正版 worlds 的桥梁。为离线和正版玩家提供无缝且统一的认证体验。",
+    "home_hero_subtitle": "连接离线与在线世界。为离线和正版玩家提供无缝且统一的认证体验。",
     "button_view_profile": "查看个人资料",
     "button_manage_settings": "管理设置",
     "button_login_now": "立即登录",
     "button_create_account": "创建一个账户",
-    "feature_signed_sessions_title": "全员通行",
+    "feature_signed_sessions_title": "统一验证",
     "feature_signed_sessions_desc": "统一正版与离线玩家的登录流程",
     "feature_oauth_login_title": "社交登录",
     "feature_oauth_login_desc": "支持 GitHub / Google 快捷登录",
@@ -114,5 +114,7 @@
     "settings_passkey_name_label": "通行密钥名称",
     "settings_passkey_name_placeholder": "例如：“我的手机”、“YubiKey”",
     "settings_cancel": "取消",
-    "settings_continue": "继续"
+    "settings_continue": "继续",
+    "alert_confirm_unlink": "您确定要解除此登录方式的绑定吗？",
+    "alert_confirm_delete_passkey": "您确定要删除通行密钥 “{name}” 吗？"
 }

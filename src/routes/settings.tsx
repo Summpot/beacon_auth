@@ -12,7 +12,6 @@ import {
   Lightbulb,
   Link2,
   Loader2,
-  Mail,
   Plus,
   Trash2,
   X,
@@ -29,7 +28,6 @@ import {
   Card,
   CardContent,
   CardDescription,
-  CardHeader,
   CardTitle,
 } from '@/components/ui/card';
 import {
@@ -41,6 +39,7 @@ import {
 } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Badge } from '@/components/ui/badge';
 import { ApiError, apiClient } from '../utils/api';
 import * as m from '@/paraglide/messages';
 
@@ -256,7 +255,7 @@ function SettingsPage() {
   };
 
   const handleUnlinkIdentity = async (id: string) => {
-    if (!confirm('Are you sure you want to unlink this login method?')) return;
+    if (!confirm(m.alert_confirm_unlink())) return;
     try {
       await apiClient(`/api/v1/identities/${id}`, { method: 'DELETE' });
       setMessage({ type: 'success', text: 'Login method unlinked.' });
@@ -326,7 +325,7 @@ function SettingsPage() {
   };
 
   const handleDeletePasskey = async (id: string, name: string) => {
-    if (!confirm(`Are you sure you want to delete passkey "${name}"?`)) return;
+    if (!confirm(m.alert_confirm_delete_passkey({ name }))) return;
     try {
       await apiClient(`/api/v1/passkey/${id}`, { method: 'DELETE' });
       setMessage({ type: 'success', text: 'Passkey deleted successfully!' });
@@ -341,12 +340,14 @@ function SettingsPage() {
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center min-h-screen p-4">
-        <Card>
+      <div className="flex items-center justify-center min-h-screen p-4 bg-background">
+        <Card className="border-0 shadow-lg">
           <CardContent className="pt-6">
             <div className="flex flex-col items-center gap-4">
               <Loader2 className="h-8 w-8 animate-spin text-primary" />
-              <span className="text-muted-foreground">{m.profile_loading()}</span>
+              <span className="text-muted-foreground">
+                {m.profile_loading()}
+              </span>
             </div>
           </CardContent>
         </Card>
@@ -356,20 +357,20 @@ function SettingsPage() {
 
   if (!user) {
     return (
-      <div className="flex items-center justify-center min-h-screen p-4">
+      <div className="flex items-center justify-center min-h-screen p-4 bg-background">
         <div className="w-full max-w-md">
-          <Card className="text-center">
-            <CardContent className="pt-6">
-              <div className="inline-block mb-6">
-                <BeaconIcon className="w-20 h-20 opacity-50" />
+          <Card className="text-center shadow-lg border-muted">
+            <CardContent className="pt-8 pb-8">
+              <div className="inline-block mb-6 text-muted-foreground opacity-50">
+                <BeaconIcon className="w-16 h-16" />
               </div>
               <CardTitle className="text-2xl font-bold mb-4">
                 {m.settings_not_authenticated()}
               </CardTitle>
-              <CardDescription className="mb-6">
+              <CardDescription className="mb-8">
                 {m.settings_login_required()}
               </CardDescription>
-              <Button asChild>
+              <Button asChild size="lg" className="rounded-full">
                 <Link to="/login">{m.settings_sign_in()}</Link>
               </Button>
             </CardContent>
@@ -380,18 +381,28 @@ function SettingsPage() {
   }
 
   return (
-    <div className="min-h-screen p-4">
-      <nav className="fixed top-0 left-0 right-0 z-50 bg-background/80 backdrop-blur-md border-b border-border">
+    <div className="min-h-screen bg-background pb-20">
+      <nav className="sticky top-0 z-50 bg-background/95 backdrop-blur-sm border-b border-border">
         <div className="container mx-auto px-6 py-4">
           <div className="flex items-center justify-between">
             <Link to="/" className="flex items-center gap-3 group">
-              <BeaconIcon className="w-8 h-8" />
-              <span className="text-xl text-primary font-bold">{m.app_name()}</span>
+              <BeaconIcon className="w-8 h-8 text-primary" />
+              <span className="text-xl text-primary font-bold">
+                {m.app_name()}
+              </span>
             </Link>
             <div className="flex items-center gap-2">
-              <Button variant="ghost" asChild>
-                <Link to="/profile">{m.settings_nav_profile()}</Link>
+              <Button variant="ghost" asChild className="hidden sm:inline-flex">
+                <Link to="/profile">
+                  <ChevronLeft className="h-4 w-4 mr-1" />
+                  {m.settings_nav_profile()}
+                </Link>
               </Button>
+              <Link to="/profile" className="sm:hidden">
+                <Button variant="ghost" size="icon">
+                  <ChevronLeft className="h-5 w-5" />
+                </Button>
+              </Link>
               <ThemeToggle />
               <LanguageToggle />
             </div>
@@ -399,17 +410,12 @@ function SettingsPage() {
         </div>
       </nav>
 
-      <div className="max-w-4xl mx-auto pt-24 pb-8">
-        <div className="mb-8">
-          <Link
-            to="/profile"
-            className="inline-flex items-center gap-2 text-muted-foreground hover:text-primary transition-colors mb-4"
-          >
-            <ChevronLeft className="h-4 w-4" />
-            {m.settings_back_profile()}
-          </Link>
-          <h1 className="text-3xl font-bold">{m.settings_title()}</h1>
-          <p className="text-muted-foreground mt-2">
+      <div className="container max-w-3xl mx-auto px-4 md:px-6 pt-12">
+        <div className="mb-10">
+          <h1 className="text-3xl font-extrabold tracking-tight mb-2">
+            {m.settings_title()}
+          </h1>
+          <p className="text-muted-foreground text-lg">
             {m.settings_subtitle({ username: user.username })}
           </p>
         </div>
@@ -417,18 +423,19 @@ function SettingsPage() {
         {message && (
           <Alert
             variant={message.type === 'success' ? 'default' : 'destructive'}
-            className="mb-6"
+            className="mb-8 shadow-sm"
           >
             <AlertDescription className="flex items-center justify-between">
               <div className="flex items-center gap-3">
                 <span className="text-xl">
                   {message.type === 'success' ? '✓' : '✗'}
                 </span>
-                <p>{message.text}</p>
+                <p className="font-medium">{message.text}</p>
               </div>
               <Button
                 variant="ghost"
                 size="sm"
+                className="h-8 w-8 p-0"
                 onClick={() => setMessage(null)}
               >
                 <X className="h-4 w-4" />
@@ -437,390 +444,443 @@ function SettingsPage() {
           </Alert>
         )}
 
-        <Card className="mb-6">
-          <CardHeader>
-            <CardTitle className="text-xl font-bold flex items-center gap-3">
-              <span className="w-2 h-2 bg-primary rounded-full" />
-              {m.settings_change_username_title()}
-            </CardTitle>
-            <CardDescription>
-              {m.settings_change_username_desc()}
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <form
-              onSubmit={changeUsernameForm.handleSubmit(onUsernameChange)}
-              className="space-y-4"
-            >
-              <div className="space-y-2">
-                <Label htmlFor="username">{m.settings_username_label()}</Label>
-                <Input
-                  id="username"
-                  {...changeUsernameForm.register('username')}
-                  placeholder={m.settings_username_placeholder()}
-                  disabled={changeUsernameForm.formState.isSubmitting}
-                  className="bg-background/50"
-                />
-                {changeUsernameForm.formState.errors.username && (
-                  <p className="text-sm text-destructive">
-                    {changeUsernameForm.formState.errors.username.message}
-                  </p>
-                )}
-              </div>
-
-              <Button
-                type="submit"
-                disabled={changeUsernameForm.formState.isSubmitting}
-              >
-                {changeUsernameForm.formState.isSubmitting ? (
-                  <>
-                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                    {m.settings_updating()}
-                  </>
-                ) : (
-                  m.settings_update_username()
-                )}
-              </Button>
-            </form>
-          </CardContent>
-        </Card>
-
-        <Card className="mb-6">
-          <CardHeader>
-            <div className="flex items-center justify-between">
-              <div>
-                <CardTitle className="text-xl font-bold flex items-center gap-3">
-                  <span className="w-2 h-2 bg-primary rounded-full" />
-                  {m.settings_login_methods_title()}
-                </CardTitle>
-                <CardDescription>
-                  {m.settings_login_methods_desc()}
-                </CardDescription>
-              </div>
+        <div className="grid gap-8">
+          <section className="space-y-4">
+            <div className="flex items-center gap-2 mb-2">
+              <div className="h-8 w-1 bg-primary rounded-full" />
+              <h2 className="text-xl font-bold">
+                {m.settings_change_username_title()}
+              </h2>
             </div>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-4">
-              <div className="flex items-center justify-between p-4 rounded-xl border border-border bg-card/50">
-                <div className="flex items-center gap-4">
-                  <div className="w-10 h-10 rounded-lg bg-primary/20 flex items-center justify-center">
-                    <Mail className="h-5 w-5 text-primary" />
-                  </div>
-
-                  <div>
-                    <h3 className="font-semibold">{m.settings_password_method()}</h3>
-                    <p className="text-xs text-muted-foreground">
-                      {user.username}
-                    </p>
-                  </div>
-                </div>
-                <span
-                  className={
-                    hasPassword
-                      ? 'text-green-600 text-sm font-medium'
-                      : 'text-muted-foreground text-sm'
-                  }
+            <Card className="border-0 shadow-md">
+              <CardContent className="p-6">
+                <p className="text-muted-foreground mb-6 text-sm">
+                  {m.settings_change_username_desc()}
+                </p>
+                <form
+                  onSubmit={changeUsernameForm.handleSubmit(onUsernameChange)}
+                  className="flex flex-col sm:flex-row gap-4"
                 >
-                  {hasPassword ? m.settings_enabled() : m.settings_not_set()}
-                </span>
-              </div>
-
-              <div className="space-y-3">
-                <h3 className="font-semibold text-sm text-muted-foreground">
-                  {m.settings_linked_oauth()}
-                </h3>
-                {identities &&
-                identities.identities.filter((i) => i.provider !== 'password')
-                  .length === 0 ? (
-                  <div className="text-sm text-muted-foreground p-4 rounded-xl border border-dashed border-border">
-                    {m.settings_no_oauth()}
+                  <div className="flex-1 space-y-2">
+                    <Label htmlFor="username" className="sr-only">
+                      {m.settings_username_label()}
+                    </Label>
+                    <Input
+                      id="username"
+                      {...changeUsernameForm.register('username')}
+                      placeholder={m.settings_username_placeholder()}
+                      disabled={changeUsernameForm.formState.isSubmitting}
+                      className="bg-background/50 h-10"
+                    />
+                    {changeUsernameForm.formState.errors.username && (
+                      <p className="text-sm text-destructive mt-1">
+                        {changeUsernameForm.formState.errors.username.message}
+                      </p>
+                    )}
                   </div>
-                ) : (
-                  <div className="space-y-3">
-                    {(identities?.identities || [])
-                      .filter((i) => i.provider !== 'password')
-                      .map((i) => (
-                        <div
-                          key={i.id}
-                          className="flex items-center justify-between p-4 rounded-xl border border-border bg-card/50 hover:border-primary/30 transition-colors"
+                  <Button
+                    type="submit"
+                    disabled={changeUsernameForm.formState.isSubmitting}
+                    className="shrink-0"
+                  >
+                    {changeUsernameForm.formState.isSubmitting ? (
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                    ) : (
+                      m.settings_update_username()
+                    )}
+                  </Button>
+                </form>
+              </CardContent>
+            </Card>
+          </section>
+
+          <section className="space-y-4">
+            <div className="flex items-center gap-2 mb-2">
+              <div className="h-8 w-1 bg-primary rounded-full" />
+              <h2 className="text-xl font-bold">
+                {m.settings_login_methods_title()}
+              </h2>
+            </div>
+
+            <Card className="border-0 shadow-md">
+              <CardContent className="p-0">
+                <div className="p-6 pb-0">
+                  <p className="text-muted-foreground mb-6 text-sm">
+                    {m.settings_login_methods_desc()}
+                  </p>
+                </div>
+                <div className="divide-y divide-border">
+                  {/* Password Method */}
+                  <div className="flex items-center justify-between p-6 bg-green-50/50 dark:bg-green-900/10">
+                    <div className="flex items-center gap-4">
+                      <div className="w-10 h-10 rounded-xl bg-background flex items-center justify-center shadow-xs text-primary">
+                        <Key className="h-5 w-5" />
+                      </div>
+                      <div>
+                        <h3 className="font-semibold">
+                          {m.settings_password_method()}
+                        </h3>
+                        <p className="text-xs text-muted-foreground">
+                          {hasPassword
+                            ? 'Secure password set'
+                            : 'No password set'}
+                        </p>
+                      </div>
+                    </div>
+                    <Badge
+                      variant={hasPassword ? 'default' : 'outline'}
+                      className={hasPassword ? 'bg-green-600' : ''}
+                    >
+                      {hasPassword
+                        ? m.settings_enabled()
+                        : m.settings_not_set()}
+                    </Badge>
+                  </div>
+
+                  {/* OAuth Methods */}
+                  <div className="p-6 space-y-4">
+                    <h3 className="text-sm font-medium text-muted-foreground uppercase tracking-wider">
+                      {m.settings_linked_oauth()}
+                    </h3>
+
+                    {(identities?.identities || []).filter(
+                      (i) => i.provider !== 'password',
+                    ).length === 0 ? (
+                      <div className="text-center p-8 border-2 border-dashed rounded-xl text-muted-foreground bg-muted/30">
+                        {m.settings_no_oauth()}
+                      </div>
+                    ) : (
+                      <div className="grid gap-3">
+                        {(identities?.identities || [])
+                          .filter((i) => i.provider !== 'password')
+                          .map((i) => (
+                            <div
+                              key={i.id}
+                              className="flex items-center justify-between p-4 rounded-xl border border-border bg-background/50"
+                            >
+                              <div className="flex items-center gap-4">
+                                <div className="w-10 h-10 rounded-lg bg-secondary flex items-center justify-center text-secondary-foreground">
+                                  {i.provider === 'github' ? (
+                                    <Github className="h-5 w-5" />
+                                  ) : i.provider === 'google' ? (
+                                    <Chrome className="h-5 w-5" />
+                                  ) : (
+                                    <Link2 className="h-5 w-5" />
+                                  )}
+                                </div>
+                                <div>
+                                  <h3 className="font-semibold capitalize">
+                                    {i.provider}
+                                  </h3>
+                                  <p className="text-xs text-muted-foreground break-all">
+                                    {i.provider_user_id}
+                                  </p>
+                                </div>
+                              </div>
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="text-destructive hover:text-destructive hover:bg-destructive/10"
+                                onClick={() => handleUnlinkIdentity(i.id)}
+                                title="Unlink"
+                              >
+                                <Trash2 className="h-4 w-4" />
+                              </Button>
+                            </div>
+                          ))}
+                      </div>
+                    )}
+
+                    <div className="flex flex-wrap gap-3 pt-2">
+                      {config?.github_oauth && !isGithubLinked && (
+                        <Button
+                          variant="outline"
+                          onClick={() => handleOAuthLink('github')}
+                          className="gap-2"
                         >
-                          <div className="flex items-center gap-4">
-                            <div className="w-10 h-10 rounded-lg bg-secondary/20 flex items-center justify-center">
-                              {i.provider === 'github' ? (
-                                <Github className="h-5 w-5" />
-                              ) : i.provider === 'google' ? (
-                                <Chrome className="h-5 w-5" />
-                              ) : (
-                                <Link2 className="h-5 w-5" />
-                              )}
-                            </div>
-                            <div>
-                              <h3 className="font-semibold">{i.provider}</h3>
-                              <p className="text-xs text-muted-foreground break-all">
-                                {i.provider_user_id}
-                              </p>
-                            </div>
-                          </div>
-
-                          <Button
-                            variant="destructive"
-                            size="sm"
-                            onClick={() => handleUnlinkIdentity(i.id)}
-                          >
-                            <Trash2 className="h-4 w-4" />
-                          </Button>
-                        </div>
-                      ))}
+                          <Github className="h-4 w-4" />
+                          {m.settings_link_github()}
+                        </Button>
+                      )}
+                      {config?.google_oauth && !isGoogleLinked && (
+                        <Button
+                          variant="outline"
+                          onClick={() => handleOAuthLink('google')}
+                          className="gap-2"
+                        >
+                          <Chrome className="h-4 w-4" />
+                          {m.settings_link_google()}
+                        </Button>
+                      )}
+                      {!config?.github_oauth && !config?.google_oauth && (
+                        <p className="text-sm text-muted-foreground italic">
+                          {m.settings_no_providers()}
+                        </p>
+                      )}
+                    </div>
                   </div>
-                )}
-              </div>
+                </div>
+              </CardContent>
+            </Card>
+          </section>
 
-              <div className="flex flex-wrap gap-2 pt-2">
-                {config?.github_oauth && !isGithubLinked && (
-                  <Button
-                    variant="secondary"
-                    onClick={() => handleOAuthLink('github')}
-                  >
-                    <Github className="h-4 w-4 mr-2" />
-                    {m.settings_link_github()}
-                  </Button>
-                )}
-                {config?.google_oauth && !isGoogleLinked && (
-                  <Button
-                    variant="secondary"
-                    onClick={() => handleOAuthLink('google')}
-                  >
-                    <Chrome className="h-4 w-4 mr-2" />
-                    {m.settings_link_google()}
-                  </Button>
-                )}
-                {!config?.github_oauth && !config?.google_oauth && (
-                  <p className="text-sm text-muted-foreground">
-                    {m.settings_no_providers()}
-                  </p>
-                )}
-              </div>
+          <section className="space-y-4">
+            <div className="flex items-center gap-2 mb-2">
+              <div className="h-8 w-1 bg-primary rounded-full" />
+              <h2 className="text-xl font-bold">
+                {hasPassword
+                  ? m.settings_change_password()
+                  : m.settings_set_password()}
+              </h2>
             </div>
-          </CardContent>
-        </Card>
+            <Card className="border-0 shadow-md">
+              <CardContent className="p-6">
+                {hasPassword ? (
+                  <form
+                    onSubmit={changePasswordForm.handleSubmit(onPasswordChange)}
+                    className="space-y-4 max-w-md"
+                  >
+                    <div className="space-y-2">
+                      <Label htmlFor="currentPassword">
+                        {m.settings_current_password()}
+                      </Label>
+                      <Input
+                        id="currentPassword"
+                        type="password"
+                        {...changePasswordForm.register('currentPassword')}
+                        placeholder="••••••••"
+                        disabled={changePasswordForm.formState.isSubmitting}
+                        className="bg-background/50"
+                      />
+                      {changePasswordForm.formState.errors.currentPassword && (
+                        <p className="text-sm text-destructive">
+                          {
+                            changePasswordForm.formState.errors.currentPassword
+                              .message
+                          }
+                        </p>
+                      )}
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="newPassword">
+                        {m.settings_new_password()}
+                      </Label>
+                      <Input
+                        id="newPassword"
+                        type="password"
+                        {...changePasswordForm.register('newPassword')}
+                        placeholder="••••••••"
+                        disabled={changePasswordForm.formState.isSubmitting}
+                        className="bg-background/50"
+                      />
+                      {changePasswordForm.formState.errors.newPassword && (
+                        <p className="text-sm text-destructive">
+                          {
+                            changePasswordForm.formState.errors.newPassword
+                              .message
+                          }
+                        </p>
+                      )}
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="confirmPassword">
+                        {m.settings_confirm_password()}
+                      </Label>
+                      <Input
+                        id="confirmPassword"
+                        type="password"
+                        {...changePasswordForm.register('confirmPassword')}
+                        placeholder="••••••••"
+                        disabled={changePasswordForm.formState.isSubmitting}
+                        className="bg-background/50"
+                      />
+                      {changePasswordForm.formState.errors.confirmPassword && (
+                        <p className="text-sm text-destructive">
+                          {
+                            changePasswordForm.formState.errors.confirmPassword
+                              .message
+                          }
+                        </p>
+                      )}
+                    </div>
+                    <Button
+                      type="submit"
+                      disabled={changePasswordForm.formState.isSubmitting}
+                    >
+                      {changePasswordForm.formState.isSubmitting ? (
+                        <>
+                          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                          {m.settings_changing_password()}
+                        </>
+                      ) : (
+                        m.settings_change_password()
+                      )}
+                    </Button>
+                  </form>
+                ) : (
+                  <form
+                    onSubmit={setPasswordForm.handleSubmit(onPasswordSet)}
+                    className="space-y-4 max-w-md"
+                  >
+                    <Alert className="mb-4 bg-primary/5 border-primary/10">
+                      <AlertDescription>
+                        You currently log in with social accounts. Set a
+                        password to log in with username/password as well.
+                      </AlertDescription>
+                    </Alert>
+                    <div className="space-y-2">
+                      <Label htmlFor="newPassword">
+                        {m.settings_new_password()}
+                      </Label>
+                      <Input
+                        id="newPassword"
+                        type="password"
+                        {...setPasswordForm.register('newPassword')}
+                        placeholder="••••••••"
+                        disabled={setPasswordForm.formState.isSubmitting}
+                        className="bg-background/50"
+                      />
+                      {setPasswordForm.formState.errors.newPassword && (
+                        <p className="text-sm text-destructive">
+                          {setPasswordForm.formState.errors.newPassword.message}
+                        </p>
+                      )}
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="confirmPassword">
+                        {m.settings_confirm_password_simple()}
+                      </Label>
+                      <Input
+                        id="confirmPassword"
+                        type="password"
+                        {...setPasswordForm.register('confirmPassword')}
+                        placeholder="••••••••"
+                        disabled={setPasswordForm.formState.isSubmitting}
+                        className="bg-background/50"
+                      />
+                      {setPasswordForm.formState.errors.confirmPassword && (
+                        <p className="text-sm text-destructive">
+                          {
+                            setPasswordForm.formState.errors.confirmPassword
+                              .message
+                          }
+                        </p>
+                      )}
+                    </div>
+                    <Button
+                      type="submit"
+                      disabled={setPasswordForm.formState.isSubmitting}
+                    >
+                      {setPasswordForm.formState.isSubmitting ? (
+                        <>
+                          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                          {m.settings_setting_password()}
+                        </>
+                      ) : (
+                        m.settings_set_password()
+                      )}
+                    </Button>
+                  </form>
+                )}
+              </CardContent>
+            </Card>
+          </section>
 
-        <Card className="mb-6">
-          <CardHeader>
-            <CardTitle className="text-xl font-bold flex items-center gap-3">
-              <span className="w-2 h-2 bg-primary rounded-full" />
-              {hasPassword ? m.settings_change_password() : m.settings_set_password()}
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            {hasPassword ? (
-              <form
-                onSubmit={changePasswordForm.handleSubmit(onPasswordChange)}
-                className="space-y-4"
-              >
-                <div className="space-y-2">
-                  <Label htmlFor="currentPassword">{m.settings_current_password()}</Label>
-                  <Input
-                    id="currentPassword"
-                    type="password"
-                    {...changePasswordForm.register('currentPassword')}
-                    placeholder={m.settings_current_password_placeholder()}
-                    disabled={changePasswordForm.formState.isSubmitting}
-                    className="bg-background/50"
-                  />
-                  {changePasswordForm.formState.errors.currentPassword && (
-                    <p className="text-sm text-destructive">
-                      {
-                        changePasswordForm.formState.errors.currentPassword
-                          .message
-                      }
-                    </p>
-                  )}
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="newPassword">{m.settings_new_password()}</Label>
-                  <Input
-                    id="newPassword"
-                    type="password"
-                    {...changePasswordForm.register('newPassword')}
-                    placeholder={m.settings_new_password_placeholder()}
-                    disabled={changePasswordForm.formState.isSubmitting}
-                    className="bg-background/50"
-                  />
-                  {changePasswordForm.formState.errors.newPassword && (
-                    <p className="text-sm text-destructive">
-                      {changePasswordForm.formState.errors.newPassword.message}
-                    </p>
-                  )}
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="confirmPassword">{m.settings_confirm_password()}</Label>
-                  <Input
-                    id="confirmPassword"
-                    type="password"
-                    {...changePasswordForm.register('confirmPassword')}
-                    placeholder={m.settings_confirm_password_placeholder()}
-                    disabled={changePasswordForm.formState.isSubmitting}
-                    className="bg-background/50"
-                  />
-                  {changePasswordForm.formState.errors.confirmPassword && (
-                    <p className="text-sm text-destructive">
-                      {
-                        changePasswordForm.formState.errors.confirmPassword
-                          .message
-                      }
-                    </p>
-                  )}
-                </div>
-                <Button
-                  type="submit"
-                  disabled={changePasswordForm.formState.isSubmitting}
-                  className="w-full"
-                >
-                  {changePasswordForm.formState.isSubmitting ? (
-                    <>
-                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                      {m.settings_changing_password()}
-                    </>
-                  ) : (
-                    m.settings_change_password()
-                  )}
-                </Button>
-              </form>
-            ) : (
-              <form
-                onSubmit={setPasswordForm.handleSubmit(onPasswordSet)}
-                className="space-y-4"
-              >
-                <div className="space-y-2">
-                  <Label htmlFor="newPassword">{m.settings_new_password()}</Label>
-                  <Input
-                    id="newPassword"
-                    type="password"
-                    {...setPasswordForm.register('newPassword')}
-                    placeholder={m.settings_create_password_placeholder()}
-                    disabled={setPasswordForm.formState.isSubmitting}
-                    className="bg-background/50"
-                  />
-                  {setPasswordForm.formState.errors.newPassword && (
-                    <p className="text-sm text-destructive">
-                      {setPasswordForm.formState.errors.newPassword.message}
-                    </p>
-                  )}
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="confirmPassword">{m.settings_confirm_password_simple()}</Label>
-                  <Input
-                    id="confirmPassword"
-                    type="password"
-                    {...setPasswordForm.register('confirmPassword')}
-                    placeholder={m.settings_confirm_password_simple_placeholder()}
-                    disabled={setPasswordForm.formState.isSubmitting}
-                    className="bg-background/50"
-                  />
-                  {setPasswordForm.formState.errors.confirmPassword && (
-                    <p className="text-sm text-destructive">
-                      {setPasswordForm.formState.errors.confirmPassword.message}
-                    </p>
-                  )}
-                </div>
-                <Button
-                  type="submit"
-                  disabled={setPasswordForm.formState.isSubmitting}
-                  className="w-full"
-                >
-                  {setPasswordForm.formState.isSubmitting ? (
-                    <>
-                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                      {m.settings_setting_password()}
-                    </>
-                  ) : (
-                    m.settings_set_password()
-                  )}
-                </Button>
-              </form>
-            )}
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader>
+          <section className="space-y-4">
             <div className="flex items-center justify-between">
-              <div>
-                <CardTitle className="text-xl font-bold flex items-center gap-3">
-                  <span className="w-2 h-2 bg-primary rounded-full" />
+              <div className="flex items-center gap-2 mb-2">
+                <div className="h-8 w-1 bg-primary rounded-full" />
+                <h2 className="text-xl font-bold">
                   {m.settings_passkeys_title()}
-                </CardTitle>
-                <CardDescription>
-                  {m.settings_passkeys_desc()}
-                </CardDescription>
+                </h2>
               </div>
-              <Button onClick={() => setShowPasskeyModal(true)}>
+              <Button
+                onClick={() => setShowPasskeyModal(true)}
+                size="sm"
+                className="rounded-full"
+              >
                 <Plus className="h-4 w-4 mr-2" />
                 {m.settings_add_passkey()}
               </Button>
             </div>
-          </CardHeader>
-          <CardContent>
-            {passkeys.length === 0 ? (
-              <div className="text-center py-12 border-2 border-dashed border-border rounded-xl">
-                <Key className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
-                <p className="text-muted-foreground mb-2">
-                  {m.settings_no_passkeys()}
-                </p>
-                <p className="text-sm text-muted-foreground">
-                  {m.settings_add_passkey_promo()}
-                </p>
-              </div>
-            ) : (
-              <div className="space-y-3">
-                {passkeys.map((passkey) => (
-                  <div
-                    key={passkey.id}
-                    className="flex items-center justify-between p-4 rounded-xl border border-border bg-card/50 hover:border-primary/30 transition-colors"
-                  >
-                    <div className="flex items-center gap-4">
-                      <div className="w-10 h-10 rounded-lg bg-primary/20 flex items-center justify-center">
-                        <Key className="h-5 w-5 text-primary" />
-                      </div>
-                      <div>
-                        <h3 className="font-semibold">{passkey.name}</h3>
-                        <div className="flex items-center gap-4 text-xs text-muted-foreground mt-1">
-                          <span>
-                            {m.settings_created_at({ date: new Date(passkey.created_at).toLocaleDateString() })}
-                          </span>
-                          {passkey.last_used_at && (
-                            <span>
-                              {m.settings_last_used({ date: new Date(passkey.last_used_at).toLocaleDateString() })}
-                            </span>
-                          )}
-                        </div>
-                      </div>
-                    </div>
-                    <Button
-                      variant="destructive"
-                      size="sm"
-                      onClick={() =>
-                        handleDeletePasskey(passkey.id, passkey.name)
-                      }
-                    >
-                      <Trash2 className="h-4 w-4" />
-                    </Button>
-                  </div>
-                ))}
-              </div>
-            )}
 
-            <Alert className="mt-6">
-              <Lightbulb className="h-4 w-4" />
-              <AlertDescription>
-                <h3 className="font-semibold mb-1">{m.settings_what_are_passkeys()}</h3>
-                <p className="text-sm text-muted-foreground">
-                  {m.settings_passkeys_help_text()}
-                </p>
-              </AlertDescription>
-            </Alert>
-          </CardContent>
-        </Card>
+            <Card className="border-0 shadow-md">
+              <CardContent className="p-6">
+                {passkeys.length === 0 ? (
+                  <div className="text-center py-12 border-2 border-dashed border-border rounded-xl bg-muted/20">
+                    <div className="w-16 h-16 mx-auto bg-muted rounded-full flex items-center justify-center mb-4 text-muted-foreground">
+                      <Key className="h-8 w-8" />
+                    </div>
+                    <p className="text-muted-foreground font-medium mb-1">
+                      {m.settings_no_passkeys()}
+                    </p>
+                    <p className="text-sm text-muted-foreground/80">
+                      {m.settings_add_passkey_promo()}
+                    </p>
+                  </div>
+                ) : (
+                  <div className="space-y-3">
+                    {passkeys.map((passkey) => (
+                      <div
+                        key={passkey.id}
+                        className="flex items-center justify-between p-4 rounded-xl border border-border bg-background/50"
+                      >
+                        <div className="flex items-center gap-4">
+                          <div className="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center text-primary">
+                            <Key className="h-5 w-5" />
+                          </div>
+                          <div>
+                            <h3 className="font-semibold">{passkey.name}</h3>
+                            <div className="flex items-center gap-4 text-xs text-muted-foreground mt-1">
+                              <span>
+                                {m.settings_created_at({
+                                  date: new Date(
+                                    passkey.created_at,
+                                  ).toLocaleDateString(),
+                                })}
+                              </span>
+                              {passkey.last_used_at && (
+                                <span>
+                                  {m.settings_last_used({
+                                    date: new Date(
+                                      passkey.last_used_at,
+                                    ).toLocaleDateString(),
+                                  })}
+                                </span>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="text-destructive hover:bg-destructive/10"
+                          onClick={() =>
+                            handleDeletePasskey(passkey.id, passkey.name)
+                          }
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                <Alert className="mt-8 bg-blue-50/50 dark:bg-blue-900/10 border-blue-100 dark:border-blue-900">
+                  <Lightbulb className="h-4 w-4 text-blue-500" />
+                  <AlertDescription className="text-blue-700 dark:text-blue-300">
+                    <h3 className="font-semibold mb-1">
+                      {m.settings_what_are_passkeys()}
+                    </h3>
+                    <p className="text-sm opacity-90">
+                      {m.settings_passkeys_help_text()}
+                    </p>
+                  </AlertDescription>
+                </Alert>
+              </CardContent>
+            </Card>
+          </section>
+        </div>
 
         <Dialog open={showPasskeyModal} onOpenChange={setShowPasskeyModal}>
           <DialogContent className="bg-card border-border">
@@ -833,7 +893,9 @@ function SettingsPage() {
             <form onSubmit={handlePasskeyModalSubmit}>
               <div className="space-y-4">
                 <div className="space-y-2">
-                  <Label htmlFor="passkeyName">{m.settings_passkey_name_label()}</Label>
+                  <Label htmlFor="passkeyName">
+                    {m.settings_passkey_name_label()}
+                  </Label>
                   <Input
                     id="passkeyName"
                     type="text"

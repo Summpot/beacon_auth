@@ -114,5 +114,7 @@
   "settings_passkey_name_label": "Passkey Name",
   "settings_passkey_name_placeholder": "e.g., \"My Phone\", \"YubiKey\"",
   "settings_cancel": "Cancel",
-  "settings_continue": "Continue"
+  "settings_continue": "Continue",
+  "alert_confirm_unlink": "Are you sure you want to unlink this login method?",
+  "alert_confirm_delete_passkey": "Are you sure you want to delete passkey \"{name}\"?"
 }
