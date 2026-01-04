@@ -483,7 +483,7 @@ function SettingsPage() {
                   <Button
                     type="submit"
                     disabled={changeUsernameForm.formState.isSubmitting}
-                    className="shrink-0 self-end mb-[2px]"
+                    className="shrink-0 self-start mt-8" // Added mt-8 to align with input since label is sr-only or similar
                   >
                     {changeUsernameForm.formState.isSubmitting ? (
                       <Loader2 className="h-4 w-4 animate-spin" />
@@ -604,54 +604,60 @@ function SettingsPage() {
                       </div>
                     )}
 
-                    <div className="flex flex-wrap gap-3 pt-2">
-                      {config?.github_oauth && !isGithubLinked && (
-                        <Button
-                          variant="outline"
-                          onClick={() => handleOAuthLink('github')}
-                          className="gap-2"
-                        >
-                          <Github className="h-4 w-4" />
-                          {m.settings_link_github()}
-                        </Button>
-                      )}
-                      {config?.google_oauth && !isGoogleLinked && (
-                        <Button
-                          variant="outline"
-                          onClick={() => handleOAuthLink('google')}
-                          className="gap-2"
-                        >
-                          <Chrome className="h-4 w-4" />
-                          {m.settings_link_google()}
-                        </Button>
-                      )}
-                      {config?.microsoft_oauth && !isMicrosoftLinked && (
-                        <Button
-                          variant="outline"
-                          onClick={() => handleOAuthLink('microsoft')}
-                          className="gap-2"
-                        >
-                          <svg
-                            className="h-4 w-4"
-                            viewBox="0 0 24 24"
-                            aria-label="Microsoft"
-                          >
-                            <path fill="#F25022" d="M2 2h9v9H2z" />
-                            <path fill="#7FBA00" d="M13 2h9v9h-9z" />
-                            <path fill="#00A4EF" d="M2 13h9v9H2z" />
-                            <path fill="#FFB900" d="M13 13h9v9h-9z" />
-                          </svg>
-                          {m.settings_link_microsoft()}
-                        </Button>
-                      )}
-                      {!config?.github_oauth &&
-                        !config?.google_oauth &&
-                        !config?.microsoft_oauth && (
-                        <p className="text-sm text-muted-foreground italic">
-                          {m.settings_no_providers()}
-                        </p>
-                      )}
-                    </div>
+                     {/* Link Buttons Row */}
+                     {(config?.github_oauth && !isGithubLinked) ||
+                     (config?.google_oauth && !isGoogleLinked) ||
+                     (config?.microsoft_oauth && !isMicrosoftLinked) ? (
+                       <div className="flex flex-wrap gap-3 pt-2">
+                         {config?.github_oauth && !isGithubLinked && (
+                           <Button
+                             variant="outline"
+                             onClick={() => handleOAuthLink('github')}
+                             className="gap-2"
+                           >
+                             <Github className="h-4 w-4" />
+                             {m.settings_link_github()}
+                           </Button>
+                         )}
+                         {config?.google_oauth && !isGoogleLinked && (
+                           <Button
+                             variant="outline"
+                             onClick={() => handleOAuthLink('google')}
+                             className="gap-2"
+                           >
+                             <Chrome className="h-4 w-4" />
+                             {m.settings_link_google()}
+                           </Button>
+                         )}
+                         {config?.microsoft_oauth && !isMicrosoftLinked && (
+                           <Button
+                             variant="outline"
+                             onClick={() => handleOAuthLink('microsoft')}
+                             className="gap-2"
+                           >
+                             <svg
+                               className="h-4 w-4"
+                               viewBox="0 0 24 24"
+                               aria-label="Microsoft"
+                             >
+                               <path fill="#F25022" d="M2 2h9v9H2z" />
+                               <path fill="#7FBA00" d="M13 2h9v9h-9z" />
+                               <path fill="#00A4EF" d="M2 13h9v9H2z" />
+                               <path fill="#FFB900" d="M13 13h9v9h-9z" />
+                             </svg>
+                             {m.settings_link_microsoft()}
+                           </Button>
+                         )}
+                       </div>
+                     ) : (
+                       !config?.github_oauth &&
+                       !config?.google_oauth &&
+                       !config?.microsoft_oauth && (
+                         <p className="text-sm text-muted-foreground italic pt-2">
+                           {m.settings_no_providers()}
+                         </p>
+                       )
+                     )}
                   </div>
                 </div>
               </CardContent>
@@ -672,85 +678,88 @@ function SettingsPage() {
                 {hasPassword ? (
                   <form
                     onSubmit={changePasswordForm.handleSubmit(onPasswordChange)}
-                    className="space-y-4 max-w-md"
+                    className="gap-4"
                   >
-                    <div className="space-y-2">
-                      <Label htmlFor="currentPassword">
-                        {m.settings_current_password()}
-                      </Label>
-                      <Input
-                        id="currentPassword"
-                        type="password"
-                        {...changePasswordForm.register('currentPassword')}
-                        placeholder="••••••••"
-                        disabled={changePasswordForm.formState.isSubmitting}
-                        className="bg-background/50"
-                      />
-                      {changePasswordForm.formState.errors.currentPassword && (
-                        <p className="text-sm text-destructive">
-                          {
-                            changePasswordForm.formState.errors.currentPassword
-                              .message
-                          }
-                        </p>
-                      )}
-                    </div>
-                    <div className="space-y-2">
-                      <Label htmlFor="newPassword">
-                        {m.settings_new_password()}
-                      </Label>
-                      <Input
-                        id="newPassword"
-                        type="password"
-                        {...changePasswordForm.register('newPassword')}
-                        placeholder="••••••••"
-                        disabled={changePasswordForm.formState.isSubmitting}
-                        className="bg-background/50"
-                      />
-                      {changePasswordForm.formState.errors.newPassword && (
-                        <p className="text-sm text-destructive">
-                          {
-                            changePasswordForm.formState.errors.newPassword
-                              .message
-                          }
-                        </p>
-                      )}
-                    </div>
-                    <div className="space-y-2">
-                      <Label htmlFor="confirmPassword">
-                        {m.settings_confirm_password()}
-                      </Label>
-                      <Input
-                        id="confirmPassword"
-                        type="password"
-                        {...changePasswordForm.register('confirmPassword')}
-                        placeholder="••••••••"
-                        disabled={changePasswordForm.formState.isSubmitting}
-                        className="bg-background/50"
-                      />
-                      {changePasswordForm.formState.errors.confirmPassword && (
-                        <p className="text-sm text-destructive">
-                          {
-                            changePasswordForm.formState.errors.confirmPassword
-                              .message
-                          }
-                        </p>
-                      )}
-                    </div>
-                    <div className="flex justify-end pt-2">
-                      <Button
-                        type="submit"
-                        disabled={changePasswordForm.formState.isSubmitting}
-                      >
-                        {changePasswordForm.formState.isSubmitting ? (
-                          <>
-                            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                            {m.settings_changing_password()}
-                          </>
-                        ) : (
-                          m.settings_change_password()
+                    <div className="grid md:grid-cols-2 gap-4">
+                      <div className="space-y-2">
+                        <Label htmlFor="currentPassword">
+                          {m.settings_current_password()}
+                        </Label>
+                        <Input
+                          id="currentPassword"
+                          type="password"
+                          {...changePasswordForm.register('currentPassword')}
+                          placeholder="••••••••"
+                          disabled={changePasswordForm.formState.isSubmitting}
+                          className="bg-background/50"
+                        />
+                        {changePasswordForm.formState.errors.currentPassword && (
+                          <p className="text-sm text-destructive">
+                            {
+                              changePasswordForm.formState.errors.currentPassword
+                                .message
+                            }
+                          </p>
                         )}
-                      </Button>
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="newPassword">
+                          {m.settings_new_password()}
+                        </Label>
+                        <Input
+                          id="newPassword"
+                          type="password"
+                          {...changePasswordForm.register('newPassword')}
+                          placeholder="••••••••"
+                          disabled={changePasswordForm.formState.isSubmitting}
+                          className="bg-background/50"
+                        />
+                        {changePasswordForm.formState.errors.newPassword && (
+                          <p className="text-sm text-destructive">
+                            {
+                              changePasswordForm.formState.errors.newPassword
+                                .message
+                            }
+                          </p>
+                        )}
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="confirmPassword">
+                          {m.settings_confirm_password()}
+                        </Label>
+                        <Input
+                          id="confirmPassword"
+                          type="password"
+                          {...changePasswordForm.register('confirmPassword')}
+                          placeholder="••••••••"
+                          disabled={changePasswordForm.formState.isSubmitting}
+                          className="bg-background/50"
+                        />
+                        {changePasswordForm.formState.errors.confirmPassword && (
+                          <p className="text-sm text-destructive">
+                            {
+                              changePasswordForm.formState.errors.confirmPassword
+                                .message
+                            }
+                          </p>
+                        )}
+                      </div>
+                      <div className="flex items-end justify-end">
+                        <Button
+                          type="submit"
+                          disabled={changePasswordForm.formState.isSubmitting}
+                          className="w-full md:w-auto"
+                        >
+                          {changePasswordForm.formState.isSubmitting ? (
+                            <>
+                              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                              {m.settings_changing_password()}
+                            </>
+                          ) : (
+                            m.settings_change_password()
+                          )}
+                        </Button>
+                      </div>
                     </div>
                   </form>
                 ) : (
@@ -959,6 +968,7 @@ function SettingsPage() {
                     {m.settings_continue()}
                   </Button>
                 </div>
+              </div>
               </div>
             </form>
           </DialogContent>
