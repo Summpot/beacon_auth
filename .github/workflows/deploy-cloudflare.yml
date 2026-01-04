@@ -36,29 +36,21 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Install bun
+        uses: oven-sh/setup-bun@v2
+
+      - name: Install dependencies and build frontend
+        run: bun install && bun run build
+
       - name: Setup Rust
         uses: dtolnay/rust-toolchain@stable
         with:
           targets: wasm32-unknown-unknown
 
-      - name: Setup pnpm
-        uses: pnpm/action-setup@v4
-        with:
-          version: 10
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: '22'
-          cache: 'pnpm'
-
       - name: Install worker-build
         uses: baptiste0928/cargo-install@v3
         with:
           crate: worker-build
-
-      - name: Install dependencies
-        run: pnpm install --frozen-lockfile
 
       - name: Cache cargo
         uses: actions/cache@v4
@@ -163,15 +155,12 @@ jobs:
 
           echo "Ensuring Pages project '$project' exists (errors are safe to ignore):"
 
-          cmd=(pnpm exec wrangler pages project create "$project" --production-branch "main")
+          cmd=(bun wrangler pages project create "$project" --production-branch "main")
           if [ -n "$compat" ]; then
             cmd+=(--compatibility-date "$compat")
           fi
 
           "${cmd[@]}" || true
-
-      - name: Build frontend (UI + Pages _worker.js)
-        run: pnpm build
 
       - name: Deploy worker
         env:
@@ -183,7 +172,7 @@ jobs:
         run: |
           set -euo pipefail
 
-          pnpm exec wrangler deploy --config "${WRANGLER_WORKERS_CONFIG}" --var "BASE_URL:${BASE_URL}" --var "CLOUDFLARE_ACCOUNT_ID:${CLOUDFLARE_ACCOUNT_ID}"
+          bun wrangler deploy --config "${WRANGLER_WORKERS_CONFIG}" --var "BASE_URL:${BASE_URL}" --var "CLOUDFLARE_ACCOUNT_ID:${CLOUDFLARE_ACCOUNT_ID}"
 
       - name: Apply SeaORM migrations (Migrator::up)
         env:
@@ -255,7 +244,7 @@ jobs:
             local value="$2"
             if [ -n "$value" ]; then
               echo "Setting secret: $name"
-              printf %s "$value" | pnpm exec wrangler secret put "$name" --config "${WRANGLER_WORKERS_CONFIG}"
+              printf %s "$value" | bun wrangler secret put "$name" --config "${WRANGLER_WORKERS_CONFIG}"
             else
               echo "Skipping secret (not provided): $name"
             fi
@@ -281,7 +270,7 @@ jobs:
           project="${PAGES_PROJECT:?PAGES_PROJECT is required}"
           echo "Deploying Pages project '$project' from ./dist"
 
-          pnpm exec wrangler pages deploy dist --project-name "$project" --branch "main" --experimental-provision --experimental-auto-create
+          bun wrangler pages deploy dist --project-name "$project" --branch "main" --experimental-provision --experimental-auto-create
 
           echo "Pages URL: https://$project.pages.dev" >> "$GITHUB_STEP_SUMMARY"
 
