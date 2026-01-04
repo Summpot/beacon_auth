@@ -47,7 +47,7 @@ const RootLayout = () => {
             <HeadContent />
             {/* Toggles (Theme & Language) - Floating on non-home pages */}
             {!/^\/($|en\/?$|zh-CN\/?$)/.test(pathname) && (
-              <div className="fixed top-4 right-4 z-50 flex gap-2">
+              <div className="fixed bottom-4 right-4 z-50 flex gap-2">
                 <ThemeToggle />
                 <LanguageToggle />
               </div>
