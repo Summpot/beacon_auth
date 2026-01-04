@@ -64,5 +64,8 @@ pub struct OAuthConfig {
     pub github_client_secret: Option<String>,
     pub google_client_id: Option<String>,
     pub google_client_secret: Option<String>,
+    pub microsoft_client_id: Option<String>,
+    pub microsoft_client_secret: Option<String>,
+    pub microsoft_tenant: String,
     pub redirect_base: String,
 }

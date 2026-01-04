@@ -117,6 +117,8 @@ pub struct ConfigResponse {
     pub github_oauth: bool,
     /// Whether Google OAuth is configured
     pub google_oauth: bool,
+    /// Whether Microsoft OAuth is configured
+    pub microsoft_oauth: bool,
 }
 
 /// Session token claims (for access token and refresh token)

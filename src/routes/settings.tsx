@@ -97,6 +97,7 @@ interface ServerConfig {
   database_auth: boolean;
   github_oauth: boolean;
   google_oauth: boolean;
+  microsoft_oauth: boolean;
 }
 
 interface IdentityInfo {
@@ -142,6 +143,7 @@ function SettingsPage() {
   );
   const isGithubLinked = linkedProviders.has('github');
   const isGoogleLinked = linkedProviders.has('google');
+  const isMicrosoftLinked = linkedProviders.has('microsoft');
 
   const changePasswordForm = useForm<PasswordChangeData>({
     resolver: zodResolver(passwordChangeSchema),
@@ -268,7 +270,7 @@ function SettingsPage() {
     }
   };
 
-  const handleOAuthLink = async (provider: 'github' | 'google') => {
+  const handleOAuthLink = async (provider: 'github' | 'google' | 'microsoft') => {
     try {
       const result = await apiClient<{ authorizationUrl?: string }>(
         '/api/v1/oauth/link/start',
@@ -410,7 +412,7 @@ function SettingsPage() {
         </div>
       </nav>
 
-      <div className="container max-w-3xl mx-auto px-4 md:px-6 pt-12">
+      <div className="container max-w-5xl mx-auto px-4 md:px-6 pt-12">
         <div className="mb-10">
           <h1 className="text-3xl font-extrabold tracking-tight mb-2">
             {m.settings_title()}
@@ -481,7 +483,7 @@ function SettingsPage() {
                   <Button
                     type="submit"
                     disabled={changeUsernameForm.formState.isSubmitting}
-                    className="shrink-0"
+                    className="shrink-0 self-end mb-[2px]"
                   >
                     {changeUsernameForm.formState.isSubmitting ? (
                       <Loader2 className="h-4 w-4 animate-spin" />
@@ -522,8 +524,8 @@ function SettingsPage() {
                         </h3>
                         <p className="text-xs text-muted-foreground">
                           {hasPassword
-                            ? 'Secure password set'
-                            : 'No password set'}
+                            ? m.settings_password_secure_set()
+                            : m.settings_password_not_set()}
                         </p>
                       </div>
                     </div>
@@ -564,6 +566,17 @@ function SettingsPage() {
                                     <Github className="h-5 w-5" />
                                   ) : i.provider === 'google' ? (
                                     <Chrome className="h-5 w-5" />
+                                  ) : i.provider === 'microsoft' ? (
+                                    <svg
+                                      className="h-5 w-5"
+                                      viewBox="0 0 24 24"
+                                      aria-label="Microsoft"
+                                    >
+                                      <path fill="#F25022" d="M2 2h9v9H2z" />
+                                      <path fill="#7FBA00" d="M13 2h9v9h-9z" />
+                                      <path fill="#00A4EF" d="M2 13h9v9H2z" />
+                                      <path fill="#FFB900" d="M13 13h9v9h-9z" />
+                                    </svg>
                                   ) : (
                                     <Link2 className="h-5 w-5" />
                                   )}
@@ -612,7 +625,28 @@ function SettingsPage() {
                           {m.settings_link_google()}
                         </Button>
                       )}
-                      {!config?.github_oauth && !config?.google_oauth && (
+                      {config?.microsoft_oauth && !isMicrosoftLinked && (
+                        <Button
+                          variant="outline"
+                          onClick={() => handleOAuthLink('microsoft')}
+                          className="gap-2"
+                        >
+                          <svg
+                            className="h-4 w-4"
+                            viewBox="0 0 24 24"
+                            aria-label="Microsoft"
+                          >
+                            <path fill="#F25022" d="M2 2h9v9H2z" />
+                            <path fill="#7FBA00" d="M13 2h9v9h-9z" />
+                            <path fill="#00A4EF" d="M2 13h9v9H2z" />
+                            <path fill="#FFB900" d="M13 13h9v9h-9z" />
+                          </svg>
+                          {m.settings_link_microsoft()}
+                        </Button>
+                      )}
+                      {!config?.github_oauth &&
+                        !config?.google_oauth &&
+                        !config?.microsoft_oauth && (
                         <p className="text-sm text-muted-foreground italic">
                           {m.settings_no_providers()}
                         </p>
@@ -703,19 +737,21 @@ function SettingsPage() {
                         </p>
                       )}
                     </div>
-                    <Button
-                      type="submit"
-                      disabled={changePasswordForm.formState.isSubmitting}
-                    >
-                      {changePasswordForm.formState.isSubmitting ? (
-                        <>
-                          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                          {m.settings_changing_password()}
-                        </>
-                      ) : (
-                        m.settings_change_password()
-                      )}
-                    </Button>
+                    <div className="flex justify-end pt-2">
+                      <Button
+                        type="submit"
+                        disabled={changePasswordForm.formState.isSubmitting}
+                      >
+                        {changePasswordForm.formState.isSubmitting ? (
+                          <>
+                            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                            {m.settings_changing_password()}
+                          </>
+                        ) : (
+                          m.settings_change_password()
+                        )}
+                      </Button>
+                    </div>
                   </form>
                 ) : (
                   <form
@@ -767,19 +803,21 @@ function SettingsPage() {
                         </p>
                       )}
                     </div>
-                    <Button
-                      type="submit"
-                      disabled={setPasswordForm.formState.isSubmitting}
-                    >
-                      {setPasswordForm.formState.isSubmitting ? (
-                        <>
-                          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                          {m.settings_setting_password()}
-                        </>
-                      ) : (
-                        m.settings_set_password()
-                      )}
-                    </Button>
+                    <div className="flex justify-end pt-2">
+                      <Button
+                        type="submit"
+                        disabled={setPasswordForm.formState.isSubmitting}
+                      >
+                        {setPasswordForm.formState.isSubmitting ? (
+                          <>
+                            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                            {m.settings_setting_password()}
+                          </>
+                        ) : (
+                          m.settings_set_password()
+                        )}
+                      </Button>
+                    </div>
                   </form>
                 )}
               </CardContent>

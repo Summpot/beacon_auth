@@ -258,7 +258,7 @@ function ProfilePage() {
                   {m.profile_status()}
                 </h3>
                 <p className="text-muted-foreground mb-3 leading-relaxed">
-                  Your account is active and verified.
+                  {m.profile_status_verified_desc()}
                 </p>
                 <Badge
                   variant="outline"
@@ -280,7 +280,7 @@ function ProfilePage() {
                   {m.profile_minecraft()}
                 </h3>
                 <p className="text-muted-foreground mb-3 leading-relaxed">
-                  Connected to the Minecraft network.
+                  {m.profile_minecraft_connected_desc()}
                 </p>
                 <Badge
                   variant="outline"

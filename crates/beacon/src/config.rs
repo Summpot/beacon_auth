@@ -104,6 +104,18 @@ pub struct ServeConfig {
     #[arg(long, env = "GOOGLE_CLIENT_SECRET")]
     pub google_client_secret: Option<String>,
 
+    /// Microsoft OAuth Client ID (Microsoft Entra ID / Azure AD)
+    #[arg(long, env = "MICROSOFT_CLIENT_ID")]
+    pub microsoft_client_id: Option<String>,
+
+    /// Microsoft OAuth Client Secret (Microsoft Entra ID / Azure AD)
+    #[arg(long, env = "MICROSOFT_CLIENT_SECRET")]
+    pub microsoft_client_secret: Option<String>,
+
+    /// Microsoft OAuth tenant (common, organizations, consumers, or a tenant GUID)
+    #[arg(long, env = "MICROSOFT_TENANT", default_value = "common")]
+    pub microsoft_tenant: String,
+
     /// Base URL for the server (e.g., https://beaconauth.pages.dev)
     /// Used for OAuth redirects, JWT issuer claim, and WebAuthn RP origin
     #[arg(
