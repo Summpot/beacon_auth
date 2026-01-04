@@ -234,12 +234,14 @@ function RegisterPage() {
                 </Link>
               </p>
             </div>
+          </CardContent>
+        </Card>
+
         <div className="mt-6 text-center">
-          <p className="text-xs text-muted-foreground">
+            <p className="text-xs text-muted-foreground">
             🔒 Your password is stored securely
           </p>
         </div>
-
       </div>
       </div>
     </div>
