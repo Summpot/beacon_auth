@@ -6,7 +6,7 @@
   "scripts": {
     "build:ui": "rsbuild build",
     "build:worker": "rslib build",
-    "build": "paraglide-js compile --project ./project.inlang --outdir ./src\\paraglide && pnpm -s build:ui && pnpm -s build:worker",
+    "build": "paraglide-js compile --project ./project.inlang --outdir ./src/paraglide && pnpm -s build:ui && pnpm -s build:worker",
     "check": "biome check --write",
     "dev": "rsbuild dev --open",
     "format": "biome format --write",
