@@ -1,7 +1,7 @@
 import { createFileRoute, notFound } from '@tanstack/react-router';
 import { HomePage } from './index';
 import { isAvailableLocale, setLocaleCookie } from '@/lib/i18n';
-import { setLanguageTag } from '@/paraglide/runtime';
+import { setLocale } from '@/paraglide/runtime';
 
 export const Route = createFileRoute('/$lang')({
   beforeLoad: ({ params }) => {
@@ -13,7 +13,7 @@ export const Route = createFileRoute('/$lang')({
   },
   loader: ({ params }) => {
     if (isAvailableLocale(params.lang)) {
-        setLanguageTag(params.lang);
+        setLocale(params.lang);
         setLocaleCookie(params.lang);
         
         // Update document lang
