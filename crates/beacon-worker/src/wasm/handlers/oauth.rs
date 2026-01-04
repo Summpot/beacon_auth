@@ -10,7 +10,7 @@ use crate::wasm::{
     },
     env::env_string,
     http::{error_response, internal_error_response, json_with_cors},
-    jwt::{sign_jwt, verify_access_token},
+    jwt::{sign_jwt, verify_access_token, verify_oauth_state_token},
     state::get_jwt_state,
     util::{new_family_id, new_refresh_token, query_param, redact_oauth_token_body_for_log, sha256_hex},
 };
@@ -287,7 +287,7 @@ pub async fn handle_oauth_link_start(mut req: Request, env: &Env) -> Result<Resp
         return error_response(&req, 401, "unauthorized", "Not authenticated");
     };
 
-    let link_user_id = match verify_access_token(jwt, &access_token) {
+    let link_user_id = match verify_access_token(jwt, &access_token).await {
         Ok(id) => id,
         Err(e) => return error_response(&req, 401, "invalid_token", e),
     };
@@ -385,27 +385,16 @@ pub async fn handle_oauth_callback(req: &Request, env: &Env) -> Result<Response>
 
     let jwt = get_jwt_state(env).await?;
 
-    // Validate and decode stateless OAuth state
-    let mut validation = jsonwebtoken::Validation::new(jsonwebtoken::Algorithm::ES256);
-    validation.set_issuer(&[&jwt.issuer]);
-    validation.set_audience(&["beaconauth-oauth"]);
-    validation.validate_exp = true;
-
-    let oauth_state = match jsonwebtoken::decode::<models::OAuthStateClaims>(
-        &state_token,
-        &jwt.decoding_key,
-        &validation,
-    ) {
-        Ok(data) => data.claims,
+    // Validate and decode stateless OAuth state.
+    // This uses the token header `jku` to dynamically fetch the correct JWKS, so callbacks can
+    // be verified across instances without a shared signing key.
+    let oauth_state = match verify_oauth_state_token(jwt, &state_token).await {
+        Ok(claims) => claims,
         Err(e) => {
-            worker::console_log!("Invalid OAuth state token: {e:?}");
+            worker::console_log!("Invalid OAuth state token: {e}");
             return error_response(req, 400, "invalid_oauth_state", "Invalid or expired OAuth state");
         }
     };
-
-    if oauth_state.token_type != "oauth_state" {
-        return error_response(req, 400, "invalid_oauth_state", "Invalid OAuth state");
-    }
 
     let (provider_user_id, username) = match oauth_state.provider.as_str() {
         "github" => {

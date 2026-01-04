@@ -102,7 +102,7 @@ pub async fn handle_passkey_register_start(mut req: Request, env: &Env) -> Resul
         return error_response(&req, 401, "unauthorized", "Not authenticated");
     };
 
-    let user_id = match verify_access_token(jwt, &access_token) {
+    let user_id = match verify_access_token(jwt, &access_token).await {
         Ok(id) => id,
         Err(e) => return error_response(&req, 401, "invalid_token", e),
     };
@@ -173,7 +173,7 @@ pub async fn handle_passkey_register_finish(mut req: Request, env: &Env) -> Resu
         return error_response(&req, 401, "unauthorized", "Not authenticated");
     };
 
-    let user_id = match verify_access_token(jwt, &access_token) {
+    let user_id = match verify_access_token(jwt, &access_token).await {
         Ok(id) => id,
         Err(e) => return error_response(&req, 401, "invalid_token", e),
     };
@@ -376,7 +376,7 @@ pub async fn handle_passkey_list(req: &Request, env: &Env) -> Result<Response> {
         return error_response(req, 401, "unauthorized", "Not authenticated");
     };
 
-    let user_id = match verify_access_token(jwt, &access_token) {
+    let user_id = match verify_access_token(jwt, &access_token).await {
         Ok(id) => id,
         Err(e) => return error_response(req, 401, "invalid_token", e),
     };
@@ -406,7 +406,7 @@ pub async fn handle_passkey_delete_by_id(req: &Request, env: &Env, id: String) -
         return error_response(req, 401, "unauthorized", "Not authenticated");
     };
 
-    let user_id = match verify_access_token(jwt, &access_token) {
+    let user_id = match verify_access_token(jwt, &access_token).await {
         Ok(id) => id,
         Err(e) => return error_response(req, 401, "invalid_token", e),
     };

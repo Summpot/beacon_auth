@@ -24,7 +24,7 @@ pub async fn handle_minecraft_jwt(mut req: Request, env: &Env) -> Result<Respons
         return json_with_cors(&req, resp);
     };
 
-    let user_id = match verify_access_token(jwt, &access_token) {
+    let user_id = match verify_access_token(jwt, &access_token).await {
         Ok(id) => id,
         Err(e) => {
             let resp = Response::from_json(&models::ErrorResponse {
