@@ -7,6 +7,8 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Github, KeyRound, Shield, Gamepad2 } from 'lucide-react';
+import { ThemeToggle } from '@/components/theme-toggle';
+import { LanguageToggle } from '@/components/language-toggle';
 
 interface UserInfo {
   id: string;
@@ -65,6 +67,8 @@ export function HomePage() {
                   <Github className="h-5 w-5" />
                 </Button>
               </a>
+              <ThemeToggle />
+              <LanguageToggle />
             </div>
           </div>
         </div>
