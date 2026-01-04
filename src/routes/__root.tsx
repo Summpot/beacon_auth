@@ -1,4 +1,4 @@
-import { createRootRoute, Outlet, useRouterState } from '@tanstack/react-router';
+import { createRootRoute, Outlet, useRouterState, HeadContent } from '@tanstack/react-router';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { useEffect, useState } from 'react';
 import { ThemeProvider } from '@/components/theme-provider';
@@ -44,6 +44,7 @@ const RootLayout = () => {
       <QueryClientProvider client={queryClient}>
         <MotionConfig reducedMotion="user">
           <div className="min-h-screen bg-background text-foreground relative">
+            <HeadContent />
             {/* Toggles (Theme & Language) - Floating on non-home pages */}
             {!['/', '/en', '/zh-CN'].includes(pathname) && (
               <div className="fixed top-4 right-4 z-50 flex gap-2">
@@ -76,10 +77,11 @@ const RootLayout = () => {
 
 export const Route = createRootRoute({ 
   component: RootLayout,
-  // @ts-expect-error meta is available in recent versions but might not be in the type definition inferred here
-  meta: () => [
-    {
-      title: 'BeaconAuth',
-    },
-  ],
+  head: () => ({
+    meta: [
+      { charset: 'utf-8' },
+      { name: 'viewport', content: 'width=device-width, initial-scale=1' },
+      { title: 'BeaconAuth' },
+    ],
+  }),
 });
