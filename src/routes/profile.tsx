@@ -3,6 +3,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useEffect, useState } from 'react';
 import { z } from 'zod';
 import { apiClient, queryKeys, type ApiError } from '../utils/api';
+import * as m from '@/paraglide/messages';
 import { BeaconIcon } from '@/components/beacon-icon';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardTitle, CardDescription } from '@/components/ui/card';
@@ -81,7 +82,7 @@ function ProfilePage() {
           <CardContent className="pt-6">
             <div className="flex flex-col items-center gap-4">
               <Loader2 className="h-8 w-8 animate-spin text-primary" />
-              <span className="text-muted-foreground">Loading...</span>
+              <span className="text-muted-foreground">{m.profile_loading()}</span>
             </div>
           </CardContent>
         </Card>
@@ -98,10 +99,10 @@ function ProfilePage() {
               <div className="inline-block mb-6">
                 <BeaconIcon className="w-20 h-20 opacity-50" />
               </div>
-              <CardTitle className="text-2xl font-bold mb-4">Could not load profile</CardTitle>
+              <CardTitle className="text-2xl font-bold mb-4">{m.profile_error_title()}</CardTitle>
               <CardDescription className="mb-6">{error.message}</CardDescription>
               <div className="flex flex-col gap-3">
-                <Button asChild><Link to="/">Back to Home</Link></Button>
+                <Button asChild><Link to="/">{m.profile_back_home()}</Link></Button>
               </div>
             </CardContent>
           </Card>
@@ -119,13 +120,13 @@ function ProfilePage() {
               <div className="inline-block mb-6">
                 <BeaconIcon className="w-20 h-20 opacity-50" />
               </div>
-              <CardTitle className="text-2xl font-bold mb-4">Signed out</CardTitle>
+              <CardTitle className="text-2xl font-bold mb-4">{m.profile_signed_out()}</CardTitle>
               <CardDescription className="mb-6">
-                Redirecting to the login page…
+                {m.profile_redirecting()}
               </CardDescription>
               <div className="flex flex-col gap-3">
                 <Button asChild>
-                  <Link to="/login">Go to Login</Link>
+                  <Link to="/login">{m.profile_go_login()}</Link>
                 </Button>
               </div>
             </CardContent>
@@ -146,11 +147,11 @@ function ProfilePage() {
             </Link>
             <div className="flex items-center gap-2">
               <Button variant="ghost" asChild>
-                <Link to="/settings"><Settings className="h-4 w-4 mr-2" />Settings</Link>
+                <Link to="/settings"><Settings className="h-4 w-4 mr-2" />{m.profile_nav_settings()}</Link>
               </Button>
               <Button variant="destructive" size="sm" onClick={handleLogout} disabled={logoutMutation.isPending}>
                 <LogOut className="h-4 w-4 mr-2" />
-                {logoutMutation.isPending ? 'Logging out...' : 'Logout'}
+                {logoutMutation.isPending ? m.profile_logging_out() : m.profile_logout()}
               </Button>
             </div>
           </div>
@@ -182,7 +183,7 @@ function ProfilePage() {
               </div>
               <div className="flex-1">
                 <h1 className="text-3xl font-bold mb-1">{user.username}</h1>
-                <p className="text-muted-foreground">BeaconAuth User</p>
+                <p className="text-muted-foreground">{m.profile_user_role()}</p>
               </div>
             </div>
           </CardContent>
@@ -196,7 +197,7 @@ function ProfilePage() {
                   <Lock className="h-6 w-6 text-primary" />
                 </div>
                 <div>
-                  <p className="text-muted-foreground text-sm">Account ID</p>
+                  <p className="text-muted-foreground text-sm">{m.profile_account_id()}</p>
                   <p className="font-bold">#{user.id}</p>
                 </div>
               </div>
@@ -210,8 +211,8 @@ function ProfilePage() {
                   <CheckCircle className="h-6 w-6 text-green-500" />
                 </div>
                 <div>
-                  <p className="text-muted-foreground text-sm">Status</p>
-                  <Badge variant="outline" className="text-green-500 border-green-500/30">Authenticated</Badge>
+                  <p className="text-muted-foreground text-sm">{m.profile_status()}</p>
+                  <Badge variant="outline" className="text-green-500 border-green-500/30">{m.profile_status_authenticated()}</Badge>
                 </div>
               </div>
             </CardContent>
@@ -224,8 +225,8 @@ function ProfilePage() {
                   <Gamepad2 className="h-6 w-6 text-secondary-foreground" />
                 </div>
                 <div>
-                  <p className="text-muted-foreground text-sm">Minecraft</p>
-                  <Badge variant="outline">Connected</Badge>
+                  <p className="text-muted-foreground text-sm">{m.profile_minecraft()}</p>
+                  <Badge variant="outline">{m.profile_connected()}</Badge>
                 </div>
               </div>
             </CardContent>
@@ -235,10 +236,9 @@ function ProfilePage() {
         <Alert className="mt-6">
           <Shield className="h-4 w-4" />
           <AlertDescription>
-            <h3 className="font-semibold mb-1">Secure Session</h3>
+            <h3 className="font-semibold mb-1">{m.profile_secure_session_title()}</h3>
             <p className="text-sm text-muted-foreground">
-              Your session is protected with secure, signed cookies.
-              For extra protection, enable passkey sign-in in your settings.
+              {m.profile_secure_session_desc()}
             </p>
           </AlertDescription>
         </Alert>

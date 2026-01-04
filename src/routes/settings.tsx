@@ -40,6 +40,7 @@ import {
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { ApiError, apiClient } from '../utils/api';
+import * as m from '@/paraglide/messages';
 
 const passwordChangeSchema = z
   .object({
@@ -343,7 +344,7 @@ function SettingsPage() {
           <CardContent className="pt-6">
             <div className="flex flex-col items-center gap-4">
               <Loader2 className="h-8 w-8 animate-spin text-primary" />
-              <span className="text-muted-foreground">Loading...</span>
+              <span className="text-muted-foreground">{m.profile_loading()}</span>
             </div>
           </CardContent>
         </Card>
@@ -361,13 +362,13 @@ function SettingsPage() {
                 <BeaconIcon className="w-20 h-20 opacity-50" />
               </div>
               <CardTitle className="text-2xl font-bold mb-4">
-                Not Authenticated
+                {m.settings_not_authenticated()}
               </CardTitle>
               <CardDescription className="mb-6">
-                Please log in to access settings.
+                {m.settings_login_required()}
               </CardDescription>
               <Button asChild>
-                <Link to="/login">Sign In</Link>
+                <Link to="/login">{m.settings_sign_in()}</Link>
               </Button>
             </CardContent>
           </Card>
@@ -383,10 +384,10 @@ function SettingsPage() {
           <div className="flex items-center justify-between">
             <Link to="/" className="flex items-center gap-3 group">
               <BeaconIcon className="w-8 h-8" />
-              <span className="text-xl text-primary font-bold">BeaconAuth</span>
+              <span className="text-xl text-primary font-bold">{m.app_name()}</span>
             </Link>
             <Button variant="ghost" asChild>
-              <Link to="/profile">Profile</Link>
+              <Link to="/profile">{m.settings_nav_profile()}</Link>
             </Button>
           </div>
         </div>
@@ -399,12 +400,11 @@ function SettingsPage() {
             className="inline-flex items-center gap-2 text-muted-foreground hover:text-primary transition-colors mb-4"
           >
             <ChevronLeft className="h-4 w-4" />
-            Back to Profile
+            {m.settings_back_profile()}
           </Link>
-          <h1 className="text-3xl font-bold">Profile Settings</h1>
+          <h1 className="text-3xl font-bold">{m.settings_title()}</h1>
           <p className="text-muted-foreground mt-2">
-            Manage your password and passkeys for{' '}
-            <span className="text-primary">{user.username}</span>
+            {m.settings_subtitle({ username: <span className="text-primary">{user.username}</span> })}
           </p>
         </div>
 
@@ -435,11 +435,10 @@ function SettingsPage() {
           <CardHeader>
             <CardTitle className="text-xl font-bold flex items-center gap-3">
               <span className="w-2 h-2 bg-primary rounded-full" />
-              Change Username
+              {m.settings_change_username_title()}
             </CardTitle>
             <CardDescription>
-              3-16 characters. Letters, numbers, and underscore only. Usernames
-              are unique case-insensitively.
+              {m.settings_change_username_desc()}
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -448,11 +447,11 @@ function SettingsPage() {
               className="space-y-4"
             >
               <div className="space-y-2">
-                <Label htmlFor="username">Username</Label>
+                <Label htmlFor="username">{m.settings_username_label()}</Label>
                 <Input
                   id="username"
                   {...changeUsernameForm.register('username')}
-                  placeholder="Your Minecraft-style username"
+                  placeholder={m.settings_username_placeholder()}
                   disabled={changeUsernameForm.formState.isSubmitting}
                   className="bg-background/50"
                 />
@@ -470,10 +469,10 @@ function SettingsPage() {
                 {changeUsernameForm.formState.isSubmitting ? (
                   <>
                     <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                    Updating...
+                    {m.settings_updating()}
                   </>
                 ) : (
-                  'Update Username'
+                  m.settings_update_username()
                 )}
               </Button>
             </form>
@@ -486,11 +485,10 @@ function SettingsPage() {
               <div>
                 <CardTitle className="text-xl font-bold flex items-center gap-3">
                   <span className="w-2 h-2 bg-primary rounded-full" />
-                  Login Methods
+                  {m.settings_login_methods_title()}
                 </CardTitle>
                 <CardDescription>
-                  Link or unlink login methods. All methods are equal — keep at
-                  least one enabled so you don&apos;t lock yourself out.
+                  {m.settings_login_methods_desc()}
                 </CardDescription>
               </div>
             </div>
@@ -502,8 +500,9 @@ function SettingsPage() {
                   <div className="w-10 h-10 rounded-lg bg-primary/20 flex items-center justify-center">
                     <Mail className="h-5 w-5 text-primary" />
                   </div>
+
                   <div>
-                    <h3 className="font-semibold">Password</h3>
+                    <h3 className="font-semibold">{m.settings_password_method()}</h3>
                     <p className="text-xs text-muted-foreground">
                       {user.username}
                     </p>
@@ -516,19 +515,19 @@ function SettingsPage() {
                       : 'text-muted-foreground text-sm'
                   }
                 >
-                  {hasPassword ? 'Enabled' : 'Not set'}
+                  {hasPassword ? m.settings_enabled() : m.settings_not_set()}
                 </span>
               </div>
 
               <div className="space-y-3">
                 <h3 className="font-semibold text-sm text-muted-foreground">
-                  Linked OAuth Accounts
+                  {m.settings_linked_oauth()}
                 </h3>
                 {identities &&
                 identities.identities.filter((i) => i.provider !== 'password')
                   .length === 0 ? (
                   <div className="text-sm text-muted-foreground p-4 rounded-xl border border-dashed border-border">
-                    No OAuth accounts linked yet.
+                    {m.settings_no_oauth()}
                   </div>
                 ) : (
                   <div className="space-y-3">
@@ -577,7 +576,7 @@ function SettingsPage() {
                     onClick={() => handleOAuthLink('github')}
                   >
                     <Github className="h-4 w-4 mr-2" />
-                    Link GitHub
+                    {m.settings_link_github()}
                   </Button>
                 )}
                 {config?.google_oauth && !isGoogleLinked && (
@@ -586,12 +585,12 @@ function SettingsPage() {
                     onClick={() => handleOAuthLink('google')}
                   >
                     <Chrome className="h-4 w-4 mr-2" />
-                    Link Google
+                    {m.settings_link_google()}
                   </Button>
                 )}
                 {!config?.github_oauth && !config?.google_oauth && (
                   <p className="text-sm text-muted-foreground">
-                    No OAuth providers configured on the server.
+                    {m.settings_no_providers()}
                   </p>
                 )}
               </div>
@@ -603,7 +602,7 @@ function SettingsPage() {
           <CardHeader>
             <CardTitle className="text-xl font-bold flex items-center gap-3">
               <span className="w-2 h-2 bg-primary rounded-full" />
-              {hasPassword ? 'Change Password' : 'Set Password'}
+              {hasPassword ? m.settings_change_password() : m.settings_set_password()}
             </CardTitle>
           </CardHeader>
           <CardContent>
@@ -613,12 +612,12 @@ function SettingsPage() {
                 className="space-y-4"
               >
                 <div className="space-y-2">
-                  <Label htmlFor="currentPassword">Current Password</Label>
+                  <Label htmlFor="currentPassword">{m.settings_current_password()}</Label>
                   <Input
                     id="currentPassword"
                     type="password"
                     {...changePasswordForm.register('currentPassword')}
-                    placeholder="Enter current password"
+                    placeholder={m.settings_current_password_placeholder()}
                     disabled={changePasswordForm.formState.isSubmitting}
                     className="bg-background/50"
                   />
@@ -632,12 +631,12 @@ function SettingsPage() {
                   )}
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="newPassword">New Password</Label>
+                  <Label htmlFor="newPassword">{m.settings_new_password()}</Label>
                   <Input
                     id="newPassword"
                     type="password"
                     {...changePasswordForm.register('newPassword')}
-                    placeholder="Enter new password (min 6 characters)"
+                    placeholder={m.settings_new_password_placeholder()}
                     disabled={changePasswordForm.formState.isSubmitting}
                     className="bg-background/50"
                   />
@@ -648,12 +647,12 @@ function SettingsPage() {
                   )}
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="confirmPassword">Confirm New Password</Label>
+                  <Label htmlFor="confirmPassword">{m.settings_confirm_password()}</Label>
                   <Input
                     id="confirmPassword"
                     type="password"
                     {...changePasswordForm.register('confirmPassword')}
-                    placeholder="Confirm new password"
+                    placeholder={m.settings_confirm_password_placeholder()}
                     disabled={changePasswordForm.formState.isSubmitting}
                     className="bg-background/50"
                   />
@@ -674,10 +673,10 @@ function SettingsPage() {
                   {changePasswordForm.formState.isSubmitting ? (
                     <>
                       <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                      Changing Password...
+                      {m.settings_changing_password()}
                     </>
                   ) : (
-                    'Change Password'
+                    m.settings_change_password()
                   )}
                 </Button>
               </form>
@@ -687,12 +686,12 @@ function SettingsPage() {
                 className="space-y-4"
               >
                 <div className="space-y-2">
-                  <Label htmlFor="newPassword">New Password</Label>
+                  <Label htmlFor="newPassword">{m.settings_new_password()}</Label>
                   <Input
                     id="newPassword"
                     type="password"
                     {...setPasswordForm.register('newPassword')}
-                    placeholder="Create a password (min 6 characters)"
+                    placeholder={m.settings_create_password_placeholder()}
                     disabled={setPasswordForm.formState.isSubmitting}
                     className="bg-background/50"
                   />
@@ -703,12 +702,12 @@ function SettingsPage() {
                   )}
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="confirmPassword">Confirm Password</Label>
+                  <Label htmlFor="confirmPassword">{m.settings_confirm_password_simple()}</Label>
                   <Input
                     id="confirmPassword"
                     type="password"
                     {...setPasswordForm.register('confirmPassword')}
-                    placeholder="Confirm your password"
+                    placeholder={m.settings_confirm_password_simple_placeholder()}
                     disabled={setPasswordForm.formState.isSubmitting}
                     className="bg-background/50"
                   />
@@ -726,10 +725,10 @@ function SettingsPage() {
                   {setPasswordForm.formState.isSubmitting ? (
                     <>
                       <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                      Setting Password...
+                      {m.settings_setting_password()}
                     </>
                   ) : (
-                    'Set Password'
+                    m.settings_set_password()
                   )}
                 </Button>
               </form>
@@ -743,15 +742,15 @@ function SettingsPage() {
               <div>
                 <CardTitle className="text-xl font-bold flex items-center gap-3">
                   <span className="w-2 h-2 bg-primary rounded-full" />
-                  Passkeys
+                  {m.settings_passkeys_title()}
                 </CardTitle>
                 <CardDescription>
-                  Use biometric authentication for passwordless login
+                  {m.settings_passkeys_desc()}
                 </CardDescription>
               </div>
               <Button onClick={() => setShowPasskeyModal(true)}>
                 <Plus className="h-4 w-4 mr-2" />
-                Add Passkey
+                {m.settings_add_passkey()}
               </Button>
             </div>
           </CardHeader>
@@ -760,10 +759,10 @@ function SettingsPage() {
               <div className="text-center py-12 border-2 border-dashed border-border rounded-xl">
                 <Key className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
                 <p className="text-muted-foreground mb-2">
-                  No passkeys registered yet
+                  {m.settings_no_passkeys()}
                 </p>
                 <p className="text-sm text-muted-foreground">
-                  Add a passkey for faster, more secure authentication
+                  {m.settings_add_passkey_promo()}
                 </p>
               </div>
             ) : (
