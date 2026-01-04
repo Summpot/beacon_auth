@@ -60,12 +60,14 @@ jobs:
             artifact_ext: zip
             arch: amd64
             container: ''
+            vcpkg_triplet: 'x64-windows-static-md'
           - os: windows-11-arm
             target: aarch64-pc-windows-msvc
             artifact_name: beaconauth-windows-arm64
             artifact_ext: zip
             arch: arm64
             container: ''
+            vcpkg_triplet: 'arm64-windows-static-md'
           - os: macos-15-intel
             target: x86_64-apple-darwin
             artifact_name: beaconauth-macos-amd64
@@ -112,18 +114,12 @@ jobs:
         uses: davidlattimore/wild-action@0.7.0
 
       - name: Install OpenSSL
-        if: runner.os == 'Windows' && matrix.target == 'x86_64-pc-windows-msvc'
-        run: |
-          vcpkg install openssl:x64-windows-static-md
-          echo "VCPKG_ROOT=$env:VCPKG_INSTALLATION_ROOT" >> $env:GITHUB_ENV
-        shell: pwsh
-
-      - name: Install OpenSSL
-        if: runner.os == 'Windows' && matrix.target == 'aarch64-pc-windows-msvc'
-        run: |
-          vcpkg install openssl:arm64-windows-static-md
-          echo "VCPKG_ROOT=$env:VCPKG_INSTALLATION_ROOT" >> $env:GITHUB_ENV
-        shell: pwsh
+        uses: johnwason/vcpkg-action@v7
+        with:
+          pkgs: openssl
+          triplet: ${{ matrix.config.vcpkg_triplet }}
+          cache-key: ${{ matrix.os }}-${{ matrix.vcpkg_triplet }}
+          token: ${{ github.token }}
 
       - name: Use rust-lld (Windows)
         if: runner.os == 'Windows'
