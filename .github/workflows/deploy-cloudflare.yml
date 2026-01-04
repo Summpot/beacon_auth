@@ -158,7 +158,7 @@ jobs:
 
           echo "Ensuring Pages project '$project' exists (errors are safe to ignore):"
 
-          cmd=(bun wrangler pages project create "$project" --production-branch "main")
+          cmd=(pnpm wrangler pages project create "$project" --production-branch "main")
           if [ -n "$compat" ]; then
             cmd+=(--compatibility-date "$compat")
           fi
@@ -175,7 +175,7 @@ jobs:
         run: |
           set -euo pipefail
 
-          bun wrangler deploy --config "${WRANGLER_WORKERS_CONFIG}" --var "BASE_URL:${BASE_URL}" --var "CLOUDFLARE_ACCOUNT_ID:${CLOUDFLARE_ACCOUNT_ID}"
+          pnpm wrangler deploy --config "${WRANGLER_WORKERS_CONFIG}" --var "BASE_URL:${BASE_URL}" --var "CLOUDFLARE_ACCOUNT_ID:${CLOUDFLARE_ACCOUNT_ID}"
 
       - name: Apply SeaORM migrations (Migrator::up)
         env:
@@ -247,7 +247,7 @@ jobs:
             local value="$2"
             if [ -n "$value" ]; then
               echo "Setting secret: $name"
-              printf %s "$value" | bun wrangler secret put "$name" --config "${WRANGLER_WORKERS_CONFIG}"
+              printf %s "$value" | pnpm wrangler secret put "$name" --config "${WRANGLER_WORKERS_CONFIG}"
             else
               echo "Skipping secret (not provided): $name"
             fi
@@ -273,7 +273,7 @@ jobs:
           project="${PAGES_PROJECT:?PAGES_PROJECT is required}"
           echo "Deploying Pages project '$project' from ./dist"
 
-          bun wrangler pages deploy dist --project-name "$project" --branch "main" --experimental-provision --experimental-auto-create
+          pnpm wrangler pages deploy dist --project-name "$project" --branch "main" --experimental-provision --experimental-auto-create
 
           echo "Pages URL: https://$project.pages.dev" >> "$GITHUB_STEP_SUMMARY"
 
