@@ -10,6 +10,8 @@ import { Card, CardContent, CardTitle, CardDescription } from '@/components/ui/c
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
+import { ThemeToggle } from '@/components/theme-toggle';
+import { LanguageToggle } from '@/components/language-toggle';
 import { Settings, LogOut, Shield, Gamepad2, Lock, CheckCircle, Loader2 } from 'lucide-react';
 
 const searchParamsSchema = z.object({
@@ -125,10 +127,14 @@ function ProfilePage() {
                 {m.profile_redirecting()}
               </CardDescription>
               <div className="flex flex-col gap-3">
-                <Button asChild>
-                  <Link to="/login">{m.profile_go_login()}</Link>
-                </Button>
-              </div>
+                <div className="flex items-center gap-2">
+              <Button variant="ghost" asChild>
+                <Link to="/profile">{m.settings_nav_profile()}</Link>
+              </Button>
+              <ThemeToggle />
+              <LanguageToggle />
+            </div>
+          </div>
             </CardContent>
           </Card>
         </div>

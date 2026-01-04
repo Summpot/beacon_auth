@@ -22,6 +22,8 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Separator } from '@/components/ui/separator';
 import { KeyRound, ChevronLeft, Loader2 } from 'lucide-react';
+import { ThemeToggle } from '@/components/theme-toggle';
+import { LanguageToggle } from '@/components/language-toggle';
 
 const searchParamsSchema = z.object({
   challenge: z.string().min(1).optional(),
@@ -240,10 +242,16 @@ function LoginPage() {
   return (
     <div className="flex items-center justify-center min-h-screen p-4">
       <div className="w-full max-w-md">
-        <Link to="/" className="inline-flex items-center gap-2 text-muted-foreground hover:text-primary transition-colors mb-6">
-          <ChevronLeft className="h-4 w-4" />
-          {m.login_back_home()}
-        </Link>
+        <div className="flex items-center justify-between mb-6">
+          <Link to="/" className="inline-flex items-center gap-2 text-muted-foreground hover:text-primary transition-colors">
+            <ChevronLeft className="h-4 w-4" />
+            {m.login_back_home()}
+          </Link>
+          <div className="flex items-center gap-2">
+            <ThemeToggle />
+            <LanguageToggle />
+          </div>
+        </div>
 
         <Card>
           <CardHeader className="text-center pb-4">
