@@ -173,7 +173,7 @@ function ProfilePage() {
               <Button
                 variant="outline"
                 size="sm"
-                className="text-destructive hover:text-destructive hover:bg-destructive/10 border-destructive/20"
+                className="text-red-600 dark:text-red-400 hover:text-red-700 dark:hover:text-red-300 hover:bg-red-50 dark:hover:bg-red-900/20 border-red-200 dark:border-red-900/50"
                 onClick={handleLogout}
                 disabled={logoutMutation.isPending}
               >
@@ -192,7 +192,7 @@ function ProfilePage() {
         </div>
       </nav>
 
-      <div className="container max-w-4xl mx-auto px-4 md:px-6 pt-12">
+      <div className="container max-w-5xl mx-auto px-4 md:px-6 pt-12">
         {statusMessage && (
           <Alert
             variant={

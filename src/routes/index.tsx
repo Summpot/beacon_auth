@@ -272,7 +272,7 @@ export function HomePage() {
                   BeaconAuth
                 </span>
                 <span className="text-xs text-muted-foreground">
-                  © 2024 Open Source
+                  © 2026 Summpot
                 </span>
               </div>
             </div>
