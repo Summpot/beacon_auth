@@ -41,6 +41,8 @@ pub async fn get_config(app_state: web::Data<AppState>) -> impl Responder {
             && app_state.oauth_config.github_client_secret.is_some(),
         google_oauth: app_state.oauth_config.google_client_id.is_some()
             && app_state.oauth_config.google_client_secret.is_some(),
+        microsoft_oauth: app_state.oauth_config.microsoft_client_id.is_some()
+            && app_state.oauth_config.microsoft_client_secret.is_some(),
     };
 
     HttpResponse::Ok().json(config)
@@ -396,6 +398,35 @@ pub async fn oauth_start(
                 });
             }
         }
+        "microsoft" => {
+            if let (Some(client_id), Some(_)) = (
+                &app_state.oauth_config.microsoft_client_id,
+                &app_state.oauth_config.microsoft_client_secret,
+            ) {
+                let redirect_uri = format!(
+                    "{}/api/v1/oauth/callback",
+                    app_state.oauth_config.redirect_base
+                );
+
+                let tenant_raw = app_state.oauth_config.microsoft_tenant.trim();
+                let tenant = if tenant_raw.is_empty() { "common" } else { tenant_raw };
+                let scope = "openid email profile User.Read";
+
+                format!(
+                    "https://login.microsoftonline.com/{tenant}/oauth2/v2.0/authorize?client_id={}&redirect_uri={}&response_type=code&response_mode=query&scope={}&state={}",
+                    client_id,
+                    urlencoding::encode(&redirect_uri),
+                    urlencoding::encode(scope),
+                    urlencoding::encode(&state_token)
+                )
+            } else {
+                log::error!("Microsoft OAuth not configured");
+                return HttpResponse::ServiceUnavailable().json(ErrorResponse {
+                    error: "oauth_not_configured".to_string(),
+                    message: "Microsoft OAuth is not configured".to_string(),
+                });
+            }
+        }
         _ => {
             return HttpResponse::BadRequest().json(ErrorResponse {
                 error: "invalid_provider".to_string(),
@@ -525,6 +556,35 @@ pub async fn oauth_link_start(
                 });
             }
         }
+        "microsoft" => {
+            if let (Some(client_id), Some(_)) = (
+                &app_state.oauth_config.microsoft_client_id,
+                &app_state.oauth_config.microsoft_client_secret,
+            ) {
+                let redirect_uri = format!(
+                    "{}/api/v1/oauth/callback",
+                    app_state.oauth_config.redirect_base
+                );
+
+                let tenant_raw = app_state.oauth_config.microsoft_tenant.trim();
+                let tenant = if tenant_raw.is_empty() { "common" } else { tenant_raw };
+                let scope = "openid email profile User.Read";
+
+                format!(
+                    "https://login.microsoftonline.com/{tenant}/oauth2/v2.0/authorize?client_id={}&redirect_uri={}&response_type=code&response_mode=query&scope={}&state={}",
+                    client_id,
+                    urlencoding::encode(&redirect_uri),
+                    urlencoding::encode(scope),
+                    urlencoding::encode(&state_token)
+                )
+            } else {
+                log::error!("Microsoft OAuth not configured");
+                return HttpResponse::ServiceUnavailable().json(ErrorResponse {
+                    error: "oauth_not_configured".to_string(),
+                    message: "Microsoft OAuth is not configured".to_string(),
+                });
+            }
+        }
         _ => {
             return HttpResponse::BadRequest().json(ErrorResponse {
                 error: "invalid_provider".to_string(),
@@ -581,6 +641,13 @@ pub async fn oauth_callback(
             Err(e) => {
                 log::error!("Google OAuth failed: {}", e);
                 return HttpResponse::InternalServerError().body("Google authentication failed");
+            }
+        },
+        "microsoft" => match exchange_microsoft_code(&app_state, &query.code).await {
+            Ok((id, name)) => (id, name),
+            Err(e) => {
+                log::error!("Microsoft OAuth failed: {}", e);
+                return HttpResponse::InternalServerError().body("Microsoft authentication failed");
             }
         },
         _ => {
@@ -681,6 +748,7 @@ pub async fn oauth_callback(
         let prefix = match provider.as_str() {
             "github" => "gh_",
             "google" => "gg_",
+            "microsoft" => "ms_",
             _ => "id_",
         };
 
@@ -999,6 +1067,124 @@ async fn exchange_google_code(
     let username = email.split('@').next().unwrap_or(email);
 
     Ok((user_id, username.to_string()))
+}
+
+// Helper function to exchange Microsoft code for user info
+async fn exchange_microsoft_code(
+    app_state: &AppState,
+    code: &str,
+) -> Result<(String, String), anyhow::Error> {
+    let client = reqwest::Client::new();
+
+    let redirect_uri = format!(
+        "{}/api/v1/oauth/callback",
+        app_state.oauth_config.redirect_base.trim_end_matches('/')
+    );
+
+    let tenant_raw = app_state.oauth_config.microsoft_tenant.trim();
+    let tenant = if tenant_raw.is_empty() { "common" } else { tenant_raw };
+    let token_url = format!(
+        "https://login.microsoftonline.com/{tenant}/oauth2/v2.0/token"
+    );
+
+    // Exchange code for access token
+    let token_resp = client
+        .post(&token_url)
+        .form(&[
+            (
+                "client_id",
+                app_state
+                    .oauth_config
+                    .microsoft_client_id
+                    .as_ref()
+                    .unwrap()
+                    .as_str(),
+            ),
+            (
+                "client_secret",
+                app_state
+                    .oauth_config
+                    .microsoft_client_secret
+                    .as_ref()
+                    .unwrap()
+                    .as_str(),
+            ),
+            ("code", code),
+            ("grant_type", "authorization_code"),
+            ("redirect_uri", &redirect_uri),
+            ("scope", "openid email profile User.Read"),
+        ])
+        .send()
+        .await?;
+
+    let status = token_resp.status();
+    let token_body = token_resp.text().await?;
+
+    if !status.is_success() {
+        anyhow::bail!(
+            "Microsoft token exchange failed ({status}): {token_body} (check MICROSOFT_CLIENT_ID/MICROSOFT_CLIENT_SECRET and callback URL: {redirect_uri})"
+        );
+    }
+
+    let token_json: serde_json::Value = serde_json::from_str(&token_body)
+        .map_err(|e| anyhow::anyhow!("Failed to parse Microsoft token response JSON: {e}; body={token_body}"))?;
+
+    let access_token = token_json
+        .get("access_token")
+        .and_then(|v| v.as_str())
+        .ok_or_else(|| {
+            let err = token_json.get("error").and_then(|v| v.as_str()).unwrap_or("unknown_error");
+            let desc = token_json
+                .get("error_description")
+                .and_then(|v| v.as_str())
+                .unwrap_or("no error_description");
+            anyhow::anyhow!("No access_token in Microsoft response (error={err}): {desc}")
+        })?;
+
+    // Get user info
+    let user_resp = client
+        .get("https://graph.microsoft.com/v1.0/me")
+        .header("Accept", "application/json")
+        .header("Authorization", format!("Bearer {access_token}"))
+        .send()
+        .await?;
+
+    let user_status = user_resp.status();
+    let user_body = user_resp.text().await?;
+    if !user_status.is_success() {
+        anyhow::bail!("Microsoft user fetch failed ({user_status}): {user_body}");
+    }
+
+    let user_json: serde_json::Value = serde_json::from_str(&user_body)
+        .map_err(|e| anyhow::anyhow!("Failed to parse Microsoft user JSON: {e}; body={user_body}"))?;
+
+    let user_id = user_json
+        .get("id")
+        .and_then(|v| v.as_str())
+        .ok_or_else(|| anyhow::anyhow!("No id in Microsoft profile response"))?
+        .to_string();
+
+    let username_source = user_json
+        .get("mail")
+        .and_then(|v| v.as_str())
+        .filter(|s| !s.trim().is_empty())
+        .or_else(|| {
+            user_json
+                .get("userPrincipalName")
+                .and_then(|v| v.as_str())
+                .filter(|s| !s.trim().is_empty())
+        })
+        .or_else(|| {
+            user_json
+                .get("displayName")
+                .and_then(|v| v.as_str())
+                .filter(|s| !s.trim().is_empty())
+        })
+        .ok_or_else(|| anyhow::anyhow!("No mail/userPrincipalName/displayName in Microsoft profile response"))?;
+
+    let username_raw = username_source.split('@').next().unwrap_or(username_source);
+
+    Ok((user_id, username_raw.to_string()))
 }
 
 /// Helper function to extract user ID from session cookie

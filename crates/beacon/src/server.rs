@@ -179,6 +179,9 @@ pub async fn build_app_state(config: &ServeConfig) -> anyhow::Result<web::Data<A
         github_client_secret: config.github_client_secret.clone(),
         google_client_id: config.google_client_id.clone(),
         google_client_secret: config.google_client_secret.clone(),
+        microsoft_client_id: config.microsoft_client_id.clone(),
+        microsoft_client_secret: config.microsoft_client_secret.clone(),
+        microsoft_tenant: config.microsoft_tenant.clone(),
         redirect_base: config.base_url.clone(),
     };
 
@@ -480,6 +483,9 @@ mod tests {
             github_client_secret: None,
             google_client_id: None,
             google_client_secret: None,
+            microsoft_client_id: None,
+            microsoft_client_secret: None,
+            microsoft_tenant: "common".to_string(),
             redis_url: None,
             base_url: "https://beaconauth.pages.dev".to_string(),
             jwks_url: None,

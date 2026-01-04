@@ -12,7 +12,7 @@
 - 🔐 **ES256 JWT Authentication** - Industry-standard elliptic curve cryptography
 - 🌐 **Modern Web Interface** - React-based login and registration pages
 - 🍪 **Session Management** - Secure HttpOnly cookies with refresh token rotation
-- 🔑 **OAuth Integration** - Support for GitHub and Google authentication
+- 🔑 **OAuth Integration** - Support for GitHub, Google, and Microsoft authentication
 - 🔒 **WebAuthn/Passkey Support** - Passwordless authentication with biometrics
 - 🗄️ **SQLite Database** - Simple, file-based user storage
 - 🐳 **Docker Ready** - Multi-architecture container images (amd64/arm64)
@@ -174,6 +174,9 @@ Recommended / optional secrets:
 | `CLOUDFLARE_WORKER_GITHUB_CLIENT_SECRET` | Optional | GitHub OAuth |
 | `CLOUDFLARE_WORKER_GOOGLE_CLIENT_ID` | Optional | Google OAuth |
 | `CLOUDFLARE_WORKER_GOOGLE_CLIENT_SECRET` | Optional | Google OAuth |
+| `CLOUDFLARE_WORKER_MICROSOFT_CLIENT_ID` | Optional | Microsoft OAuth |
+| `CLOUDFLARE_WORKER_MICROSOFT_CLIENT_SECRET` | Optional | Microsoft OAuth |
+| `CLOUDFLARE_WORKER_MICROSOFT_TENANT` | Optional | Microsoft OAuth tenant (defaults to `common`) |
 
 The workflow will:
 
@@ -207,7 +210,10 @@ beacon serve --help
 | `--github-client-secret` | `GITHUB_CLIENT_SECRET` | - | GitHub OAuth client secret |
 | `--google-client-id` | `GOOGLE_CLIENT_ID` | - | Google OAuth client ID |
 | `--google-client-secret` | `GOOGLE_CLIENT_SECRET` | - | Google OAuth client secret |
-| `--oauth-redirect-base` | `OAUTH_REDIRECT_BASE` | `https://beaconauth.pages.dev` | OAuth redirect base URL |
+| `--microsoft-client-id` | `MICROSOFT_CLIENT_ID` | - | Microsoft OAuth client ID |
+| `--microsoft-client-secret` | `MICROSOFT_CLIENT_SECRET` | - | Microsoft OAuth client secret |
+| `--microsoft-tenant` | `MICROSOFT_TENANT` | `common` | Microsoft OAuth tenant (`common`, `organizations`, `consumers`, or a tenant GUID) |
+| `--base-url` | `BASE_URL` | `https://beaconauth.pages.dev` | Base URL used for issuer + OAuth redirects + WebAuthn RP origin |
 
 #### Example Configuration
 
@@ -224,7 +230,11 @@ GITHUB_CLIENT_ID=your_github_client_id
 GITHUB_CLIENT_SECRET=your_github_client_secret
 GOOGLE_CLIENT_ID=your_google_client_id
 GOOGLE_CLIENT_SECRET=your_google_client_secret
-OAUTH_REDIRECT_BASE=https://auth.example.com
+MICROSOFT_CLIENT_ID=your_microsoft_client_id
+MICROSOFT_CLIENT_SECRET=your_microsoft_client_secret
+# Optional; defaults to "common". Use a tenant GUID to restrict logins to a single tenant.
+MICROSOFT_TENANT=common
+BASE_URL=https://auth.example.com
 ```
 
 ### Database Setup
@@ -279,6 +289,33 @@ beacon delete-user --username username
    export GOOGLE_CLIENT_SECRET=your_client_secret
    ```
 
+#### Microsoft OAuth
+
+BeaconAuth uses the Microsoft identity platform (v2.0) and Microsoft Graph to fetch the signed-in user's profile.
+
+1. Go to the Azure Portal → **Microsoft Entra ID** → **App registrations**
+2. Click **New registration**
+3. Fill in the details:
+  - **Name**: BeaconAuth
+  - **Supported account types**: choose what fits your deployment
+4. After creation, note:
+  - **Application (client) ID** → `MICROSOFT_CLIENT_ID`
+  - (Optional) **Directory (tenant) ID** (if you want to restrict to one tenant)
+5. Configure a redirect URI:
+  - Go to **Authentication** → **Add a platform** → **Web**
+  - Add **Redirect URI**: `https://beaconauth.pages.dev/api/v1/oauth/callback` (or your own `${BASE_URL}/api/v1/oauth/callback`)
+6. Create a client secret:
+  - Go to **Certificates & secrets** → **New client secret**
+  - Copy the value → `MICROSOFT_CLIENT_SECRET`
+7. Ensure API permissions include Microsoft Graph **User.Read** (delegated)
+8. Set environment variables:
+  ```bash
+  export MICROSOFT_CLIENT_ID=your_client_id
+  export MICROSOFT_CLIENT_SECRET=your_client_secret
+  # Optional; defaults to "common".
+  export MICROSOFT_TENANT=common
+  ```
+
 ### Production Deployment
 
 #### Using Docker Compose
@@ -303,7 +340,10 @@ services:
       GITHUB_CLIENT_SECRET: ${GITHUB_CLIENT_SECRET}
       GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID}
       GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET}
-      OAUTH_REDIRECT_BASE: https://auth.example.com
+      MICROSOFT_CLIENT_ID: ${MICROSOFT_CLIENT_ID}
+      MICROSOFT_CLIENT_SECRET: ${MICROSOFT_CLIENT_SECRET}
+      MICROSOFT_TENANT: ${MICROSOFT_TENANT}
+      BASE_URL: https://auth.example.com
     restart: unless-stopped
 ```
 
@@ -806,7 +846,7 @@ If it is missing or invalid, BeaconAuth falls back to the launcher-provided user
 
 **Solutions**:
 1. Verify OAuth app callback URL matches exactly: `http://yourserver:8080/api/v1/oauth/callback`
-2. Check `OAUTH_REDIRECT_BASE` environment variable
+2. Check `BASE_URL` environment variable
 3. For production, use HTTPS and proper domain
 
 ### Debug Logging

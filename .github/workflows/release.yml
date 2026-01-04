@@ -58,65 +58,10 @@ jobs:
   build-mod:
     name: Build Minecraft Mod
     needs: create-release
-    runs-on: ubuntu-latest
-    
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Setup Java
-        uses: actions/setup-java@v4
-        with:
-          distribution: 'zulu'
-          java-version: '21'
-
-      - name: Setup Gradle
-        uses: gradle/actions/setup-gradle@v4
-        with:
-          cache-read-only: false
-
-      - name: Build mod with Gradle
-        run: |
-          cd modSrc
-          chmod +x gradlew
-          ./gradlew build --no-daemon --stacktrace
-
-      - name: Prepare mod artifacts
-        shell: bash
-        run: |
-          set -euo pipefail
-
-          mkdir -p mod-release
-
-          projects=(
-            fabric-1.20.1
-            forge-1.20.1
-            fabric-1.21.1
-            neoforge-1.21.1
-            fabric-1.21.8
-            neoforge-1.21.8
-          )
-
-          for p in "${projects[@]}"; do
-            dir="modSrc/${p}/build/libs"
-            if [ -d "$dir" ]; then
-              find "$dir" -maxdepth 1 -type f -name "*.jar" \
-                ! -name "*-dev-shadow.jar" \
-                -exec cp -v "{}" mod-release/ \;
-            else
-              echo "Skipping missing libs dir: $dir"
-            fi
-          done
-
-          echo "Release mod files:"
-          ls -la mod-release/
-
-      - name: Upload mod as artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: beaconauth-mod-release
-          path: mod-release/*.jar
-          retention-days: 90
+    uses: ./.github/workflows/mod.yml
+    with:
+      artifact-name: beaconauth-mod-release
+      retention-days: 90
 
   # Upload auth server release assets
   upload-server-assets:

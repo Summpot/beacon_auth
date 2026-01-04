@@ -243,6 +243,9 @@ jobs:
           GITHUB_CLIENT_SECRET: ${{ secrets.CLOUDFLARE_WORKER_GITHUB_CLIENT_SECRET }}
           GOOGLE_CLIENT_ID: ${{ secrets.CLOUDFLARE_WORKER_GOOGLE_CLIENT_ID }}
           GOOGLE_CLIENT_SECRET: ${{ secrets.CLOUDFLARE_WORKER_GOOGLE_CLIENT_SECRET }}
+          MICROSOFT_CLIENT_ID: ${{ secrets.CLOUDFLARE_WORKER_MICROSOFT_CLIENT_ID }}
+          MICROSOFT_CLIENT_SECRET: ${{ secrets.CLOUDFLARE_WORKER_MICROSOFT_CLIENT_SECRET }}
+          MICROSOFT_TENANT: ${{ secrets.CLOUDFLARE_WORKER_MICROSOFT_TENANT }}
         shell: bash
         run: |
           set -euo pipefail
@@ -262,6 +265,9 @@ jobs:
           put_secret GITHUB_CLIENT_SECRET "${GITHUB_CLIENT_SECRET:-}"
           put_secret GOOGLE_CLIENT_ID "${GOOGLE_CLIENT_ID:-}"
           put_secret GOOGLE_CLIENT_SECRET "${GOOGLE_CLIENT_SECRET:-}"
+          put_secret MICROSOFT_CLIENT_ID "${MICROSOFT_CLIENT_ID:-}"
+          put_secret MICROSOFT_CLIENT_SECRET "${MICROSOFT_CLIENT_SECRET:-}"
+          put_secret MICROSOFT_TENANT "${MICROSOFT_TENANT:-}"
 
       - name: Deploy Pages (UI)
         env:

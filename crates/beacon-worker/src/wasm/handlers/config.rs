@@ -9,11 +9,14 @@ pub async fn handle_get_config(req: &Request, env: &Env) -> Result<Response> {
         && env_string(env, "GITHUB_CLIENT_SECRET").is_some();
     let google_ok = env_string(env, "GOOGLE_CLIENT_ID").is_some()
         && env_string(env, "GOOGLE_CLIENT_SECRET").is_some();
+    let microsoft_ok = env_string(env, "MICROSOFT_CLIENT_ID").is_some()
+        && env_string(env, "MICROSOFT_CLIENT_SECRET").is_some();
 
     let body = models::ConfigResponse {
         database_auth: true,
         github_oauth: github_ok,
         google_oauth: google_ok,
+        microsoft_oauth: microsoft_ok,
     };
 
     let resp = Response::from_json(&body)?;
