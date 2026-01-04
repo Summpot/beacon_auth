@@ -7,11 +7,10 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Languages } from "lucide-react";
 import { setLocale } from "@/paraglide/runtime";
-import { useLocation, useNavigate } from "@tanstack/react-router";
+import { useLocation } from "@tanstack/react-router";
 import { setLocaleCookie } from "@/lib/i18n";
 
 export function LanguageToggle() {
-  const navigate = useNavigate();
   const location = useLocation();
 
 
@@ -27,11 +26,9 @@ export function LanguageToggle() {
     const isHomepage = location.pathname === "/" || location.pathname === "/en" || location.pathname === "/zh-CN";
 
     if (isHomepage) {
-         // If switching to default locale (en) from something else, ideally we go to '/' or '/en'? 
-         // The user path strategy was: "homepage based on path, others based on cookie".
-         // Let's explicitly navigate to /$lang for clarity, or / for default?
-         // Let's use /$lang for explicit language selection to be safe.
-         navigate({ to: '/$lang', params: { lang: newLocale } });
+         // Force hard navigation to prevent routing instability and ensure clean state
+         // This fixes the issue where switching language might redirect back to root path momentarily
+         window.location.href = `/${newLocale}${location.search}`;
     } else {
         // For other pages, just use the runtime setLocale which handles reload if configured, 
         // or we manually reload if needed to pick up the new cookie.

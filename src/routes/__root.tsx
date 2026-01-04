@@ -23,8 +23,16 @@ const RootLayout = () => {
 
   const pathname = useRouterState({ select: (s) => s.location.pathname });
 
+  // useEffect(() => {
+  //   document.title = 'BeaconAuth';
+  //   // Initialize i18n from cookie/navigator on mount
+  //   import('@/lib/i18n').then(({ initializeI18n }) => {
+  //      initializeI18n();
+  //   });
+  // }, []);
+
+  // UseEffect for i18n initialization only, title is handled by router meta
   useEffect(() => {
-    document.title = 'BeaconAuth';
     // Initialize i18n from cookie/navigator on mount
     import('@/lib/i18n').then(({ initializeI18n }) => {
        initializeI18n();
@@ -66,4 +74,12 @@ const RootLayout = () => {
   );
 };
 
-export const Route = createRootRoute({ component: RootLayout });
+export const Route = createRootRoute({ 
+  component: RootLayout,
+  // @ts-expect-error meta is available in recent versions but might not be in the type definition inferred here
+  meta: () => [
+    {
+      title: 'BeaconAuth',
+    },
+  ],
+});
