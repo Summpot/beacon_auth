@@ -118,7 +118,7 @@ jobs:
         uses: johnwason/vcpkg-action@v7
         with:
           pkgs: openssl
-          triplet: ${{ matrix.config.vcpkg_triplet }}
+          triplet: ${{ matrix.vcpkg_triplet }}
           cache-key: ${{ matrix.os }}-${{ matrix.vcpkg_triplet }}
           token: ${{ github.token }}
 
