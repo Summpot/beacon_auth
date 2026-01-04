@@ -37,11 +37,7 @@
 	],
 	"vars": {
 		"BASE_URL": "",
-		// Optional: override the JWKS URL advertised via JWT header `jku`.
-		// When unset, defaults to `${BASE_URL}/.well-known/jwks.json`.
 		"JWKS_URL": "",
-		// Optional: comma/space-separated host patterns allowed for trusting token header `jku`.
-		// Examples: "auth.example.com, *.auth.example.com".
 		"JKU_ALLOWED_HOST_PATTERNS": "",
 		"JWT_KID": "beacon-auth-key-1",
 		"ACCESS_TOKEN_EXPIRATION": "900",
