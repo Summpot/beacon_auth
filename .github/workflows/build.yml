@@ -59,6 +59,7 @@ jobs:
           - os: windows-latest
             target: x86_64-pc-windows-msvc
             arch: amd64
+            vcpkg_triplet: 'x64-windows-static-md'
           - os: macos-latest
             target: x86_64-apple-darwin
             arch: amd64
@@ -97,11 +98,13 @@ jobs:
           "RUSTFLAGS=-C linker=rust-lld" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
 
       - name: Install OpenSSL
-        if: runner.os == 'Windows'
-        run: |
-          vcpkg install openssl:x64-windows-static-md
-          echo "VCPKG_ROOT=$env:VCPKG_INSTALLATION_ROOT" >> $env:GITHUB_ENV
-        shell: pwsh
+        if: always() && !matrix.vcpkg_triplet == ''
+        uses: johnwason/vcpkg-action@v7
+        with:
+          pkgs: openssl
+          triplet: ${{ matrix.vcpkg_triplet }}
+          cache-key: ${{ matrix.os }}-${{ matrix.vcpkg_triplet }}
+          token: ${{ github.token }}
 
       - name: Setup sccache
         uses: mozilla-actions/sccache-action@v0.0.9
@@ -129,7 +132,6 @@ jobs:
           cargo test --workspace --all-features
           sccache --show-stats
 
-  # Build Docker images (debug)
   build-docker-amd64:
     name: Build Docker Image (linux/amd64)
     runs-on: ubuntu-latest
@@ -255,7 +257,6 @@ jobs:
     permissions:
       contents: read
       packages: write
-    # Only publish manifests on non-PR events (push/workflow_dispatch). PR builds should not mutate registry tags.
     if: github.event_name != 'pull_request'
 
     steps:
