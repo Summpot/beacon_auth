@@ -26,7 +26,7 @@ pub async fn handle_identities_list(req: &Request, env: &Env) -> Result<Response
         return error_response(req, 401, "unauthorized", "Not authenticated");
     };
 
-    let user_id = match verify_access_token(jwt, &access_token) {
+    let user_id = match verify_access_token(jwt, &access_token).await {
         Ok(id) => id,
         Err(e) => return error_response(req, 401, "invalid_token", e),
     };
@@ -71,7 +71,7 @@ pub async fn handle_identity_delete_by_id(req: &Request, env: &Env, identity_id:
         return error_response(req, 401, "unauthorized", "Not authenticated");
     };
 
-    let user_id = match verify_access_token(jwt, &access_token) {
+    let user_id = match verify_access_token(jwt, &access_token).await {
         Ok(id) => id,
         Err(e) => return error_response(req, 401, "invalid_token", e),
     };

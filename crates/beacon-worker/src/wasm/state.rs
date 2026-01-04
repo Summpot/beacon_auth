@@ -1,16 +1,22 @@
 use std::sync::OnceLock;
 
 use beacon_core::crypto;
-use base64::{engine::general_purpose::STANDARD, Engine};
 use url::Url;
 use worker::{Env, Error, Result};
 
 use super::env::env_string;
-use super::kv::{kv, kv_get_string, kv_put_string};
 
 #[derive(Clone)]
 pub struct JwtState {
     pub issuer: String,
+    /// JWKS URL to advertise in the JWT header `jku`.
+    pub jwks_url: String,
+    /// Allowed host patterns for trusting token header `jku` (SSRF protection).
+    ///
+    /// Patterns are comma/space-separated. Supported:
+    /// - `example.com`
+    /// - `*.example.com` (matches both `example.com` and any subdomain)
+    pub jku_allowed_host_patterns: Vec<String>,
     pub kid: String,
     pub encoding_key: jsonwebtoken::EncodingKey,
     pub decoding_key: jsonwebtoken::DecodingKey,
@@ -25,38 +31,42 @@ static JWT_STATE: OnceLock<JwtState> = OnceLock::new();
 
 static PASSKEY_RP: OnceLock<beacon_passkey::RpConfig> = OnceLock::new();
 
-const JWT_PKCS8_DER_B64_KV_KEY_PREFIX: &str = "jwt:pkcs8_der_b64:";
-
-async fn load_or_init_jwt_pkcs8_der_b64(env: &Env, kid: &str) -> Result<String> {
-    let kv = kv(env)?;
-    let key = format!("{JWT_PKCS8_DER_B64_KV_KEY_PREFIX}{kid}");
-
-    if let Some(existing) = kv_get_string(&kv, &key).await? {
-        return Ok(existing);
-    }
-
-    // No key persisted yet. Generate a new PKCS#8 private key, persist it, and then read back.
-    // Reading back avoids using a locally-generated key in case multiple instances race during
-    // initial deployment.
-    let der = crypto::generate_ecdsa_pkcs8_der().map_err(|e| Error::RustError(e.to_string()))?;
-    let generated_b64 = STANDARD.encode(der);
-    kv_put_string(&kv, &key, &generated_b64).await?;
-
-    Ok(kv_get_string(&kv, &key).await?.unwrap_or(generated_b64))
-}
-
 async fn init_jwt_state(env: &Env) -> Result<JwtState> {
     let issuer = env_string(env, "BASE_URL").unwrap_or_else(|| "https://beaconauth.pages.dev".to_string());
     let kid = env_string(env, "JWT_KID").unwrap_or_else(|| "beacon-auth-key-1".to_string());
 
-    // BeaconAuth is JWKS-first: the worker MUST serve a stable JWKS, otherwise signatures will be
-    // invalid when requests hit different isolates.
+    // BeaconAuth is JWKS-first: this worker serves its public key at `/.well-known/jwks.json` and
+    // advertises that URL via the JWT header `jku`.
     //
-    // We persist the ES256 PKCS#8 private key in Workers KV so all instances share the same key.
-    let key_b64 = load_or_init_jwt_pkcs8_der_b64(env, &kid).await?;
-    let der = crypto::decode_pkcs8_der_b64(&key_b64).map_err(|e| Error::RustError(e.to_string()))?;
+    // This deployment mode no longer persists a fixed private key (no KV/shared key). Each worker
+    // instance generates its own ES256 key material at startup.
+    let der = crypto::generate_ecdsa_pkcs8_der().map_err(|e| Error::RustError(e.to_string()))?;
     let (encoding_key, decoding_key, jwks_json) =
         crypto::ecdsa_keypair_from_pkcs8_der(&der, &kid).map_err(|e| Error::RustError(e.to_string()))?;
+
+    let jwks_url = env_string(env, "JWKS_URL").unwrap_or_else(|| {
+        format!(
+            "{}/.well-known/jwks.json",
+            issuer.trim_end_matches('/')
+        )
+    });
+
+    let jku_allowed_host_patterns = env_string(env, "JKU_ALLOWED_HOST_PATTERNS")
+        .map(|raw| {
+            raw.split(|c: char| c == ',' || c.is_whitespace())
+                .map(|s| s.trim())
+                .filter(|s| !s.is_empty())
+                .map(|s| s.to_string())
+                .collect::<Vec<_>>()
+        })
+        .unwrap_or_else(|| {
+            // Default to trusting only our own configured JWKS host.
+            // This keeps JKU enabled for same-origin tokens while mitigating SSRF.
+            let host = Url::parse(&jwks_url)
+                .ok()
+                .and_then(|u| u.host_str().map(|h| h.to_string()));
+            host.into_iter().collect()
+        });
 
     let access_token_expiration = env_string(env, "ACCESS_TOKEN_EXPIRATION")
         .and_then(|s| s.parse::<i64>().ok())
@@ -72,6 +82,8 @@ async fn init_jwt_state(env: &Env) -> Result<JwtState> {
 
     Ok(JwtState {
         issuer,
+        jwks_url,
+        jku_allowed_host_patterns,
         kid,
         encoding_key,
         decoding_key,

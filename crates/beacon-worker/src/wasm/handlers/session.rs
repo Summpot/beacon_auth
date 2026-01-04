@@ -273,7 +273,7 @@ pub async fn handle_user_me(req: &Request, env: &Env) -> Result<Response> {
         return json_with_cors(req, resp);
     };
 
-    let user_id = match verify_access_token(jwt, &access_token) {
+        let user_id = match verify_access_token(jwt, &access_token).await {
         Ok(id) => id,
         Err(e) => {
             let resp = Response::from_json(&models::ErrorResponse {
@@ -311,7 +311,7 @@ pub async fn handle_change_password(mut req: Request, env: &Env) -> Result<Respo
         return json_with_cors(&req, resp);
     };
 
-    let user_id = match verify_access_token(jwt, &access_token) {
+        let user_id = match verify_access_token(jwt, &access_token).await {
         Ok(id) => id,
         Err(e) => {
             let resp = Response::from_json(&models::ErrorResponse {
@@ -393,7 +393,7 @@ pub async fn handle_change_username(mut req: Request, env: &Env) -> Result<Respo
         return json_with_cors(&req, resp);
     };
 
-    let user_id = match verify_access_token(jwt, &access_token) {
+        let user_id = match verify_access_token(jwt, &access_token).await {
         Ok(id) => id,
         Err(e) => {
             let resp = Response::from_json(&models::ErrorResponse {
@@ -442,7 +442,7 @@ pub async fn handle_logout(req: &Request, env: &Env) -> Result<Response> {
         return json_with_cors(req, resp);
     };
 
-    let user_id = match verify_access_token(jwt, &access_token) {
+        let user_id = match verify_access_token(jwt, &access_token).await {
         Ok(id) => id,
         Err(_) => {
             let resp = Response::from_json(&json!({ "success": true }))?;
