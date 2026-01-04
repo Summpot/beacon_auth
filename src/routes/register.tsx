@@ -113,9 +113,8 @@ function RegisterPage() {
   };
 
   return (
-    <div className="flex items-center justify-center min-h-screen p-4">
-      <div className="w-full max-w-md">
-        <div className="flex items-center justify-between mb-6">
+    <div className="min-h-screen flex flex-col">
+      <div className="p-4 flex items-center justify-between">
           <Link
             to="/"
             className="inline-flex items-center gap-2 text-muted-foreground hover:text-primary transition-colors"
@@ -127,7 +126,10 @@ function RegisterPage() {
             <ThemeToggle />
             <LanguageToggle />
           </div>
-        </div>
+      </div>
+
+      <div className="flex-1 flex items-center justify-center p-4">
+      <div className="w-full max-w-md">
 
         <Card>
           <CardHeader className="text-center pb-4">
@@ -232,14 +234,13 @@ function RegisterPage() {
                 </Link>
               </p>
             </div>
-          </CardContent>
-        </Card>
-
         <div className="mt-6 text-center">
           <p className="text-xs text-muted-foreground">
             🔒 Your password is stored securely
           </p>
         </div>
+
+      </div>
       </div>
     </div>
   );
