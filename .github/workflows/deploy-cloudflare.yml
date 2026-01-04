@@ -36,11 +36,14 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Install bun
-        uses: oven-sh/setup-bun@v2
+      - uses: pnpm/action-setup@v4
+        name: Install pnpm
+        with:
+          version: 10
+          cache: true
 
-      - name: Install dependencies and build frontend
-        run: bun install && bun run build
+      - name: Install dependencies
+        run: pnpm install && pnpm build
 
       - name: Setup Rust
         uses: dtolnay/rust-toolchain@stable
