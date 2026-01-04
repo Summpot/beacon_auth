@@ -114,6 +114,7 @@ jobs:
         uses: davidlattimore/wild-action@0.7.0
 
       - name: Install OpenSSL
+        if: matrix.target != ''
         uses: johnwason/vcpkg-action@v7
         with:
           pkgs: openssl
