@@ -969,7 +969,7 @@ function SettingsPage() {
                   </Button>
                 </div>
               </div>
-              </div>
+
             </form>
           </DialogContent>
         </Dialog>
