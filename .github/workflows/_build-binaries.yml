@@ -79,13 +79,14 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Install bun
-        uses: oven-sh/setup-bun@v2
+      - uses: pnpm/action-setup@v4
+        name: Install pnpm
         with:
-          bun-download-url:  ${{ (runner.os == 'Windows' && runner.arch == 'ARM64') && 'https://github.com/oven-sh/bun/releases/latest/download/bun-windows-x64-baseline.zip' || '' }}
+          version: 10
+          cache: true
 
-      - name: Install dependencies and build frontend
-        run: bun install && bun run build
+      - name: Install dependencies
+        run: pnpm install && pnpm build
 
       - name: Use Wild linker (Linux)
         if: runner.os == 'Linux' && matrix.container == ''
