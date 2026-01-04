@@ -81,6 +81,8 @@ jobs:
 
       - name: Install bun
         uses: oven-sh/setup-bun@v2
+        with:
+          bun-download-url:  ${{ (runner.os == 'Windows' && runner.arch == 'ARM64') && 'https://github.com/oven-sh/bun/releases/latest/download/bun-windows-x64-baseline.zip' || '' }}
 
       - name: Install dependencies and build frontend
         run: bun install && bun run build
