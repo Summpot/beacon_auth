@@ -21,14 +21,6 @@ const RootLayout = () => {
 
   const pathname = useRouterState({ select: (s) => s.location.pathname });
 
-  // useEffect(() => {
-  //   document.title = 'BeaconAuth';
-  //   // Initialize i18n from cookie/navigator on mount
-  //   import('@/lib/i18n').then(({ initializeI18n }) => {
-  //      initializeI18n();
-  //   });
-  // }, []);
-
   // UseEffect for i18n initialization only, title is handled by router meta
   useEffect(() => {
     // Initialize i18n from cookie/navigator on mount
@@ -43,12 +35,6 @@ const RootLayout = () => {
         <MotionConfig reducedMotion="user">
           <div className="min-h-screen bg-background text-foreground relative">
             <HeadContent />
-            {/* Toggles (Theme & Language) - Floating on non-home pages */}
-            {/* Toggles are now integrated into page layouts */}
-
-            {/* Theme toggle in top right corner */}
-
-
             <AnimatePresence mode="wait" initial={false}>
               <motion.div
                 // Keyed by pathname so route changes animate.

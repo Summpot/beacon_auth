@@ -171,8 +171,9 @@ function ProfilePage() {
               <ThemeToggle />
               <LanguageToggle />
               <Button
-                variant="destructive"
+                variant="outline"
                 size="sm"
+                className="text-destructive hover:text-destructive hover:bg-destructive/10 border-destructive/20"
                 onClick={handleLogout}
                 disabled={logoutMutation.isPending}
               >
@@ -293,13 +294,13 @@ function ProfilePage() {
           </Card>
         </div>
 
-        <Alert className="bg-primary/5 border-primary/10 text-primary-foreground mb-12">
+        <Alert className="bg-card border-border shadow-sm mb-12">
           <Shield className="h-5 w-5 text-primary" />
           <AlertDescription className="ml-2">
             <h3 className="font-semibold text-foreground mb-1">
               {m.profile_secure_session_title()}
             </h3>
-            <p className="text-sm text-foreground/70 leading-relaxed">
+            <p className="text-sm text-muted-foreground leading-relaxed">
               {m.profile_secure_session_desc()}
             </p>
           </AlertDescription>
