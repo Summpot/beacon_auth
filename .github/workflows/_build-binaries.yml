@@ -107,6 +107,10 @@ jobs:
         with:
           target: ${{ matrix.target }}
 
+      - name: Use Wild linker (Linux)
+        if: runner.os == 'Linux' && matrix.container == ''
+        uses: davidlattimore/wild-action@0.7.0
+
       - name: Install OpenSSL
         if: runner.os == 'Windows' && matrix.target == 'x86_64-pc-windows-msvc'
         run: |
@@ -120,6 +124,12 @@ jobs:
           vcpkg install openssl:arm64-windows-static-md
           echo "VCPKG_ROOT=$env:VCPKG_INSTALLATION_ROOT" >> $env:GITHUB_ENV
         shell: pwsh
+
+      - name: Use rust-lld (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          "RUSTFLAGS=-C linker=rust-lld" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
 
       - name: Setup sccache
         uses: Summpot/sccache-action@main

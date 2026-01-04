@@ -16,6 +16,9 @@ path = "src/main.rs"
 actix-web = { workspace = true }
 actix-cors = { workspace = true }
 
+# Embedded frontend assets
+beacon-frontend-embed = { workspace = true }
+
 # Shared core (crypto + API models)
 beacon-core = { workspace = true, features = ["passkey"] }
 
@@ -50,8 +53,6 @@ env_logger = { workspace = true }
 log = { workspace = true }
 anyhow = { workspace = true }
 actix-files = { workspace = true }
-rust-embed = { workspace = true }
-actix-web-rust-embed-responder = { workspace = true }
 mime_guess = { workspace = true }
 url = { workspace = true }
 uuid = { workspace = true }
@@ -69,6 +70,3 @@ redis = { workspace = true }
 
 # Cache
 moka = { workspace = true }
-
-[build-dependencies]
-which = { workspace = true }

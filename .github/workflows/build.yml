@@ -83,6 +83,16 @@ jobs:
         with:
           targets: ${{ matrix.target }}
 
+      - name: Use Wild linker (Linux)
+        if: runner.os == 'Linux'
+        uses: davidlattimore/wild-action@0.7.0
+
+      - name: Use rust-lld (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          "RUSTFLAGS=-C linker=rust-lld" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+
       - name: Install OpenSSL
         if: runner.os == 'Windows'
         run: |

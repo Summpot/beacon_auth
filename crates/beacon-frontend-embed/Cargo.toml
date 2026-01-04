@@ -1,0 +1,14 @@
+[package]
+name = "beacon-frontend-embed"
+version = "0.1.0"
+edition = "2021"
+
+[lib]
+name = "beacon_frontend_embed"
+path = "src/lib.rs"
+
+[dependencies]
+rust-embed = { workspace = true }
+
+[build-dependencies]
+which = { workspace = true }

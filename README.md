@@ -444,7 +444,10 @@ beacon_auth/
 │   │   │   ├── crypto.rs        # JWT/ECDSA utilities
 │   │   │   ├── config.rs        # Configuration
 │   │   │   └── ...
-│   │   ├── build.rs             # Frontend build script
+│   │   └── Cargo.toml
+│   ├── beacon-frontend-embed/    # Frontend build + embedded dist/ assets
+│   │   ├── build.rs             # Frontend build script (pnpm build)
+│   │   ├── src/lib.rs           # rust-embed wrapper
 │   │   └── Cargo.toml
 │   ├── entity/                  # Sea-ORM entities
 │   └── migration/               # Database migrations
