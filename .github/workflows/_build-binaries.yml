@@ -27,7 +27,7 @@ jobs:
     outputs:
       artifact-names: ${{ steps.set-outputs.outputs.artifact-names }}
     strategy:
-      fail-fast: false
+      fail-fast: true
       matrix:
         include:
           - os: ubuntu-latest
@@ -114,7 +114,7 @@ jobs:
         uses: davidlattimore/wild-action@0.7.0
 
       - name: Install OpenSSL
-        if: matrix.vcpkg_triplet != ''
+        if: always() && !matrix.vcpkg_triplet == ''
         uses: johnwason/vcpkg-action@v7
         with:
           pkgs: openssl
