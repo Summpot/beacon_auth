@@ -1,9 +1,12 @@
 import {
-    availableLanguageTags,
-    setLanguageTag,
-    sourceLanguageTag,
+    locales,
+    setLocale,
+    baseLocale,
+    isLocale,
 } from "@/paraglide/runtime";
-import type { AvailableLanguageTag } from "@/paraglide/runtime";
+
+// Define type helper since runtime.js doesn't export the type directly in a way we can import as type easily without d.ts
+export type AvailableLanguageTag = (typeof locales)[number];
 
 export const LOCALE_COOKIE_NAME = "beaconauth-locale";
 
@@ -26,11 +29,11 @@ export function setLocaleCookie(lang: AvailableLanguageTag) {
 }
 
 export function isAvailableLocale(lang: string): lang is AvailableLanguageTag {
-    return (availableLanguageTags as readonly string[]).includes(lang);
+    return isLocale(lang);
 }
 
 export function initializeI18n(preferredLocale?: string) {
-    let locale: AvailableLanguageTag = sourceLanguageTag;
+    let locale: AvailableLanguageTag = baseLocale;
 
     // 1. Prefer explicitly passed locale (e.g. from URL param)
     if (preferredLocale && isAvailableLocale(preferredLocale)) {
@@ -54,7 +57,7 @@ export function initializeI18n(preferredLocale?: string) {
         }
     }
 
-    setLanguageTag(locale);
+    setLocale(locale);
 
     // Update document attributes
     if (typeof document !== "undefined") {
