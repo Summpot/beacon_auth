@@ -2,7 +2,9 @@ import { createRootRoute, Outlet, useRouterState } from '@tanstack/react-router'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { useEffect, useState } from 'react';
 import { ThemeProvider } from '@/components/theme-provider';
+
 import { ThemeToggle } from '@/components/theme-toggle';
+import { LanguageToggle } from '@/components/language-toggle';
 import { AnimatePresence, MotionConfig, motion } from '@/lib/motion';
 
 const RootLayout = () => {
@@ -34,10 +36,16 @@ const RootLayout = () => {
       <QueryClientProvider client={queryClient}>
         <MotionConfig reducedMotion="user">
           <div className="min-h-screen bg-background text-foreground relative">
+            {/* Toggles (Theme & Language) - Floating on non-home pages */}
+            {!['/', '/en', '/zh-CN'].includes(pathname) && (
+              <div className="fixed top-4 right-4 z-50 flex gap-2">
+                <ThemeToggle />
+                <LanguageToggle />
+              </div>
+            )}
+
             {/* Theme toggle in top right corner */}
-            <div className="fixed top-4 right-4 z-50">
-              <ThemeToggle />
-            </div>
+
 
             <AnimatePresence mode="wait" initial={false}>
               <motion.div
