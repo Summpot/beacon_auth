@@ -1,12 +1,12 @@
 {
-  "name": "rsbuild-react-ts",
+  "name": "beaconauth",
   "version": "1.0.0",
   "private": true,
   "type": "module",
   "scripts": {
     "build:ui": "rsbuild build",
     "build:worker": "rslib build",
-    "build": "paraglide-js compile --project ./project.inlang --outdir ./src/paraglide && pnpm -s build:ui && pnpm -s build:worker",
+    "build": "paraglide-js compile --project ./project.inlang --outdir ./src/paraglide && rsbuild build && rslib build",
     "check": "biome check --write",
     "dev": "rsbuild dev --open",
     "format": "biome format --write",
