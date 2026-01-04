@@ -83,7 +83,7 @@ jobs:
         uses: oven-sh/setup-bun@v2
 
       - name: Install dependencies and build frontend
-        run: bun install && bun build
+        run: bun install && bun run build
 
       - name: Use Wild linker (Linux)
         if: runner.os == 'Linux' && matrix.container == ''
