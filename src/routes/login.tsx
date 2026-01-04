@@ -242,7 +242,6 @@ function LoginPage() {
       <div className="w-full max-w-md">
         <Link to="/" className="inline-flex items-center gap-2 text-muted-foreground hover:text-primary transition-colors mb-6">
           <ChevronLeft className="h-4 w-4" />
-          <ChevronLeft className="h-4 w-4" />
           {m.login_back_home()}
         </Link>
 

@@ -404,7 +404,7 @@ function SettingsPage() {
           </Link>
           <h1 className="text-3xl font-bold">{m.settings_title()}</h1>
           <p className="text-muted-foreground mt-2">
-            {m.settings_subtitle({ username: <span className="text-primary">{user.username}</span> })}
+            {m.settings_subtitle({ username: user.username })}
           </p>
         </div>
 

@@ -198,7 +198,7 @@ function ProfilePage() {
                 </div>
                 <div>
                   <p className="text-muted-foreground text-sm">{m.profile_account_id()}</p>
-                  <p className="font-bold">#{user.id}</p>
+                  <p className="font-mono text-xs break-all">#{user.id}</p>
                 </div>
               </div>
             </CardContent>
