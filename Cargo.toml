@@ -7,6 +7,7 @@ members = [
 [workspace.dependencies]
 # Workspace crates
 beacon-core = { path = "crates/beacon-core", default-features = false }
+beacon-frontend-embed = { path = "crates/beacon-frontend-embed" }
 beacon-passkey = { path = "crates/beacon-passkey", default-features = false }
 entity = { path = "crates/entity" }
 migration = { path = "crates/migration" }
@@ -15,7 +16,6 @@ migration = { path = "crates/migration" }
 actix-web = "4.12"
 actix-cors = "0.7"
 actix-files = "0.6"
-actix-web-rust-embed-responder = "2.3"
 
 # Database
 # Use Summpot fork (includes Cloudflare D1 support in SeaORM 2.0 RC).

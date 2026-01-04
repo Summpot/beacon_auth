@@ -22,12 +22,7 @@ use tokio::net::windows::named_pipe::{NamedPipeServer, ServerOptions};
 
 // For embedding static files (Release mode)
 #[cfg(not(debug_assertions))]
-use rust_embed::RustEmbed;
-
-#[cfg(not(debug_assertions))]
-#[derive(RustEmbed)]
-#[folder = "../../dist/"] // Path relative to crates/auth_server/Cargo.toml
-struct Assets;
+use beacon_frontend_embed as frontend_embed;
 
 #[cfg(debug_assertions)]
 async fn serve_index_html() -> std::io::Result<actix_files::NamedFile> {
@@ -39,16 +34,16 @@ async fn serve_embedded_assets(req: actix_web::HttpRequest) -> actix_web::HttpRe
     let path = req.path().trim_start_matches('/');
     let path = if path.is_empty() { "index.html" } else { path };
 
-    if let Some(content) = Assets::get(path) {
+    if let Some(content) = frontend_embed::get(path) {
         let mime_type = mime_guess::from_path(path).first_or_octet_stream();
         actix_web::HttpResponse::Ok()
             .content_type(mime_type.as_ref())
-            .body(content.data.into_owned())
+            .body(content.into_owned())
     } else {
-        if let Some(content) = Assets::get("index.html") {
+        if let Some(content) = frontend_embed::get("index.html") {
             actix_web::HttpResponse::Ok()
                 .content_type("text/html")
-                .body(content.data.into_owned())
+                .body(content.into_owned())
         } else {
             actix_web::HttpResponse::NotFound().body("404 Not Found")
         }
