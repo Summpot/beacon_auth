@@ -155,6 +155,8 @@ function ProfilePage() {
               <Button variant="ghost" asChild>
                 <Link to="/settings"><Settings className="h-4 w-4 mr-2" />{m.profile_nav_settings()}</Link>
               </Button>
+              <ThemeToggle />
+              <LanguageToggle />
               <Button variant="destructive" size="sm" onClick={handleLogout} disabled={logoutMutation.isPending}>
                 <LogOut className="h-4 w-4 mr-2" />
                 {logoutMutation.isPending ? m.profile_logging_out() : m.profile_logout()}
