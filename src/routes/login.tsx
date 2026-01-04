@@ -5,6 +5,7 @@ import { useCallback, useEffect, useState, useRef } from 'react';
 import { useForm } from 'react-hook-form';
 import { z } from 'zod';
 import { ApiError, apiClient, queryKeys } from '../utils/api';
+import * as m from '@/paraglide/messages';
 import { BeaconIcon } from '@/components/beacon-icon';
 import { MinecraftFlowAlert } from '@/components/minecraft/minecraft-flow-alert';
 import {
@@ -242,7 +243,8 @@ function LoginPage() {
       <div className="w-full max-w-md">
         <Link to="/" className="inline-flex items-center gap-2 text-muted-foreground hover:text-primary transition-colors mb-6">
           <ChevronLeft className="h-4 w-4" />
-          Back to Home
+          <ChevronLeft className="h-4 w-4" />
+          {m.login_back_home()}
         </Link>
 
         <Card>
@@ -250,14 +252,14 @@ function LoginPage() {
             <div className="flex justify-center mb-4">
               <BeaconIcon className="w-16 h-16" />
             </div>
-            <CardTitle className="text-3xl font-bold">Welcome Back</CardTitle>
-            <CardDescription>Sign in to your BeaconAuth account</CardDescription>
+            <CardTitle className="text-3xl font-bold">{m.login_welcome_title()}</CardTitle>
+            <CardDescription>{m.login_welcome_desc({app_name: m.app_name()})}</CardDescription>
           </CardHeader>
 
           <CardContent className="space-y-6">
             {searchParams.challenge && searchParams.redirect_port && (
               <MinecraftFlowAlert
-                title="Minecraft Login"
+                title={m.login_minecraft_title()}
                 challenge={searchParams.challenge}
                 redirectPort={searchParams.redirect_port}
               />
@@ -266,18 +268,18 @@ function LoginPage() {
             {config?.database_auth && (
               <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
                 <div className="space-y-2">
-                  <Label htmlFor="username">Username</Label>
-                  <Input id="username" type="text" {...register('username')} placeholder="Enter your username" disabled={isSubmitting} autoComplete="username webauthn" className="bg-background/50 border-input" />
+                  <Label htmlFor="username">{m.login_username_label()}</Label>
+                  <Input id="username" type="text" {...register('username')} placeholder={m.login_username_placeholder()} disabled={isSubmitting} autoComplete="username webauthn" className="bg-background/50 border-input" />
                   {errors.username && <p className="text-sm text-destructive">{errors.username.message}</p>}
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="password">Password</Label>
-                  <Input id="password" type="password" {...register('password')} placeholder="Enter your password" disabled={isSubmitting} className="bg-background/50 border-input" />
+                  <Label htmlFor="password">{m.login_password_label()}</Label>
+                  <Input id="password" type="password" {...register('password')} placeholder={m.login_password_placeholder()} disabled={isSubmitting} className="bg-background/50 border-input" />
                   {errors.password && <p className="text-sm text-destructive">{errors.password.message}</p>}
                 </div>
                 {errors.root && <Alert variant="destructive"><AlertDescription>{errors.root.message}</AlertDescription></Alert>}
                 <Button type="submit" disabled={isSubmitting} className="w-full">
-                  {isSubmitting ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" />Authenticating...</> : 'Sign In'}
+                  {isSubmitting ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" />{m.login_button_authenticating()}</> : m.login_button_signin()}
                 </Button>
               </form>
             )}
@@ -286,12 +288,12 @@ function LoginPage() {
               {config?.database_auth && (
                 <div className="relative my-4">
                   <div className="absolute inset-0 flex items-center"><Separator className="w-full" /></div>
-                  <div className="relative flex justify-center text-xs uppercase"><span className="bg-card px-2 text-muted-foreground">or use</span></div>
+                  <div className="relative flex justify-center text-xs uppercase"><span className="bg-card px-2 text-muted-foreground">{m.login_or_use()}</span></div>
                 </div>
               )}
               <Button type="button" variant="secondary" onClick={handlePasskeyLogin} disabled={passkeyLoading} className="w-full">
                 <KeyRound className="mr-2 h-4 w-4" />
-                {passkeyLoading ? 'Authenticating...' : 'Login with Passkey'}
+                {passkeyLoading ? m.login_button_authenticating() : m.login_passkey_btn()}
               </Button>
               {passkeyError && <Alert variant="destructive" className="mt-3"><AlertDescription>{passkeyError}</AlertDescription></Alert>}
             </div>
@@ -300,7 +302,7 @@ function LoginPage() {
               <div className="space-y-3">
                 <div className="relative">
                   <div className="absolute inset-0 flex items-center"><Separator className="w-full" /></div>
-                  <div className="relative flex justify-center text-xs uppercase"><span className="bg-card px-2 text-muted-foreground">or continue with</span></div>
+                  <div className="relative flex justify-center text-xs uppercase"><span className="bg-card px-2 text-muted-foreground">{m.login_or_continue()}</span></div>
                 </div>
                 <div className={`grid gap-3 ${(config?.github_oauth && config?.google_oauth) ? 'grid-cols-2' : 'grid-cols-1'}`}>
                   {config?.github_oauth && (
@@ -322,9 +324,9 @@ function LoginPage() {
             {config?.database_auth && (
               <div className="text-center">
                 <p className="text-sm text-muted-foreground">
-                  Don't have an account?{' '}
+                  {m.login_no_account()}{' '}
                   <Link to="/register" search={{ challenge: searchParams.challenge, redirect_port: searchParams.redirect_port }} className="text-primary hover:text-primary/80 font-medium transition-colors">
-                    Create one
+                    {m.login_create_one()}
                   </Link>
                 </p>
               </div>

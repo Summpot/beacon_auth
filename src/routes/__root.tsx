@@ -23,6 +23,10 @@ const RootLayout = () => {
 
   useEffect(() => {
     document.title = 'BeaconAuth';
+    // Initialize i18n from cookie/navigator on mount
+    import('@/lib/i18n').then(({ initializeI18n }) => {
+       initializeI18n();
+    });
   }, []);
 
   return (
