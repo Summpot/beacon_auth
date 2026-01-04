@@ -23,7 +23,7 @@ export function LanguageToggle() {
     // However, for other pages, we just reload/set state because they are cookie-based.
     
     // Check if we are on homepage path (either "/" or "/en" or "/zh-CN")
-    const isHomepage = location.pathname === "/" || location.pathname === "/en" || location.pathname === "/zh-CN";
+    const isHomepage = /^\/($|en\/?$|zh-CN\/?$)/.test(location.pathname);
 
     if (isHomepage) {
          // Force hard navigation to prevent routing instability and ensure clean state
