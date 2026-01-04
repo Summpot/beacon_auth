@@ -18,6 +18,8 @@ import {
   X,
 } from 'lucide-react';
 import { useEffect, useState } from 'react';
+import { ThemeToggle } from '@/components/theme-toggle';
+import { LanguageToggle } from '@/components/language-toggle';
 import { useForm } from 'react-hook-form';
 import { z } from 'zod';
 import { BeaconIcon } from '@/components/beacon-icon';
@@ -386,9 +388,13 @@ function SettingsPage() {
               <BeaconIcon className="w-8 h-8" />
               <span className="text-xl text-primary font-bold">{m.app_name()}</span>
             </Link>
-            <Button variant="ghost" asChild>
-              <Link to="/profile">{m.settings_nav_profile()}</Link>
-            </Button>
+            <div className="flex items-center gap-2">
+              <Button variant="ghost" asChild>
+                <Link to="/profile">{m.settings_nav_profile()}</Link>
+              </Button>
+              <ThemeToggle />
+              <LanguageToggle />
+            </div>
           </div>
         </div>
       </nav>
