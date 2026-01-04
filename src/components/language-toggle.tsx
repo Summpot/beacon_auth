@@ -28,7 +28,7 @@ export function LanguageToggle() {
     if (isHomepage) {
          // Force hard navigation to prevent routing instability and ensure clean state
          // This fixes the issue where switching language might redirect back to root path momentarily
-         window.location.href = `/${newLocale}${location.search}`;
+         window.location.href = `/${newLocale}${window.location.search}`;
     } else {
         // For other pages, just use the runtime setLocale which handles reload if configured, 
         // or we manually reload if needed to pick up the new cookie.
