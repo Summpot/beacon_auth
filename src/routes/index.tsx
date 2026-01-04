@@ -1,5 +1,6 @@
 import { createFileRoute, Link } from '@tanstack/react-router';
 import { useQuery } from '@tanstack/react-query';
+import * as m from '@/paraglide/messages';
 import { apiClient, queryKeys } from '../utils/api';
 import { BeaconIcon } from '@/components/beacon-icon';
 import { Button } from '@/components/ui/button';
@@ -12,7 +13,7 @@ interface UserInfo {
   username: string;
 }
 
-function HomePage() {
+export function HomePage() {
   const { data: user } = useQuery({
     queryKey: queryKeys.userMe(),
     queryFn: async (): Promise<UserInfo | null> => {
@@ -32,7 +33,7 @@ function HomePage() {
           <div className="flex items-center justify-between">
             <Link to="/" className="flex items-center gap-3 group">
               <BeaconIcon className="w-10 h-10" />
-              <span className="text-2xl font-bold text-primary">BeaconAuth</span>
+              <span className="text-2xl font-bold text-primary">{m.app_name()}</span>
             </Link>
             
             <div className="flex items-center gap-4">
@@ -42,16 +43,16 @@ function HomePage() {
                     <Button variant="ghost">{user.username}</Button>
                   </Link>
                   <Link to="/settings">
-                    <Button variant="ghost">Settings</Button>
+                    <Button variant="ghost">{m.nav_settings()}</Button>
                   </Link>
                 </>
               ) : (
                 <>
                   <Link to="/login">
-                    <Button variant="ghost">Login</Button>
+                    <Button variant="ghost">{m.nav_login()}</Button>
                   </Link>
                   <Link to="/register">
-                    <Button>Get Started</Button>
+                    <Button>{m.nav_get_started()}</Button>
                   </Link>
                 </>
               )}
@@ -83,35 +84,35 @@ function HomePage() {
           </div>
           
           <h1 className="text-5xl md:text-7xl font-bold mb-6">
-            <span className="text-foreground">Secure Your </span>
-            <span className="text-primary">Minecraft Server</span>
+            <span className="text-foreground">{m.home_hero_title_1()}</span>
+            <span className="text-primary">{m.home_hero_title_2()}</span>
           </h1>
           
           <p className="text-xl text-muted-foreground mb-10 max-w-2xl mx-auto leading-relaxed">
-            Modern authentication for Minecraft servers. 
-            <span className="text-primary"> Password</span>,
-            <span className="text-secondary-foreground"> OAuth</span>, and
-            <span className="text-muted-foreground"> Passkey</span> support
-            with secure sessions.
+            {m.home_hero_subtitle({
+              password: <span className="text-primary"> {m.home_hero_subtitle_password()}</span>,
+              oauth: <span className="text-secondary-foreground"> {m.home_hero_subtitle_oauth()}</span>,
+              passkey: <span className="text-muted-foreground"> {m.home_hero_subtitle_passkey()}</span>,
+            })}
           </p>
           
           <div className="flex flex-col sm:flex-row gap-4 justify-center">
             {user ? (
               <>
                 <Link to="/profile">
-                  <Button size="lg">View Profile</Button>
+                  <Button size="lg">{m.button_view_profile()}</Button>
                 </Link>
                 <Link to="/settings">
-                  <Button variant="secondary" size="lg">Manage Settings</Button>
+                  <Button variant="secondary" size="lg">{m.button_manage_settings()}</Button>
                 </Link>
               </>
             ) : (
               <>
                 <Link to="/login">
-                  <Button size="lg">Login Now</Button>
+                  <Button size="lg">{m.button_login_now()}</Button>
                 </Link>
                 <Link to="/register">
-                  <Button variant="secondary" size="lg">Create Account</Button>
+                  <Button variant="secondary" size="lg">{m.button_create_account()}</Button>
                 </Link>
               </>
             )}
@@ -120,16 +121,16 @@ function HomePage() {
           {/* Quick stats */}
           <div className="mt-16 grid grid-cols-3 gap-8 max-w-lg mx-auto">
             <div className="text-center">
-              <Badge variant="outline" className="text-lg px-3 py-1">Signed Sessions</Badge>
-              <div className="text-sm text-muted-foreground mt-2">Stay logged in safely</div>
+              <Badge variant="outline" className="text-lg px-3 py-1">{m.feature_signed_sessions_title()}</Badge>
+              <div className="text-sm text-muted-foreground mt-2">{m.feature_signed_sessions_desc()}</div>
             </div>
             <div className="text-center">
-              <Badge variant="outline" className="text-lg px-3 py-1">OAuth Login</Badge>
-              <div className="text-sm text-muted-foreground mt-2">GitHub / Google</div>
+              <Badge variant="outline" className="text-lg px-3 py-1">{m.feature_oauth_login_title()}</Badge>
+              <div className="text-sm text-muted-foreground mt-2">{m.feature_oauth_login_desc()}</div>
             </div>
             <div className="text-center">
-              <Badge variant="outline" className="text-lg px-3 py-1">Passkeys</Badge>
-              <div className="text-sm text-muted-foreground mt-2">Biometric / PIN</div>
+              <Badge variant="outline" className="text-lg px-3 py-1">{m.feature_passkeys_title()}</Badge>
+              <div className="text-sm text-muted-foreground mt-2">{m.feature_passkeys_desc()}</div>
             </div>
           </div>
         </div>
@@ -140,10 +141,10 @@ function HomePage() {
         <div className="container mx-auto px-6">
           <div className="text-center mb-12">
             <h2 className="text-3xl md:text-4xl font-bold text-foreground mb-4">
-              Why <span className="text-primary">BeaconAuth</span>?
+              {m.why_beaconauth_title({ app_name: <span className="text-primary">{m.app_name()}</span> })}
             </h2>
             <p className="text-muted-foreground max-w-xl mx-auto">
-              Built for Minecraft server administrators who demand security without sacrificing user experience.
+              {m.why_beaconauth_desc()}
             </p>
           </div>
 
@@ -153,9 +154,9 @@ function HomePage() {
                 <div className="w-12 h-12 rounded-xl bg-primary/20 flex items-center justify-center mb-4">
                   <KeyRound className="h-6 w-6 text-primary" />
                 </div>
-                <h3 className="text-xl font-bold text-foreground mb-2">Multi-Auth Support</h3>
+                <h3 className="text-xl font-bold text-foreground mb-2">{m.card_multi_auth_title()}</h3>
                 <p className="text-muted-foreground text-sm">
-                  Passwords, OAuth (GitHub & Google), and passkeys for the flexibility your server needs.
+                  {m.card_multi_auth_desc()}
                 </p>
               </CardContent>
             </Card>
@@ -165,9 +166,9 @@ function HomePage() {
                 <div className="w-12 h-12 rounded-xl bg-secondary/20 flex items-center justify-center mb-4">
                   <Shield className="h-6 w-6 text-secondary-foreground" />
                 </div>
-                <h3 className="text-xl font-bold text-foreground mb-2">Enterprise Security</h3>
+                <h3 className="text-xl font-bold text-foreground mb-2">{m.card_enterprise_security_title()}</h3>
                 <p className="text-muted-foreground text-sm">
-                  Secure sessions, protected cookies, and safe OAuth flows designed for everyday players.
+                  {m.card_enterprise_security_desc()}
                 </p>
               </CardContent>
             </Card>
@@ -177,9 +178,9 @@ function HomePage() {
                 <div className="w-12 h-12 rounded-xl bg-muted/50 flex items-center justify-center mb-4">
                   <Gamepad2 className="h-6 w-6 text-muted-foreground" />
                 </div>
-                <h3 className="text-xl font-bold text-foreground mb-2">Seamless Integration</h3>
+                <h3 className="text-xl font-bold text-foreground mb-2">{m.card_seamless_integration_title()}</h3>
                 <p className="text-muted-foreground text-sm">
-                  Minecraft mod integration with smooth login and server verification.
+                  {m.card_seamless_integration_desc()}
                 </p>
               </CardContent>
             </Card>
@@ -193,10 +194,10 @@ function HomePage() {
           <Card className="border-primary/20 inline-block">
             <CardContent className="p-8">
               <h2 className="text-2xl md:text-3xl font-bold text-foreground mb-4">
-                Ready to Secure Your Server?
+                {m.cta_title()}
               </h2>
               <p className="text-muted-foreground mb-6">
-                Get started with BeaconAuth today and enjoy peace of mind.
+                {m.cta_desc()}
               </p>
               <div className="flex flex-col sm:flex-row gap-4 justify-center">
                 <a
@@ -206,11 +207,11 @@ function HomePage() {
                 >
                   <Button size="lg">
                     <Github className="mr-2 h-5 w-5" />
-                    View on GitHub
+                    {m.button_view_github()}
                   </Button>
                 </a>
                 <Link to="/login">
-                  <Button variant="secondary" size="lg">Try Demo</Button>
+                  <Button variant="secondary" size="lg">{m.button_try_demo()}</Button>
                 </Link>
               </div>
             </CardContent>
@@ -227,9 +228,9 @@ function HomePage() {
               <span className="text-sm">BeaconAuth © 2024</span>
             </div>
             <div className="flex items-center gap-6 text-sm text-muted-foreground">
-              <span>Open Source</span>
+              <span>{m.footer_open_source()}</span>
               <span>•</span>
-              <span>MIT License</span>
+              <span>{m.footer_license()}</span>
               <span>•</span>
               <a 
                 href="https://github.com/Summpot/beacon_auth"
@@ -237,7 +238,7 @@ function HomePage() {
                 rel="noopener noreferrer"
                 className="hover:text-primary transition-colors"
               >
-                Contribute
+                {m.footer_contribute()}
               </a>
             </div>
           </div>

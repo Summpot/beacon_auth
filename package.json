@@ -6,7 +6,7 @@
   "scripts": {
     "build:ui": "rsbuild build",
     "build:worker": "rslib build",
-    "build": "pnpm -s build:ui && pnpm -s build:worker",
+    "build": "paraglide-js compile --project ./project.inlang --outdir ./src\\paraglide && pnpm -s build:ui && pnpm -s build:worker",
     "check": "biome check --write",
     "dev": "rsbuild dev --open",
     "format": "biome format --write",
@@ -46,6 +46,8 @@
     "shadcn": "^3.5.0",
     "tailwindcss": "^4.1.17",
     "typescript": "^5.9.3",
-    "wrangler": "^4.56.0"
+    "wrangler": "^4.56.0",
+    "@inlang/paraglide-js": "2.7.1",
+    "@inlang/cli": "^3.0.0"
   }
 }
