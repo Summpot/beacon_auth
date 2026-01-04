@@ -72,7 +72,6 @@ jobs:
         name: Install pnpm
         with:
           version: 10
-          cache: true
 
       - name: Setup node
         uses: actions/setup-node@v6
