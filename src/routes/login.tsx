@@ -1,5 +1,5 @@
 import { zodResolver } from '@hookform/resolvers/zod';
-import { createFileRoute, Link, useNavigate } from '@tanstack/react-router';
+import { createFileRoute, Link } from '@tanstack/react-router';
 import { useQueryClient } from '@tanstack/react-query';
 import { useCallback, useEffect, useState, useRef } from 'react';
 import { useForm } from 'react-hook-form';
@@ -56,7 +56,6 @@ const getErrorMessage = (error: unknown, fallback: string) => {
 
 function LoginPage() {
   const searchParams = Route.useSearch();
-  const navigate = useNavigate();
   const queryClient = useQueryClient();
   const [config, setConfig] = useState<ServerConfig | null>(null);
   const [configLoading, setConfigLoading] = useState(true);
@@ -124,9 +123,9 @@ function LoginPage() {
         return;
       }
     } else {
-      navigate({ to: '/profile' });
+      window.location.href = '/profile';
     }
-  }, [navigate, queryClient, searchParams.challenge, searchParams.redirect_port]);
+  }, [queryClient, searchParams.challenge, searchParams.redirect_port]);
 
   useEffect(() => {
     const initConditionalUI = async () => {
@@ -175,7 +174,7 @@ function LoginPage() {
         });
         if (result.redirectUrl) window.location.href = result.redirectUrl;
       } else {
-        navigate({ to: '/profile' });
+        window.location.href = '/profile';
       }
     } catch (error) {
       setError('root', { type: 'manual', message: getErrorMessage(error, 'Failed to connect to server') });

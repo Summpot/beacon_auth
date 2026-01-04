@@ -93,13 +93,7 @@ export function HomePage() {
           </h1>
           
           <p className="text-xl text-muted-foreground mb-10 max-w-2xl mx-auto leading-relaxed">
-            {m.home_hero_subtitle_part1()}
-            <span className="text-primary">{m.home_hero_subtitle_password()}</span>
-            {m.home_hero_subtitle_separator()}
-            <span className="text-secondary-foreground">{m.home_hero_subtitle_oauth()}</span>
-            {m.home_hero_subtitle_and()}
-            <span className="text-muted-foreground">{m.home_hero_subtitle_passkey()}</span>
-            {m.home_hero_subtitle_part2()}
+            {m.home_hero_subtitle()}
           </p>
           
           <div className="flex flex-col sm:flex-row gap-4 justify-center">
@@ -147,7 +141,7 @@ export function HomePage() {
         <div className="container mx-auto px-6">
           <div className="text-center mb-12">
             <h2 className="text-3xl md:text-4xl font-bold text-foreground mb-4">
-              {m.why_beaconauth_title_part1()} <span className="text-primary">{m.app_name()}</span>{m.why_beaconauth_title_part2()}
+              {m.why_beaconauth_title()}
             </h2>
             <p className="text-muted-foreground max-w-xl mx-auto">
               {m.why_beaconauth_desc()}
