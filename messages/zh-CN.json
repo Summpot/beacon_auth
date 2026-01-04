@@ -106,5 +106,13 @@
     "settings_no_passkeys": "尚未注册通行密钥",
     "settings_add_passkey_promo": "添加通行密钥以获得更快、更安全的身份验证",
     "settings_created_at": "创建时间：{date}",
-    "settings_last_used": "最后使用：{date}"
+    "settings_last_used": "最后使用：{date}",
+    "settings_what_are_passkeys": "什么是通行密钥？",
+    "settings_passkeys_help_text": "通行密钥是一种安全的无密码身份验证方法，使用设备的生物识别身份验证（指纹、面部识别）或 PIN 码。它们比密码更安全且更易于使用。",
+    "settings_add_new_passkey_title": "添加新通行密钥",
+    "settings_add_new_passkey_desc": "给您的通行密钥起一个容易记住的名字，以便识别此设备。",
+    "settings_passkey_name_label": "通行密钥名称",
+    "settings_passkey_name_placeholder": "例如：“我的手机”、“YubiKey”",
+    "settings_cancel": "取消",
+    "settings_continue": "继续"
 }

@@ -106,5 +106,13 @@
   "settings_no_passkeys": "No passkeys registered yet",
   "settings_add_passkey_promo": "Add a passkey for faster, more secure authentication",
   "settings_created_at": "Created: {date}",
-  "settings_last_used": "Last used: {date}"
+  "settings_last_used": "Last used: {date}",
+  "settings_what_are_passkeys": "What are passkeys?",
+  "settings_passkeys_help_text": "Passkeys are a secure, passwordless authentication method that uses your device's biometric authentication (fingerprint, face recognition) or PIN. They're more secure than passwords and easier to use.",
+  "settings_add_new_passkey_title": "Add New Passkey",
+  "settings_add_new_passkey_desc": "Give your passkey a memorable name to identify this device.",
+  "settings_passkey_name_label": "Passkey Name",
+  "settings_passkey_name_placeholder": "e.g., \"My Phone\", \"YubiKey\"",
+  "settings_cancel": "Cancel",
+  "settings_continue": "Continue"
 }

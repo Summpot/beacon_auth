@@ -780,15 +780,11 @@ function SettingsPage() {
                         <h3 className="font-semibold">{passkey.name}</h3>
                         <div className="flex items-center gap-4 text-xs text-muted-foreground mt-1">
                           <span>
-                            Created:{' '}
-                            {new Date(passkey.created_at).toLocaleDateString()}
+                            {m.settings_created_at({ date: new Date(passkey.created_at).toLocaleDateString() })}
                           </span>
                           {passkey.last_used_at && (
                             <span>
-                              Last used:{' '}
-                              {new Date(
-                                passkey.last_used_at,
-                              ).toLocaleDateString()}
+                              {m.settings_last_used({ date: new Date(passkey.last_used_at).toLocaleDateString() })}
                             </span>
                           )}
                         </div>
@@ -811,12 +807,9 @@ function SettingsPage() {
             <Alert className="mt-6">
               <Lightbulb className="h-4 w-4" />
               <AlertDescription>
-                <h3 className="font-semibold mb-1">What are passkeys?</h3>
+                <h3 className="font-semibold mb-1">{m.settings_what_are_passkeys()}</h3>
                 <p className="text-sm text-muted-foreground">
-                  Passkeys are a secure, passwordless authentication method that
-                  uses your device's biometric authentication (fingerprint, face
-                  recognition) or PIN. They're more secure than passwords and
-                  easier to use.
+                  {m.settings_passkeys_help_text()}
                 </p>
               </AlertDescription>
             </Alert>
@@ -826,21 +819,21 @@ function SettingsPage() {
         <Dialog open={showPasskeyModal} onOpenChange={setShowPasskeyModal}>
           <DialogContent className="bg-card border-border">
             <DialogHeader>
-              <DialogTitle>Add New Passkey</DialogTitle>
+              <DialogTitle>{m.settings_add_new_passkey_title()}</DialogTitle>
               <DialogDescription>
-                Give your passkey a memorable name to identify this device.
+                {m.settings_add_new_passkey_desc()}
               </DialogDescription>
             </DialogHeader>
             <form onSubmit={handlePasskeyModalSubmit}>
               <div className="space-y-4">
                 <div className="space-y-2">
-                  <Label htmlFor="passkeyName">Passkey Name</Label>
+                  <Label htmlFor="passkeyName">{m.settings_passkey_name_label()}</Label>
                   <Input
                     id="passkeyName"
                     type="text"
                     value={passkeyName}
                     onChange={(e) => setPasskeyName(e.target.value)}
-                    placeholder='e.g., "My Phone", "YubiKey"'
+                    placeholder={m.settings_passkey_name_placeholder()}
                     className="bg-background/50"
                   />
                 </div>
@@ -854,10 +847,10 @@ function SettingsPage() {
                       setPasskeyName('');
                     }}
                   >
-                    Cancel
+                    {m.settings_cancel()}
                   </Button>
                   <Button type="submit" className="flex-1">
-                    Continue
+                    {m.settings_continue()}
                   </Button>
                 </div>
               </div>
