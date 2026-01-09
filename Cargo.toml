@@ -84,6 +84,6 @@ which = "8.0"
 
 [patch.crates-io]
 # Needed for SeaORM Cloudflare D1 support (sqlx-d1 binder lives on this fork).
-sea-query = { git = "https://github.com/Summpot/sea-query.git", branch = "master" }
-sea-query-derive = { git = "https://github.com/Summpot/sea-query.git", branch = "master" }
-sea-query-sqlx = { git = "https://github.com/Summpot/sea-query.git", branch = "master" }
+sea-query = { git = "https://github.com/Summpot/sea-query.git", branch = "cloudflare-d1" }
+sea-query-derive = { git = "https://github.com/Summpot/sea-query.git", branch = "cloudflare-d1" }
+sea-query-sqlx = { git = "https://github.com/Summpot/sea-query.git", branch = "cloudflare-d1" }
