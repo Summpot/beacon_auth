@@ -91,7 +91,7 @@ function LoginPage() {
             body: {
               challenge: searchParams.challenge,
               redirect_port: searchParams.redirect_port,
-              profile_url: window.location.origin + '/profile',
+              profile_url: `${window.location.origin}/profile`,
             },
           });
           if (result.redirectUrl) {
@@ -118,7 +118,7 @@ function LoginPage() {
         body: {
           challenge: searchParams.challenge,
           redirect_port: searchParams.redirect_port,
-          profile_url: window.location.origin + '/profile',
+          profile_url: `${window.location.origin}/profile`,
         },
       });
       if (result.redirectUrl) {
@@ -173,7 +173,7 @@ function LoginPage() {
       if (searchParams.challenge && searchParams.redirect_port) {
         const result = await apiClient<{ redirectUrl?: string }>('/api/v1/minecraft-jwt', {
           method: 'POST',
-          body: { challenge: searchParams.challenge, redirect_port: searchParams.redirect_port, profile_url: window.location.origin + '/profile' },
+          body: { challenge: searchParams.challenge, redirect_port: searchParams.redirect_port, profile_url: `${window.location.origin}/profile` },
         });
         if (result.redirectUrl) window.location.href = result.redirectUrl;
       } else {
@@ -287,15 +287,15 @@ function LoginPage() {
             )}
 
             {config?.database_auth && (
-              <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
+              <form onSubmit={handleSubmit(onSubmit)} className="space-y-4" autoComplete="on">
                 <div className="space-y-2">
                   <Label htmlFor="username">{m.login_username_label()}</Label>
-                  <Input id="username" type="text" {...register('username')} placeholder={m.login_username_placeholder()} disabled={isSubmitting} autoComplete="username webauthn" className="bg-background/50 border-input" />
+                  <Input id="username" type="text" {...register('username')} placeholder={m.login_username_placeholder()} disabled={isSubmitting} autoComplete="username" className="bg-background/50 border-input" />
                   {errors.username && <p className="text-sm text-destructive">{errors.username.message}</p>}
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="password">{m.login_password_label()}</Label>
-                  <Input id="password" type="password" {...register('password')} placeholder={m.login_password_placeholder()} disabled={isSubmitting} className="bg-background/50 border-input" />
+                  <Input id="password" type="password" {...register('password')} placeholder={m.login_password_placeholder()} disabled={isSubmitting} autoComplete="current-password" className="bg-background/50 border-input" />
                   {errors.password && <p className="text-sm text-destructive">{errors.password.message}</p>}
                 </div>
                 {errors.root && <Alert variant="destructive"><AlertDescription>{errors.root.message}</AlertDescription></Alert>}

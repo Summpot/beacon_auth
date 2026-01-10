@@ -85,6 +85,38 @@ function RegisterPage() {
       return;
     }
 
+    // The backend is expected to set session cookies on successful registration.
+    // In some environments (reverse proxies / cookie policies), that may not stick.
+    // Verify we're authenticated, and if not, fall back to an explicit login.
+    try {
+      await apiClient('/api/v1/user/me', {
+        // Avoid triggering the global 401 redirect flow here; we want to handle it locally.
+        requiresAuth: false,
+      });
+    } catch (error) {
+      if (error instanceof ApiError && error.status === 401) {
+        try {
+          await apiClient('/api/v1/login', {
+            method: 'POST',
+            requiresAuth: false,
+            body: { username: data.username, password: data.password },
+          });
+        } catch (loginError) {
+          setError('root', {
+            type: 'manual',
+            message: getErrorMessage(loginError, 'Registration succeeded but auto-login failed'),
+          });
+          return;
+        }
+      } else {
+        setError('root', {
+          type: 'manual',
+          message: getErrorMessage(error, 'Failed to verify session after registration'),
+        });
+        return;
+      }
+    }
+
     try {
       if (searchParams.challenge && searchParams.redirect_port) {
         const result = await apiClient<{ redirectUrl?: string }>(
@@ -149,7 +181,7 @@ function RegisterPage() {
               />
             )}
 
-            <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
+            <form onSubmit={handleSubmit(onSubmit)} className="space-y-4" autoComplete="on">
               <div className="space-y-2">
                 <Label htmlFor="username">Username</Label>
                 <Input
@@ -157,6 +189,10 @@ function RegisterPage() {
                   type="text"
                   {...register('username')}
                   placeholder="Choose a username"
+                  autoComplete="username"
+                  autoCapitalize="none"
+                  autoCorrect="off"
+                  spellCheck={false}
                   disabled={isSubmitting}
                   className="bg-background/50 border-input"
                 />
@@ -174,6 +210,7 @@ function RegisterPage() {
                   type="password"
                   {...register('password')}
                   placeholder="Create a password (min 6 chars)"
+                  autoComplete="new-password"
                   disabled={isSubmitting}
                   className="bg-background/50 border-input"
                 />
@@ -191,6 +228,7 @@ function RegisterPage() {
                   type="password"
                   {...register('confirmPassword')}
                   placeholder="Confirm your password"
+                  autoComplete="new-password"
                   disabled={isSubmitting}
                   className="bg-background/50 border-input"
                 />
