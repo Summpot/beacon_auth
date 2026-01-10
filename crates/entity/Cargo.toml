@@ -8,6 +8,6 @@ name = "entity"
 path = "src/lib.rs"
 
 [dependencies]
-sea-orm = { git = "https://github.com/Summpot/sea-orm.git", branch = "master", default-features = false, features = ["macros"] }
+sea-orm = { git = "https://github.com/Summpot/sea-orm.git", branch = "cloudflare-d1", default-features = false, features = ["macros"] }
 serde = { workspace = true }
 

@@ -19,8 +19,8 @@ actix-files = "0.6"
 
 # Database
 # Use Summpot fork (includes Cloudflare D1 support in SeaORM 2.0 RC).
-sea-orm = { git = "https://github.com/Summpot/sea-orm.git", branch = "master", features = ["sqlx-sqlite", "sqlx-postgres", "runtime-tokio-rustls", "macros"] }
-sea-orm-migration = { git = "https://github.com/Summpot/sea-orm.git", branch = "master", features = ["sqlx-sqlite", "sqlx-postgres", "runtime-tokio-rustls"] }
+sea-orm = { git = "https://github.com/Summpot/sea-orm.git", branch = "cloudflare-d1", features = ["sqlx-sqlite", "sqlx-postgres", "runtime-tokio-rustls", "macros"] }
+sea-orm-migration = { git = "https://github.com/Summpot/sea-orm.git", branch = "cloudflare-d1", features = ["sqlx-sqlite", "sqlx-postgres", "runtime-tokio-rustls"] }
 
 # JWT & Crypto
 jsonwebtoken = { version = "10.2", default-features = false, features = ["rust_crypto"] }
