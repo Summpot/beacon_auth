@@ -1,7 +1,7 @@
 import { createFileRoute } from '@tanstack/react-router';
-import { Card, CardContent } from '@/components/ui/card';
-import { Alert, AlertDescription } from '@/components/ui/alert';
 import { AlertTriangle } from 'lucide-react';
+import { Alert, AlertDescription } from '@/components/ui/alert';
+import { Card, CardContent } from '@/components/ui/card';
 
 function ErrorPage() {
   return (
@@ -11,9 +11,7 @@ function ErrorPage() {
           <CardContent className="p-8">
             <div className="text-center">
               <div className="text-6xl mb-4">⚠️</div>
-              <h1 className="text-2xl font-bold mb-4">
-                Invalid Request
-              </h1>
+              <h1 className="text-2xl font-bold mb-4">Invalid Request</h1>
               <p className="text-muted-foreground mb-4">
                 This page requires valid challenge and redirect_port parameters.
                 <br />

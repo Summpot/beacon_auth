@@ -4,9 +4,7 @@
   "version": "${version}",
   "name": "Beacon Auth",
   "description": "This is an example description! Tell everyone what your mod is about!",
-  "authors": [
-    "Me!"
-  ],
+  "authors": ["Me!"],
   "contact": {
     "homepage": "https://fabricmc.net/",
     "sources": "https://github.com/FabricMC/fabric-example-mod"
@@ -28,9 +26,7 @@
       }
     ]
   },
-  "mixins": [
-    "beaconauth.mixins.json"
-  ],
+  "mixins": ["beaconauth.mixins.json"],
   "depends": {
     "fabricloader": ">=0.15.11",
     "minecraft": "~1.21.1",

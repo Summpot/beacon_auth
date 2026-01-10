@@ -9,7 +9,7 @@ export default defineConfig({
   ],
   source: {
     entry: {
-      _worker: './src/_worker.ts'
+      _worker: './src/_worker.ts',
     },
   },
   output: {

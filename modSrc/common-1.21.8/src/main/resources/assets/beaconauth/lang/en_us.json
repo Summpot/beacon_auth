@@ -12,17 +12,17 @@
   "chat.beaconauth.generating_url": "§7Generating login URL...",
   "chat.beaconauth.auto_login": "§7Automatic login initiated...",
   "chat.beaconauth.login_cancelled": "§cAuthentication cancelled",
-  
+
   "command.beaconauth.must_be_player": "This command must be run by a player",
   "command.beaconauth.login_failed": "Failed to start login: %s",
   "command.beaconauth.login_request_sent": "§7Login request sent to your client",
-  
+
   "html.beaconauth.success.title": "Login Successful",
   "html.beaconauth.success.heading": "Login successful!",
   "html.beaconauth.success.message": "You can close this page and return to the game",
   "html.beaconauth.error.title": "Login Error",
   "html.beaconauth.error.heading": "Login Error",
-  
+
   "server.beaconauth.player_joined": "Player %s joined the server",
   "server.beaconauth.not_authenticated": "Player %s is not authenticated",
   "server.beaconauth.already_authenticated": "Player %s is already authenticated",

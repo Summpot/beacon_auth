@@ -1,13 +1,13 @@
-import { createFileRoute, Link } from '@tanstack/react-router';
 import { useQuery } from '@tanstack/react-query';
-import * as m from '@/paraglide/messages';
-import { apiClient, queryKeys } from '../utils/api';
+import { createFileRoute, Link } from '@tanstack/react-router';
+import { Gamepad2, Github, KeyRound, Shield } from 'lucide-react';
 import { BeaconIcon } from '@/components/beacon-icon';
+import { LanguageToggle } from '@/components/language-toggle';
+import { ThemeToggle } from '@/components/theme-toggle';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
-import { Github, KeyRound, Shield, Gamepad2 } from 'lucide-react';
-import { ThemeToggle } from '@/components/theme-toggle';
-import { LanguageToggle } from '@/components/language-toggle';
+import * as m from '@/paraglide/messages';
+import { apiClient, queryKeys } from '../utils/api';
 
 interface UserInfo {
   id: string;

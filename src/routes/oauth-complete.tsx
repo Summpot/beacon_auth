@@ -1,13 +1,15 @@
 import { createFileRoute, Link } from '@tanstack/react-router';
+import { CheckCircle2, Home, Loader2, XCircle } from 'lucide-react';
 import { useEffect, useState } from 'react';
-import { apiClient } from '../utils/api';
 import { BeaconIcon } from '@/components/beacon-icon';
-import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Loader2, CheckCircle2, XCircle, Home } from 'lucide-react';
+import { Card, CardContent } from '@/components/ui/card';
+import { apiClient } from '../utils/api';
 
 function OAuthCompletePage() {
-  const [status, setStatus] = useState<'loading' | 'success' | 'error'>('loading');
+  const [status, setStatus] = useState<'loading' | 'success' | 'error'>(
+    'loading',
+  );
   const [message, setMessage] = useState('Processing authentication...');
 
   useEffect(() => {
@@ -15,18 +17,20 @@ function OAuthCompletePage() {
       try {
         // Retrieve saved parameters from sessionStorage
         const challenge = sessionStorage.getItem('minecraft_challenge');
-        const redirectPortStr = sessionStorage.getItem('minecraft_redirect_port');
+        const redirectPortStr = sessionStorage.getItem(
+          'minecraft_redirect_port',
+        );
 
         // Check if we're in Minecraft mode or normal web mode
         if (!challenge || !redirectPortStr) {
           // Normal web OAuth login - redirect to profile page
           setStatus('success');
           setMessage('Authentication successful! Redirecting to profile...');
-          
+
           // Clean up any partial sessionStorage data
           sessionStorage.removeItem('minecraft_challenge');
           sessionStorage.removeItem('minecraft_redirect_port');
-          
+
           setTimeout(() => {
             window.location.href = '/profile';
           }, 1000);
@@ -46,7 +50,7 @@ function OAuthCompletePage() {
               redirect_port,
               profile_url: window.location.origin + '/profile',
             },
-          }
+          },
         );
 
         // Clean up sessionStorage
@@ -63,7 +67,9 @@ function OAuthCompletePage() {
       } catch (error) {
         console.error('OAuth completion error:', error);
         setStatus('error');
-        setMessage('An error occurred during authentication. Please try again.');
+        setMessage(
+          'An error occurred during authentication. Please try again.',
+        );
       }
     };
 

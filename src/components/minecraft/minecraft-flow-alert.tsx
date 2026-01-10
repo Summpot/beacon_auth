@@ -8,8 +8,13 @@ export interface MinecraftFlowAlertProps {
   redirectPort: number;
 }
 
-export function MinecraftFlowAlert({ title, challenge, redirectPort }: MinecraftFlowAlertProps) {
-  const short = challenge.length > 16 ? `${challenge.substring(0, 16)}...` : challenge;
+export function MinecraftFlowAlert({
+  title,
+  challenge,
+  redirectPort,
+}: MinecraftFlowAlertProps) {
+  const short =
+    challenge.length > 16 ? `${challenge.substring(0, 16)}...` : challenge;
 
   return (
     <Alert>

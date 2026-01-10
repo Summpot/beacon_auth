@@ -1,30 +1,30 @@
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { createFileRoute, Link, useNavigate } from '@tanstack/react-router';
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import {
+  CheckCircle,
+  Gamepad2,
+  Loader2,
+  LogOut,
+  Settings,
+  Shield,
+} from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { z } from 'zod';
-import { apiClient, queryKeys, type ApiError } from '../utils/api';
-import * as m from '@/paraglide/messages';
 import { BeaconIcon } from '@/components/beacon-icon';
+import { LanguageToggle } from '@/components/language-toggle';
+import { ThemeToggle } from '@/components/theme-toggle';
+import { Alert, AlertDescription } from '@/components/ui/alert';
+import { Avatar, AvatarFallback } from '@/components/ui/avatar';
+import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import {
   Card,
   CardContent,
-  CardTitle,
   CardDescription,
+  CardTitle,
 } from '@/components/ui/card';
-import { Alert, AlertDescription } from '@/components/ui/alert';
-import { Avatar, AvatarFallback } from '@/components/ui/avatar';
-import { Badge } from '@/components/ui/badge';
-import { ThemeToggle } from '@/components/theme-toggle';
-import { LanguageToggle } from '@/components/language-toggle';
-import {
-  Settings,
-  LogOut,
-  Shield,
-  Gamepad2,
-  CheckCircle,
-  Loader2,
-} from 'lucide-react';
+import * as m from '@/paraglide/messages';
+import { type ApiError, apiClient, queryKeys } from '../utils/api';
 
 const searchParamsSchema = z.object({
   status: z.enum(['success', 'error']).optional(),
@@ -52,6 +52,7 @@ function ProfilePage() {
   const {
     data: user,
     isLoading,
+    isFetching,
     error,
   } = useQuery<UserInfo, ApiError>({
     queryKey: queryKeys.userMe(),
@@ -85,17 +86,18 @@ function ProfilePage() {
   }, [status, message]);
 
   useEffect(() => {
-    if (error?.status === 401) {
+    // Don't redirect on a stale cached 401 if a refetch is currently in-flight.
+    if (!isFetching && error?.status === 401) {
       navigate({ to: '/login', replace: true });
     }
-  }, [error, navigate]);
+  }, [error, isFetching, navigate]);
 
   useEffect(() => {
     // If the cached user was cleared (e.g. after logout), redirect rather than rendering nothing.
-    if (!isLoading && !error && !user) {
+    if (!isLoading && !isFetching && !error && !user) {
       navigate({ to: '/login', replace: true });
     }
-  }, [error, isLoading, navigate, user]);
+  }, [error, isFetching, isLoading, navigate, user]);
 
   const handleLogout = () => logoutMutation.mutate();
 

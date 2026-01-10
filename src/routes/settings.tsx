@@ -17,12 +17,13 @@ import {
   X,
 } from 'lucide-react';
 import { useEffect, useState } from 'react';
-import { ThemeToggle } from '@/components/theme-toggle';
-import { LanguageToggle } from '@/components/language-toggle';
 import { useForm } from 'react-hook-form';
 import { z } from 'zod';
 import { BeaconIcon } from '@/components/beacon-icon';
+import { LanguageToggle } from '@/components/language-toggle';
+import { ThemeToggle } from '@/components/theme-toggle';
 import { Alert, AlertDescription } from '@/components/ui/alert';
+import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import {
   Card,
@@ -39,9 +40,8 @@ import {
 } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Badge } from '@/components/ui/badge';
-import { ApiError, apiClient } from '../utils/api';
 import * as m from '@/paraglide/messages';
+import { ApiError, apiClient } from '../utils/api';
 
 const passwordChangeSchema = z
   .object({
@@ -270,7 +270,9 @@ function SettingsPage() {
     }
   };
 
-  const handleOAuthLink = async (provider: 'github' | 'google' | 'microsoft') => {
+  const handleOAuthLink = async (
+    provider: 'github' | 'google' | 'microsoft',
+  ) => {
     try {
       const result = await apiClient<{ authorizationUrl?: string }>(
         '/api/v1/oauth/link/start',
@@ -604,60 +606,60 @@ function SettingsPage() {
                       </div>
                     )}
 
-                     {/* Link Buttons Row */}
-                     {(config?.github_oauth && !isGithubLinked) ||
-                     (config?.google_oauth && !isGoogleLinked) ||
-                     (config?.microsoft_oauth && !isMicrosoftLinked) ? (
-                       <div className="flex flex-wrap gap-3 pt-2">
-                         {config?.github_oauth && !isGithubLinked && (
-                           <Button
-                             variant="outline"
-                             onClick={() => handleOAuthLink('github')}
-                             className="gap-2"
-                           >
-                             <Github className="h-4 w-4" />
-                             {m.settings_link_github()}
-                           </Button>
-                         )}
-                         {config?.google_oauth && !isGoogleLinked && (
-                           <Button
-                             variant="outline"
-                             onClick={() => handleOAuthLink('google')}
-                             className="gap-2"
-                           >
-                             <Chrome className="h-4 w-4" />
-                             {m.settings_link_google()}
-                           </Button>
-                         )}
-                         {config?.microsoft_oauth && !isMicrosoftLinked && (
-                           <Button
-                             variant="outline"
-                             onClick={() => handleOAuthLink('microsoft')}
-                             className="gap-2"
-                           >
-                             <svg
-                               className="h-4 w-4"
-                               viewBox="0 0 24 24"
-                               aria-label="Microsoft"
-                             >
-                               <path fill="#F25022" d="M2 2h9v9H2z" />
-                               <path fill="#7FBA00" d="M13 2h9v9h-9z" />
-                               <path fill="#00A4EF" d="M2 13h9v9H2z" />
-                               <path fill="#FFB900" d="M13 13h9v9h-9z" />
-                             </svg>
-                             {m.settings_link_microsoft()}
-                           </Button>
-                         )}
-                       </div>
-                     ) : (
-                       !config?.github_oauth &&
-                       !config?.google_oauth &&
-                       !config?.microsoft_oauth && (
-                         <p className="text-sm text-muted-foreground italic pt-2">
-                           {m.settings_no_providers()}
-                         </p>
-                       )
-                     )}
+                    {/* Link Buttons Row */}
+                    {(config?.github_oauth && !isGithubLinked) ||
+                    (config?.google_oauth && !isGoogleLinked) ||
+                    (config?.microsoft_oauth && !isMicrosoftLinked) ? (
+                      <div className="flex flex-wrap gap-3 pt-2">
+                        {config?.github_oauth && !isGithubLinked && (
+                          <Button
+                            variant="outline"
+                            onClick={() => handleOAuthLink('github')}
+                            className="gap-2"
+                          >
+                            <Github className="h-4 w-4" />
+                            {m.settings_link_github()}
+                          </Button>
+                        )}
+                        {config?.google_oauth && !isGoogleLinked && (
+                          <Button
+                            variant="outline"
+                            onClick={() => handleOAuthLink('google')}
+                            className="gap-2"
+                          >
+                            <Chrome className="h-4 w-4" />
+                            {m.settings_link_google()}
+                          </Button>
+                        )}
+                        {config?.microsoft_oauth && !isMicrosoftLinked && (
+                          <Button
+                            variant="outline"
+                            onClick={() => handleOAuthLink('microsoft')}
+                            className="gap-2"
+                          >
+                            <svg
+                              className="h-4 w-4"
+                              viewBox="0 0 24 24"
+                              aria-label="Microsoft"
+                            >
+                              <path fill="#F25022" d="M2 2h9v9H2z" />
+                              <path fill="#7FBA00" d="M13 2h9v9h-9z" />
+                              <path fill="#00A4EF" d="M2 13h9v9H2z" />
+                              <path fill="#FFB900" d="M13 13h9v9h-9z" />
+                            </svg>
+                            {m.settings_link_microsoft()}
+                          </Button>
+                        )}
+                      </div>
+                    ) : (
+                      !config?.github_oauth &&
+                      !config?.google_oauth &&
+                      !config?.microsoft_oauth && (
+                        <p className="text-sm text-muted-foreground italic pt-2">
+                          {m.settings_no_providers()}
+                        </p>
+                      )
+                    )}
                   </div>
                 </div>
               </CardContent>
@@ -693,11 +695,12 @@ function SettingsPage() {
                           disabled={changePasswordForm.formState.isSubmitting}
                           className="bg-background/50"
                         />
-                        {changePasswordForm.formState.errors.currentPassword && (
+                        {changePasswordForm.formState.errors
+                          .currentPassword && (
                           <p className="text-sm text-destructive">
                             {
-                              changePasswordForm.formState.errors.currentPassword
-                                .message
+                              changePasswordForm.formState.errors
+                                .currentPassword.message
                             }
                           </p>
                         )}
@@ -735,11 +738,12 @@ function SettingsPage() {
                           disabled={changePasswordForm.formState.isSubmitting}
                           className="bg-background/50"
                         />
-                        {changePasswordForm.formState.errors.confirmPassword && (
+                        {changePasswordForm.formState.errors
+                          .confirmPassword && (
                           <p className="text-sm text-destructive">
                             {
-                              changePasswordForm.formState.errors.confirmPassword
-                                .message
+                              changePasswordForm.formState.errors
+                                .confirmPassword.message
                             }
                           </p>
                         )}
@@ -969,7 +973,6 @@ function SettingsPage() {
                   </Button>
                 </div>
               </div>
-
             </form>
           </DialogContent>
         </Dialog>

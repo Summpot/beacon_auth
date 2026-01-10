@@ -1,12 +1,12 @@
 {
-	"$schema": "node_modules/wrangler/config-schema.json",
-	"name": "beaconauth",
-	"compatibility_date": "2025-12-18",
-	"pages_build_output_dir": "./dist",
-	"services": [
-		{
-			"binding": "BACKEND",
-			"service": "beaconauth"
-		}
-	]
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "beaconauth",
+  "compatibility_date": "2025-12-18",
+  "pages_build_output_dir": "./dist",
+  "services": [
+    {
+      "binding": "BACKEND",
+      "service": "beaconauth"
+    }
+  ]
 }
