@@ -1,5 +1,10 @@
-import { createRootRoute, Outlet, useRouterState, HeadContent } from '@tanstack/react-router';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import {
+  createRootRoute,
+  HeadContent,
+  Outlet,
+  useRouterState,
+} from '@tanstack/react-router';
 import { useEffect, useState } from 'react';
 import { ThemeProvider } from '@/components/theme-provider';
 
@@ -16,7 +21,7 @@ const RootLayout = () => {
             refetchOnWindowFocus: false,
           },
         },
-      })
+      }),
   );
 
   const pathname = useRouterState({ select: (s) => s.location.pathname });
@@ -25,7 +30,7 @@ const RootLayout = () => {
   useEffect(() => {
     // Initialize i18n from cookie/navigator on mount
     import('@/lib/i18n').then(({ initializeI18n }) => {
-       initializeI18n();
+      initializeI18n();
     });
   }, []);
 
@@ -54,7 +59,7 @@ const RootLayout = () => {
   );
 };
 
-export const Route = createRootRoute({ 
+export const Route = createRootRoute({
   component: RootLayout,
   head: () => ({
     meta: [

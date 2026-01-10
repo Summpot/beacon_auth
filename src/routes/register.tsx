@@ -1,12 +1,13 @@
 import { zodResolver } from '@hookform/resolvers/zod';
-import { createFileRoute, Link, useNavigate } from '@tanstack/react-router';
+import { useQueryClient } from '@tanstack/react-query';
+import { createFileRoute, Link } from '@tanstack/react-router';
 import { ChevronLeft, Loader2 } from 'lucide-react';
-import { ThemeToggle } from '@/components/theme-toggle';
-import { LanguageToggle } from '@/components/language-toggle';
 import { useForm } from 'react-hook-form';
 import { z } from 'zod';
 import { BeaconIcon } from '@/components/beacon-icon';
+import { LanguageToggle } from '@/components/language-toggle';
 import { MinecraftFlowAlert } from '@/components/minecraft/minecraft-flow-alert';
+import { ThemeToggle } from '@/components/theme-toggle';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import {
@@ -18,7 +19,7 @@ import {
 } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { ApiError, apiClient } from '../utils/api';
+import { ApiError, apiClient, queryKeys } from '../utils/api';
 
 const searchParamsSchema = z.object({
   challenge: z.string().min(1).optional(),
@@ -50,7 +51,7 @@ type RegisterFormData = z.infer<typeof registerFormSchema>;
 
 function RegisterPage() {
   const searchParams = Route.useSearch();
-  const navigate = useNavigate();
+  const queryClient = useQueryClient();
 
   const getErrorMessage = (error: unknown, fallback: string) => {
     if (error instanceof ApiError) {
@@ -85,6 +86,10 @@ function RegisterPage() {
       return;
     }
 
+    // Ensure any stale /me cache (especially a cached 401 from earlier) is cleared
+    // before we hit /profile.
+    await queryClient.invalidateQueries({ queryKey: queryKeys.userMe() });
+
     try {
       if (searchParams.challenge && searchParams.redirect_port) {
         const result = await apiClient<{ redirectUrl?: string }>(
@@ -103,7 +108,8 @@ function RegisterPage() {
           return;
         }
       }
-      navigate({ to: '/profile' });
+      // Use a hard navigation (same behavior as login) to avoid any SPA cache edge cases.
+      window.location.href = '/profile';
     } catch (error) {
       setError('root', {
         type: 'manual',
@@ -115,134 +121,151 @@ function RegisterPage() {
   return (
     <div className="min-h-screen flex flex-col">
       <div className="p-4 flex items-center justify-between">
-          <Link
-            to="/"
-            className="inline-flex items-center gap-2 text-muted-foreground hover:text-primary transition-colors"
-          >
-            <ChevronLeft className="h-4 w-4" />
-            Back to Home
-          </Link>
-          <div className="flex items-center gap-2">
-            <ThemeToggle />
-            <LanguageToggle />
-          </div>
+        <Link
+          to="/"
+          className="inline-flex items-center gap-2 text-muted-foreground hover:text-primary transition-colors"
+        >
+          <ChevronLeft className="h-4 w-4" />
+          Back to Home
+        </Link>
+        <div className="flex items-center gap-2">
+          <ThemeToggle />
+          <LanguageToggle />
+        </div>
       </div>
 
       <div className="flex-1 flex items-center justify-center p-4">
-      <div className="w-full max-w-md">
-
-        <Card>
-          <CardHeader className="text-center pb-4">
-            <div className="flex justify-center mb-4">
-              <BeaconIcon className="w-16 h-16" accentColor="#a855f7" />
-            </div>
-            <CardTitle className="text-3xl font-bold">Create Account</CardTitle>
-            <CardDescription>Join the BeaconAuth community</CardDescription>
-          </CardHeader>
-
-          <CardContent className="space-y-6">
-            {searchParams.challenge && searchParams.redirect_port && (
-              <MinecraftFlowAlert
-                title="Minecraft Registration"
-                challenge={searchParams.challenge}
-                redirectPort={searchParams.redirect_port}
-              />
-            )}
-
-            <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
-              <div className="space-y-2">
-                <Label htmlFor="username">Username</Label>
-                <Input
-                  id="username"
-                  type="text"
-                  {...register('username')}
-                  placeholder="Choose a username"
-                  disabled={isSubmitting}
-                  className="bg-background/50 border-input"
-                />
-                {errors.username && (
-                  <p className="text-sm text-destructive">
-                    {errors.username.message}
-                  </p>
-                )}
+        <div className="w-full max-w-md">
+          <Card>
+            <CardHeader className="text-center pb-4">
+              <div className="flex justify-center mb-4">
+                <BeaconIcon className="w-16 h-16" accentColor="#a855f7" />
               </div>
+              <CardTitle className="text-3xl font-bold">
+                Create Account
+              </CardTitle>
+              <CardDescription>Join the BeaconAuth community</CardDescription>
+            </CardHeader>
 
-              <div className="space-y-2">
-                <Label htmlFor="password">Password</Label>
-                <Input
-                  id="password"
-                  type="password"
-                  {...register('password')}
-                  placeholder="Create a password (min 6 chars)"
-                  disabled={isSubmitting}
-                  className="bg-background/50 border-input"
+            <CardContent className="space-y-6">
+              {searchParams.challenge && searchParams.redirect_port && (
+                <MinecraftFlowAlert
+                  title="Minecraft Registration"
+                  challenge={searchParams.challenge}
+                  redirectPort={searchParams.redirect_port}
                 />
-                {errors.password && (
-                  <p className="text-sm text-destructive">
-                    {errors.password.message}
-                  </p>
-                )}
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="confirmPassword">Confirm Password</Label>
-                <Input
-                  id="confirmPassword"
-                  type="password"
-                  {...register('confirmPassword')}
-                  placeholder="Confirm your password"
-                  disabled={isSubmitting}
-                  className="bg-background/50 border-input"
-                />
-                {errors.confirmPassword && (
-                  <p className="text-sm text-destructive">
-                    {errors.confirmPassword.message}
-                  </p>
-                )}
-              </div>
-
-              {errors.root && (
-                <Alert variant="destructive">
-                  <AlertDescription>{errors.root.message}</AlertDescription>
-                </Alert>
               )}
 
-              <Button type="submit" disabled={isSubmitting} className="w-full">
-                {isSubmitting ? (
-                  <>
-                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                    Creating Account...
-                  </>
-                ) : (
-                  'Create Account'
+              <form
+                onSubmit={handleSubmit(onSubmit)}
+                method="post"
+                className="space-y-4"
+              >
+                <div className="space-y-2">
+                  <Label htmlFor="username">Username</Label>
+                  <Input
+                    id="username"
+                    type="text"
+                    {...register('username')}
+                    autoComplete="username"
+                    autoCapitalize="none"
+                    autoCorrect="off"
+                    spellCheck={false}
+                    placeholder="Choose a username"
+                    disabled={isSubmitting}
+                    className="bg-background/50 border-input"
+                  />
+                  {errors.username && (
+                    <p className="text-sm text-destructive">
+                      {errors.username.message}
+                    </p>
+                  )}
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="password">Password</Label>
+                  <Input
+                    id="password"
+                    type="password"
+                    {...register('password')}
+                    autoComplete="new-password"
+                    minLength={6}
+                    placeholder="Create a password (min 6 chars)"
+                    disabled={isSubmitting}
+                    className="bg-background/50 border-input"
+                  />
+                  {errors.password && (
+                    <p className="text-sm text-destructive">
+                      {errors.password.message}
+                    </p>
+                  )}
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="confirmPassword">Confirm Password</Label>
+                  <Input
+                    id="confirmPassword"
+                    type="password"
+                    {...register('confirmPassword')}
+                    autoComplete="new-password"
+                    minLength={6}
+                    placeholder="Confirm your password"
+                    disabled={isSubmitting}
+                    className="bg-background/50 border-input"
+                  />
+                  {errors.confirmPassword && (
+                    <p className="text-sm text-destructive">
+                      {errors.confirmPassword.message}
+                    </p>
+                  )}
+                </div>
+
+                {errors.root && (
+                  <Alert variant="destructive">
+                    <AlertDescription>{errors.root.message}</AlertDescription>
+                  </Alert>
                 )}
-              </Button>
-            </form>
 
-            <div className="text-center">
-              <p className="text-sm text-muted-foreground">
-                Already have an account?{' '}
-                <Link
-                  to="/login"
-                  search={{
-                    challenge: searchParams.challenge,
-                    redirect_port: searchParams.redirect_port,
-                  }}
-                  className="text-primary hover:text-primary/80 font-medium transition-colors"
+                <Button
+                  type="submit"
+                  disabled={isSubmitting}
+                  className="w-full"
                 >
-                  Sign in
-                </Link>
-              </p>
-            </div>
-          </CardContent>
-        </Card>
+                  {isSubmitting ? (
+                    <>
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      Creating Account...
+                    </>
+                  ) : (
+                    'Create Account'
+                  )}
+                </Button>
+              </form>
 
-        <div className="mt-6 text-center">
+              <div className="text-center">
+                <p className="text-sm text-muted-foreground">
+                  Already have an account?{' '}
+                  <Link
+                    to="/login"
+                    search={{
+                      challenge: searchParams.challenge,
+                      redirect_port: searchParams.redirect_port,
+                    }}
+                    className="text-primary hover:text-primary/80 font-medium transition-colors"
+                  >
+                    Sign in
+                  </Link>
+                </p>
+              </div>
+            </CardContent>
+          </Card>
+
+          <div className="mt-6 text-center">
             <p className="text-xs text-muted-foreground">
-            🔒 Your password is stored securely
-          </p>
+              🔒 Your password is stored securely
+            </p>
+          </div>
         </div>
-      </div>
       </div>
     </div>
   );

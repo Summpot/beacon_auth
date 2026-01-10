@@ -1,4 +1,9 @@
-import { ofetch, type FetchOptions, type FetchRequest, type FetchResponse } from 'ofetch';
+import {
+  type FetchOptions,
+  type FetchRequest,
+  type FetchResponse,
+  ofetch,
+} from 'ofetch';
 
 declare module 'ofetch' {
   interface FetchOptions {
@@ -51,7 +56,7 @@ export class ApiError extends Error {
   constructor(
     public status: number,
     message: string,
-    public data?: unknown
+    public data?: unknown,
   ) {
     super(message);
     this.name = 'ApiError';
@@ -106,7 +111,7 @@ function createApiClient() {
           context.response.status,
           (data as { message?: string } | undefined)?.message ??
             `Request failed with status ${context.response.status}`,
-          data
+          data,
         );
       }
     },

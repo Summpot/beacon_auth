@@ -1,7 +1,7 @@
+import path from 'node:path';
 import { defineConfig } from '@rsbuild/core';
 import { pluginReact } from '@rsbuild/plugin-react';
 import { tanstackRouter } from '@tanstack/router-plugin/rspack';
-import path from 'node:path';
 
 export default defineConfig({
   plugins: [pluginReact()],

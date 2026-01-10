@@ -3,12 +3,8 @@
   "package": "io.github.summpot.beaconauth.mixin",
   "compatibilityLevel": "JAVA_17",
   "minVersion": "0.8",
-  "client": [
-    "ClientHandshakePacketListenerImplMixin"
-  ],
-  "mixins": [
-    "ServerLoginPacketListenerImplMixin"
-  ],
+  "client": ["ClientHandshakePacketListenerImplMixin"],
+  "mixins": ["ServerLoginPacketListenerImplMixin"],
   "injectors": {
     "defaultRequire": 1
   }
