@@ -13,7 +13,7 @@ export const LOCALE_COOKIE_NAME = 'beaconauth-locale';
 export function getLocaleFromCookie(): AvailableLanguageTag | undefined {
   if (typeof document === 'undefined') return undefined;
   const match = document.cookie.match(
-    new RegExp('(^| )' + LOCALE_COOKIE_NAME + '=([^;]+)'),
+    new RegExp(`(^| )${LOCALE_COOKIE_NAME}=([^;]+)`),
   );
   const value = match ? match[2] : undefined;
   if (value && isAvailableLocale(value)) {
