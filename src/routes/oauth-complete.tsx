@@ -48,7 +48,7 @@ function OAuthCompletePage() {
             body: {
               challenge,
               redirect_port,
-              profile_url: window.location.origin + '/profile',
+              profile_url: `${window.location.origin}/profile`,
             },
           },
         );
