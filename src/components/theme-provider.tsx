@@ -1,3 +1,4 @@
+import { ScriptOnce } from '@tanstack/react-router';
 import { createContext, useContext, useEffect, useState } from 'react';
 
 type Theme = 'dark' | 'light' | 'system';
@@ -19,6 +20,13 @@ const initialState: ThemeProviderState = {
 };
 
 const ThemeProviderContext = createContext<ThemeProviderState>(initialState);
+
+const themeScript = `(function() {
+            var theme = localStorage.getItem('beaconauth-ui-theme')
+            if (theme === 'dark' || (!theme && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
+              document.documentElement.classList.add('dark')
+            }
+          })();`;
 
 export function ThemeProvider({
   children,
@@ -58,6 +66,8 @@ export function ThemeProvider({
 
   return (
     <ThemeProviderContext.Provider {...props} value={value}>
+      {/** biome-ignore lint/correctness/noChildrenProp: <explanation> */}
+      <ScriptOnce children={themeScript} />
       {children}
     </ThemeProviderContext.Provider>
   );

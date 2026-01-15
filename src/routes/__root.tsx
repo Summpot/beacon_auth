@@ -3,14 +3,16 @@ import {
   createRootRoute,
   HeadContent,
   Outlet,
+  Scripts,
   useRouterState,
 } from '@tanstack/react-router';
-import { useEffect, useState } from 'react';
+import { type ReactNode, useEffect, useState } from 'react';
 import { ThemeProvider } from '@/components/theme-provider';
-
 import { AnimatePresence, MotionConfig, motion } from '@/lib/motion';
 
-const RootLayout = () => {
+import appCss from '../styles.css?url';
+
+function RootComponent() {
   const [queryClient] = useState(
     () =>
       new QueryClient({
@@ -33,39 +35,54 @@ const RootLayout = () => {
       initializeI18n();
     });
   }, []);
-
   return (
-    <ThemeProvider defaultTheme="system" storageKey="beaconauth-ui-theme">
-      <QueryClientProvider client={queryClient}>
-        <MotionConfig reducedMotion="user">
-          <div className="min-h-screen bg-background text-foreground relative">
-            <HeadContent />
-            <AnimatePresence mode="wait" initial={false}>
-              <motion.div
-                // Keyed by pathname so route changes animate.
-                key={pathname}
-                initial={{ opacity: 0, y: 6 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: -6 }}
-                transition={{ duration: 0.18, ease: 'easeOut' }}
-              >
-                <Outlet />
-              </motion.div>
-            </AnimatePresence>
-          </div>
-        </MotionConfig>
-      </QueryClientProvider>
-    </ThemeProvider>
+    <RootDocument>
+      <ThemeProvider defaultTheme="system" storageKey="beaconauth-ui-theme">
+        <QueryClientProvider client={queryClient}>
+          <MotionConfig reducedMotion="user">
+            <div className="min-h-screen bg-background text-foreground relative">
+              <AnimatePresence mode="wait" initial={false}>
+                <motion.div
+                  // Keyed by pathname so route changes animate.
+                  key={pathname}
+                  initial={{ opacity: 0, y: 6 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -6 }}
+                  transition={{ duration: 0.18, ease: 'easeOut' }}
+                >
+                  <Outlet />
+                </motion.div>
+              </AnimatePresence>
+            </div>
+          </MotionConfig>
+        </QueryClientProvider>
+      </ThemeProvider>
+    </RootDocument>
   );
-};
+}
+
+function RootDocument({ children }: Readonly<{ children: ReactNode }>) {
+  return (
+    <html lang="en">
+      <head>
+        <HeadContent />
+      </head>
+      <body>
+        {children}
+        <Scripts />
+      </body>
+    </html>
+  );
+}
 
 export const Route = createRootRoute({
-  component: RootLayout,
+  component: RootComponent,
   head: () => ({
     meta: [
       { charset: 'utf-8' },
       { name: 'viewport', content: 'width=device-width, initial-scale=1' },
       { title: 'BeaconAuth' },
     ],
+    links: [{ rel: 'stylesheet', href: appCss }],
   }),
 });
