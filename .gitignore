@@ -47,3 +47,7 @@ Cargo.lock
 !.env.example
 
 .tanstack
+
+.output
+
+.wrangler
