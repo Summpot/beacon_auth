@@ -11,13 +11,6 @@ export default defineConfig({
     port: 3000,
   },
   plugins: [
-    tsConfigPaths({
-      projects: ['./tsconfig.json'],
-    }),
-    tanstackStart(),
-    viteReact(),
-    tailwindcss(),
-    nitro(),
     paraglideVitePlugin({
       project: './project.inlang',
       outdir: './src/paraglide',
@@ -31,6 +24,13 @@ export default defineConfig({
         },
       ],
     }),
+    tailwindcss(),
+    tsConfigPaths({
+      projects: ['./tsconfig.json'],
+    }),
+    tanstackStart(),
+    viteReact(),
+    nitro(),
   ],
   nitro: {
     serverDir: './',
