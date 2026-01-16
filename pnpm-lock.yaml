@@ -106,7 +106,7 @@ importers:
         specifier: ^5.9.3
         version: 5.9.3
       vite:
-        specifier: npm:rolldown-vite@latest
+        specifier: npm:rolldown-vite@7.3.1
         version: rolldown-vite@7.3.1(@types/node@25.0.8)(esbuild@0.27.0)(jiti@2.6.1)(tsx@4.20.6)
       vite-tsconfig-paths:
         specifier: ^6.0.4
