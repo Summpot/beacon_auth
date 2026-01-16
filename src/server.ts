@@ -32,6 +32,7 @@ function shouldProxy(pathname: string): boolean {
 
 async function proxyToBackend(request: Request, env: Env): Promise<Response> {
   if (!env.BACKEND || typeof env.BACKEND.fetch !== 'function') {
+    console.log('Missing Pages service binding: BACKEND');
     return new Response('Missing Pages service binding: BACKEND', {
       status: 500,
     });
