@@ -9,28 +9,20 @@ on:
       - crates/beacon-core/**
       - Cargo.toml
       - Cargo.lock
-      - wrangler.jsonc
       - wrangler.workers.jsonc
-      - src/**
-      - public/**
-      - package.json
-      - pnpm-lock.yaml
-      - rsbuild.config.ts
-      - rslib.config.ts
-      - tsconfig.json
-      - .github/workflows/deploy-cloudflare.yml
+      - .github/workflows/deploy-cloudflare-worker.yml
   workflow_dispatch:
 
 permissions:
   contents: read
 
 concurrency:
-  group: cloudflare-deploy-${{ github.ref }}
+  group: cloudflare-worker-deploy-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
   deploy-worker:
-    name: Deploy beacon-worker (API) + Pages (UI)
+    name: Deploy beacon-worker (API)
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -47,10 +39,8 @@ jobs:
           node-version: '22'
           cache: 'pnpm'
 
-      - name: Install dependencies and build
-        run: pnpm install && pnpm build
-        env:
-          NITRO_PRESET: cloudflare_pages
+      - name: Install wrangler
+        run: pnpm install wrangler -g
 
       - name: Setup Rust
         uses: dtolnay/rust-toolchain@stable
@@ -123,18 +113,14 @@ jobs:
 
           // Generate CI-only configs that pin account_id so Wrangler does not need to call
           // the /memberships endpoint to infer it.
-          pagesCfg.account_id = accountId;
           workersCfg.account_id = accountId;
 
-          const ciPagesConfigPath = 'wrangler.pages.ci.json';
           const ciWorkersConfigPath = 'wrangler.workers.ci.json';
-          fs.writeFileSync(ciPagesConfigPath, JSON.stringify(pagesCfg, null, 2) + '\n');
           fs.writeFileSync(ciWorkersConfigPath, JSON.stringify(workersCfg, null, 2) + '\n');
 
           const pagesBaseUrl = `https://${pagesName}.pages.dev`;
           const baseUrlFromEnv = String(process.env.BASE_URL ?? '').trim();
           const resolvedBaseUrl = baseUrlFromEnv || pagesBaseUrl;
-          const compatibilityDate = String(pagesCfg?.compatibility_date ?? '').trim();
 
           fs.appendFileSync(
             process.env.GITHUB_OUTPUT,
@@ -142,8 +128,6 @@ jobs:
               `worker_name=${pagesName}`,
               `pages_base_url=${pagesBaseUrl}`,
               `resolved_base_url=${resolvedBaseUrl}`,
-              `compatibility_date=${compatibilityDate}`,
-              `wrangler_pages_config=${ciPagesConfigPath}`,
               `wrangler_workers_config=${ciWorkersConfigPath}`,
               '',
             ].join('\n'),
@@ -151,31 +135,8 @@ jobs:
 
           console.log(`Project name: ${pagesName}`);
           console.log(`BASE_URL: ${resolvedBaseUrl}`);
-          console.log(`Wrangler Pages config: ${ciPagesConfigPath}`);
           console.log(`Wrangler Worker config: ${ciWorkersConfigPath}`);
           NODE
-
-      - name: Ensure Pages project exists
-        env:
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          PAGES_PROJECT: ${{ steps.cfg.outputs.worker_name }}
-          COMPATIBILITY_DATE: ${{ steps.cfg.outputs.compatibility_date }}
-        shell: bash
-        run: |
-          set -euo pipefail
-
-          project="${PAGES_PROJECT:?PAGES_PROJECT is required}"
-          compat="${COMPATIBILITY_DATE:-}"
-
-          echo "Ensuring Pages project '$project' exists (errors are safe to ignore):"
-
-          cmd=(pnpm wrangler pages project create "$project" --production-branch "main")
-          if [ -n "$compat" ]; then
-            cmd+=(--compatibility-date "$compat")
-          fi
-
-          "${cmd[@]}" || true
 
       - name: Deploy worker
         env:
@@ -187,7 +148,7 @@ jobs:
         run: |
           set -euo pipefail
 
-          pnpm wrangler deploy --config "${WRANGLER_WORKERS_CONFIG}" --var "BASE_URL:${BASE_URL}" --var "CLOUDFLARE_ACCOUNT_ID:${CLOUDFLARE_ACCOUNT_ID}"
+          wrangler deploy --config "${WRANGLER_WORKERS_CONFIG}" --var "BASE_URL:${BASE_URL}" --var "CLOUDFLARE_ACCOUNT_ID:${CLOUDFLARE_ACCOUNT_ID}"
 
       - name: Apply SeaORM migrations (Migrator::up)
         env:
@@ -259,7 +220,7 @@ jobs:
             local value="$2"
             if [ -n "$value" ]; then
               echo "Setting secret: $name"
-              printf %s "$value" | pnpm wrangler secret put "$name" --config "${WRANGLER_WORKERS_CONFIG}"
+              printf %s "$value" | wrangler secret put "$name" --config "${WRANGLER_WORKERS_CONFIG}"
             else
               echo "Skipping secret (not provided): $name"
             fi
@@ -272,20 +233,3 @@ jobs:
           put_secret MICROSOFT_CLIENT_ID "${MICROSOFT_CLIENT_ID:-}"
           put_secret MICROSOFT_CLIENT_SECRET "${MICROSOFT_CLIENT_SECRET:-}"
           put_secret MICROSOFT_TENANT "${MICROSOFT_TENANT:-}"
-
-      - name: Deploy Pages (UI)
-        env:
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          PAGES_PROJECT: ${{ steps.cfg.outputs.worker_name }}
-        shell: bash
-        run: |
-          set -euo pipefail
-
-          project="${PAGES_PROJECT:?PAGES_PROJECT is required}"
-          echo "Deploying Pages project '$project' from ./dist"
-
-          pnpm wrangler pages deploy dist --project-name "$project" --branch "main" --experimental-provision --experimental-auto-create
-
-          echo "Pages URL: https://$project.pages.dev" >> "$GITHUB_STEP_SUMMARY"
-
