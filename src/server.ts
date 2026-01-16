@@ -13,10 +13,14 @@ interface Env {
   BACKEND: Fetcher;
 }
 
-declare module '@tanstack/react-start' {
-  interface Register {
-    server: {
-      requestContext: Env;
+declare global {
+  interface Request {
+    runtime?: {
+      name: string;
+      cloudflare?: {
+        env: Env;
+        context: ExecutionContextLike;
+      };
     };
   }
 }
@@ -31,27 +35,20 @@ function shouldProxy(pathname: string): boolean {
 }
 
 async function proxyToBackend(request: Request, env: Env): Promise<Response> {
-  console.log('Starting proxy to backend service', request, env);
   if (!env.BACKEND || typeof env.BACKEND.fetch !== 'function') {
     return new Response('Missing Pages service binding: BACKEND', {
-      status: 502,
+      status: 500,
     });
   }
 
-  console.log('Proxying request to backend service', request);
-
   const url = new URL(request.url);
   const upstreamUrl = new URL(request.url);
-
-  console.log(`Proxying request to backend URL: ${upstreamUrl.toString()}`);
 
   const headers = new Headers(request.headers);
   headers.delete('host');
   headers.delete('Host');
   headers.set('X-Forwarded-Host', url.host);
   headers.set('X-Forwarded-Proto', url.protocol.replace(':', ''));
-
-  console.log('Request Headers:', headers);
 
   const init: RequestInit = {
     method: request.method,
@@ -74,12 +71,15 @@ async function proxyToBackend(request: Request, env: Env): Promise<Response> {
 }
 
 export default createServerEntry({
-  fetch(request, env) {
+  fetch(request, opts) {
     const url = new URL(request.url);
-    if (shouldProxy(url.pathname)) {
-      console.log(`Proxying request to backend: ${url.pathname}`);
-      return proxyToBackend(request, env.context);
+    if (
+      shouldProxy(url.pathname) &&
+      request.runtime &&
+      request.runtime.cloudflare
+    ) {
+      return proxyToBackend(request, request.runtime.cloudflare.env);
     }
-    return handler.fetch(request, env);
+    return handler.fetch(request, opts);
   },
 });
