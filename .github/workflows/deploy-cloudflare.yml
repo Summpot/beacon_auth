@@ -47,10 +47,10 @@ jobs:
           node-version: '22'
           cache: 'pnpm'
 
-      - name: Install dependencies
-        run: pnpm install && pnpm build\
+      - name: Install dependencies and build
+        run: pnpm install && pnpm build
         env:
-          NIRTO_PRESET: cloudflare_pages
+          NITRO_PRESET: cloudflare_pages
 
       - name: Setup Rust
         uses: dtolnay/rust-toolchain@stable

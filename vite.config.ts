@@ -20,5 +20,9 @@ export default defineConfig({
   ],
   nitro: {
     serverDir: './',
+    cloudflare: {
+      deployConfig: true,
+      nodeCompat: true
+    }
   },
 });
