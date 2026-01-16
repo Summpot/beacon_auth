@@ -37,6 +37,8 @@ async function proxyToBackend(request: Request, env: Env): Promise<Response> {
     });
   }
 
+  console.log('Proxying request to backend service', request);
+
   const url = new URL(request.url);
   const upstreamUrl = new URL(request.url);
 
@@ -60,12 +62,14 @@ async function proxyToBackend(request: Request, env: Env): Promise<Response> {
         : request.body,
   };
 
-  return env.BACKEND.fetch(new Request(upstreamUrl.toString(), init)).catch((err) => {
-    console.error('Error proxying request to backend:', err);
-    return new Response('Error connecting to backend service', {
-      status: 502,
-    });
-  });
+  return env.BACKEND.fetch(new Request(upstreamUrl.toString(), init)).catch(
+    (err) => {
+      console.error('Error proxying request to backend:', err);
+      return new Response('Error connecting to backend service', {
+        status: 502,
+      });
+    },
+  );
 }
 
 export default createServerEntry({
