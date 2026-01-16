@@ -1,7 +1,12 @@
 {
   "$schema": "./node_modules/@biomejs/biome/configuration_schema.json",
   "files": {
-    "ignoreUnknown": true
+    "ignoreUnknown": true,
+    "includes": [
+      "**",
+      "!src/components/ui",
+      "!src/routeTree.gen.ts"
+    ]
   },
   "assist": {
     "actions": {
