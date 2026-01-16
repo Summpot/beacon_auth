@@ -33,6 +33,7 @@ export default defineConfig({
     nitro(),
   ],
   nitro: {
+    debug: true,
     serverDir: './',
     cloudflare: {
       deployConfig: true,

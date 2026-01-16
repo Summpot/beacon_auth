@@ -9,8 +9,12 @@ on:
       - 'wrangler.jsonc'
       - 'wrangler.workers.jsonc'
       - 'rslib.config.ts'
-      - '.github/workflows/deploy-cloudflare.yml'
+      - 'vite.config.ts'
+      - 'tsconfig.json'
+      - '.github/workflows/deploy-cloudflare-pages.yml'
+      - '.github/workflows/deploy-cloudflare-worker.yml'
       - 'modSrc/**'
+      - 'src/**'
   pull_request:
     branches:
       - main
