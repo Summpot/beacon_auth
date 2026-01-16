@@ -21,34 +21,40 @@ const initialState: ThemeProviderState = {
 
 const ThemeProviderContext = createContext<ThemeProviderState>(initialState);
 
-const themeScript = `(function() {
-            var theme = localStorage.getItem('beaconauth-ui-theme')
-            if (theme === 'dark' || (!theme && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
-              document.documentElement.classList.add('dark')
-            }
-          })();`;
-
 export function ThemeProvider({
   children,
   defaultTheme = 'system',
   storageKey = 'beaconauth-ui-theme',
   ...props
 }: ThemeProviderProps) {
-  const [theme, setTheme] = useState<Theme>(
-    () => (localStorage.getItem(storageKey) as Theme) || defaultTheme,
-  );
+  const [theme, setTheme] = useState<Theme>(defaultTheme);
+
+  const themeScript = `(function() {
+    var key = '${storageKey}';
+    var theme = localStorage.getItem(key);
+    var doc = document.documentElement;
+    if (theme === 'dark' || (!theme && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
+      doc.classList.add('dark');
+    } else {
+      doc.classList.remove('dark');
+    }
+  })();`;
+
+  useEffect(() => {
+    const savedTheme = localStorage.getItem(storageKey) as Theme;
+    if (savedTheme) {
+      setTheme(savedTheme);
+    }
+  }, [storageKey]);
 
   useEffect(() => {
     const root = window.document.documentElement;
-
     root.classList.remove('light', 'dark');
 
     if (theme === 'system') {
-      const systemTheme = window.matchMedia('(prefers-color-scheme: dark)')
-        .matches
+      const systemTheme = window.matchMedia('(prefers-color-scheme: dark)').matches
         ? 'dark'
         : 'light';
-
       root.classList.add(systemTheme);
       return;
     }
@@ -66,8 +72,7 @@ export function ThemeProvider({
 
   return (
     <ThemeProviderContext.Provider {...props} value={value}>
-      {/** biome-ignore lint/correctness/noChildrenProp: <explanation> */}
-      <ScriptOnce children={themeScript} />
+      <ScriptOnce>{themeScript}</ScriptOnce>
       {children}
     </ThemeProviderContext.Provider>
   );
@@ -75,9 +80,7 @@ export function ThemeProvider({
 
 export const useTheme = () => {
   const context = useContext(ThemeProviderContext);
-
   if (context === undefined)
     throw new Error('useTheme must be used within a ThemeProvider');
-
   return context;
 };

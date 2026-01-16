@@ -8,90 +8,90 @@
 // You should NOT make any changes in this file as it will be overwritten.
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
-import { Route as rootRouteImport } from './routes/__root';
-import { Route as LangRouteImport } from './routes/$lang';
-import { Route as ErrorRouteImport } from './routes/error';
-import { Route as IndexRouteImport } from './routes/index';
-import { Route as LoginRouteImport } from './routes/login';
-import { Route as OauthCompleteRouteImport } from './routes/oauth-complete';
-import { Route as ProfileRouteImport } from './routes/profile';
-import { Route as RegisterRouteImport } from './routes/register';
-import { Route as SettingsRouteImport } from './routes/settings';
+import { Route as rootRouteImport } from './routes/__root'
+import { Route as SettingsRouteImport } from './routes/settings'
+import { Route as RegisterRouteImport } from './routes/register'
+import { Route as ProfileRouteImport } from './routes/profile'
+import { Route as OauthCompleteRouteImport } from './routes/oauth-complete'
+import { Route as LoginRouteImport } from './routes/login'
+import { Route as ErrorRouteImport } from './routes/error'
+import { Route as LangRouteImport } from './routes/$lang'
+import { Route as IndexRouteImport } from './routes/index'
 
 const SettingsRoute = SettingsRouteImport.update({
   id: '/settings',
   path: '/settings',
   getParentRoute: () => rootRouteImport,
-} as any);
+} as any)
 const RegisterRoute = RegisterRouteImport.update({
   id: '/register',
   path: '/register',
   getParentRoute: () => rootRouteImport,
-} as any);
+} as any)
 const ProfileRoute = ProfileRouteImport.update({
   id: '/profile',
   path: '/profile',
   getParentRoute: () => rootRouteImport,
-} as any);
+} as any)
 const OauthCompleteRoute = OauthCompleteRouteImport.update({
   id: '/oauth-complete',
   path: '/oauth-complete',
   getParentRoute: () => rootRouteImport,
-} as any);
+} as any)
 const LoginRoute = LoginRouteImport.update({
   id: '/login',
   path: '/login',
   getParentRoute: () => rootRouteImport,
-} as any);
+} as any)
 const ErrorRoute = ErrorRouteImport.update({
   id: '/error',
   path: '/error',
   getParentRoute: () => rootRouteImport,
-} as any);
+} as any)
 const LangRoute = LangRouteImport.update({
   id: '/$lang',
   path: '/$lang',
   getParentRoute: () => rootRouteImport,
-} as any);
+} as any)
 const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
   getParentRoute: () => rootRouteImport,
-} as any);
+} as any)
 
 export interface FileRoutesByFullPath {
-  '/': typeof IndexRoute;
-  '/$lang': typeof LangRoute;
-  '/error': typeof ErrorRoute;
-  '/login': typeof LoginRoute;
-  '/oauth-complete': typeof OauthCompleteRoute;
-  '/profile': typeof ProfileRoute;
-  '/register': typeof RegisterRoute;
-  '/settings': typeof SettingsRoute;
+  '/': typeof IndexRoute
+  '/$lang': typeof LangRoute
+  '/error': typeof ErrorRoute
+  '/login': typeof LoginRoute
+  '/oauth-complete': typeof OauthCompleteRoute
+  '/profile': typeof ProfileRoute
+  '/register': typeof RegisterRoute
+  '/settings': typeof SettingsRoute
 }
 export interface FileRoutesByTo {
-  '/': typeof IndexRoute;
-  '/$lang': typeof LangRoute;
-  '/error': typeof ErrorRoute;
-  '/login': typeof LoginRoute;
-  '/oauth-complete': typeof OauthCompleteRoute;
-  '/profile': typeof ProfileRoute;
-  '/register': typeof RegisterRoute;
-  '/settings': typeof SettingsRoute;
+  '/': typeof IndexRoute
+  '/$lang': typeof LangRoute
+  '/error': typeof ErrorRoute
+  '/login': typeof LoginRoute
+  '/oauth-complete': typeof OauthCompleteRoute
+  '/profile': typeof ProfileRoute
+  '/register': typeof RegisterRoute
+  '/settings': typeof SettingsRoute
 }
 export interface FileRoutesById {
-  __root__: typeof rootRouteImport;
-  '/': typeof IndexRoute;
-  '/$lang': typeof LangRoute;
-  '/error': typeof ErrorRoute;
-  '/login': typeof LoginRoute;
-  '/oauth-complete': typeof OauthCompleteRoute;
-  '/profile': typeof ProfileRoute;
-  '/register': typeof RegisterRoute;
-  '/settings': typeof SettingsRoute;
+  __root__: typeof rootRouteImport
+  '/': typeof IndexRoute
+  '/$lang': typeof LangRoute
+  '/error': typeof ErrorRoute
+  '/login': typeof LoginRoute
+  '/oauth-complete': typeof OauthCompleteRoute
+  '/profile': typeof ProfileRoute
+  '/register': typeof RegisterRoute
+  '/settings': typeof SettingsRoute
 }
 export interface FileRouteTypes {
-  fileRoutesByFullPath: FileRoutesByFullPath;
+  fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths:
     | '/'
     | '/$lang'
@@ -100,8 +100,8 @@ export interface FileRouteTypes {
     | '/oauth-complete'
     | '/profile'
     | '/register'
-    | '/settings';
-  fileRoutesByTo: FileRoutesByTo;
+    | '/settings'
+  fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
     | '/$lang'
@@ -110,7 +110,7 @@ export interface FileRouteTypes {
     | '/oauth-complete'
     | '/profile'
     | '/register'
-    | '/settings';
+    | '/settings'
   id:
     | '__root__'
     | '/'
@@ -120,78 +120,78 @@ export interface FileRouteTypes {
     | '/oauth-complete'
     | '/profile'
     | '/register'
-    | '/settings';
-  fileRoutesById: FileRoutesById;
+    | '/settings'
+  fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
-  IndexRoute: typeof IndexRoute;
-  LangRoute: typeof LangRoute;
-  ErrorRoute: typeof ErrorRoute;
-  LoginRoute: typeof LoginRoute;
-  OauthCompleteRoute: typeof OauthCompleteRoute;
-  ProfileRoute: typeof ProfileRoute;
-  RegisterRoute: typeof RegisterRoute;
-  SettingsRoute: typeof SettingsRoute;
+  IndexRoute: typeof IndexRoute
+  LangRoute: typeof LangRoute
+  ErrorRoute: typeof ErrorRoute
+  LoginRoute: typeof LoginRoute
+  OauthCompleteRoute: typeof OauthCompleteRoute
+  ProfileRoute: typeof ProfileRoute
+  RegisterRoute: typeof RegisterRoute
+  SettingsRoute: typeof SettingsRoute
 }
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
     '/settings': {
-      id: '/settings';
-      path: '/settings';
-      fullPath: '/settings';
-      preLoaderRoute: typeof SettingsRouteImport;
-      parentRoute: typeof rootRouteImport;
-    };
+      id: '/settings'
+      path: '/settings'
+      fullPath: '/settings'
+      preLoaderRoute: typeof SettingsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/register': {
-      id: '/register';
-      path: '/register';
-      fullPath: '/register';
-      preLoaderRoute: typeof RegisterRouteImport;
-      parentRoute: typeof rootRouteImport;
-    };
+      id: '/register'
+      path: '/register'
+      fullPath: '/register'
+      preLoaderRoute: typeof RegisterRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/profile': {
-      id: '/profile';
-      path: '/profile';
-      fullPath: '/profile';
-      preLoaderRoute: typeof ProfileRouteImport;
-      parentRoute: typeof rootRouteImport;
-    };
+      id: '/profile'
+      path: '/profile'
+      fullPath: '/profile'
+      preLoaderRoute: typeof ProfileRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/oauth-complete': {
-      id: '/oauth-complete';
-      path: '/oauth-complete';
-      fullPath: '/oauth-complete';
-      preLoaderRoute: typeof OauthCompleteRouteImport;
-      parentRoute: typeof rootRouteImport;
-    };
+      id: '/oauth-complete'
+      path: '/oauth-complete'
+      fullPath: '/oauth-complete'
+      preLoaderRoute: typeof OauthCompleteRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/login': {
-      id: '/login';
-      path: '/login';
-      fullPath: '/login';
-      preLoaderRoute: typeof LoginRouteImport;
-      parentRoute: typeof rootRouteImport;
-    };
+      id: '/login'
+      path: '/login'
+      fullPath: '/login'
+      preLoaderRoute: typeof LoginRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/error': {
-      id: '/error';
-      path: '/error';
-      fullPath: '/error';
-      preLoaderRoute: typeof ErrorRouteImport;
-      parentRoute: typeof rootRouteImport;
-    };
+      id: '/error'
+      path: '/error'
+      fullPath: '/error'
+      preLoaderRoute: typeof ErrorRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/$lang': {
-      id: '/$lang';
-      path: '/$lang';
-      fullPath: '/$lang';
-      preLoaderRoute: typeof LangRouteImport;
-      parentRoute: typeof rootRouteImport;
-    };
+      id: '/$lang'
+      path: '/$lang'
+      fullPath: '/$lang'
+      preLoaderRoute: typeof LangRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/': {
-      id: '/';
-      path: '/';
-      fullPath: '/';
-      preLoaderRoute: typeof IndexRouteImport;
-      parentRoute: typeof rootRouteImport;
-    };
+      id: '/'
+      path: '/'
+      fullPath: '/'
+      preLoaderRoute: typeof IndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
   }
 }
 
@@ -204,17 +204,16 @@ const rootRouteChildren: RootRouteChildren = {
   ProfileRoute: ProfileRoute,
   RegisterRoute: RegisterRoute,
   SettingsRoute: SettingsRoute,
-};
+}
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
-  ._addFileTypes<FileRouteTypes>();
+  ._addFileTypes<FileRouteTypes>()
 
-import type { createStart } from '@tanstack/react-start';
-import type { getRouter } from './router.tsx';
-
+import type { getRouter } from './router.tsx'
+import type { createStart } from '@tanstack/react-start'
 declare module '@tanstack/react-start' {
   interface Register {
-    ssr: true;
-    router: Awaited<ReturnType<typeof getRouter>>;
+    ssr: true
+    router: Awaited<ReturnType<typeof getRouter>>
   }
 }
