@@ -146,7 +146,7 @@ jobs:
           const db = await api(`/v1/organizations/${encodeURIComponent(org)}/databases/${encodeURIComponent(name)}`);
           const hostname = String(db?.database?.Hostname ?? '').trim();
           if (!hostname) throw new Error('Turso API: missing database.Hostname');
-          const databaseUrl = `https://${hostname}`;
+          const databaseUrl = `libsql://${hostname}`;
 
           // Create a database auth token.
           const tok = await api(`/v1/organizations/${encodeURIComponent(org)}/databases/${encodeURIComponent(name)}/auth/tokens?authorization=full-access`, {
