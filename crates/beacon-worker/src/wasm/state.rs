@@ -1,10 +1,9 @@
 use std::sync::OnceLock;
 
-use beacon_core::crypto;
 use url::Url;
 use worker::{Env, Error, Result};
 
-use super::env::env_string;
+use super::{db::{d1, db_get_or_create_jwks}, env::env_string};
 
 #[derive(Clone)]
 pub struct JwtState {
@@ -38,11 +37,9 @@ async fn init_jwt_state(env: &Env) -> Result<JwtState> {
     // BeaconAuth is JWKS-first: this worker serves its public key at `/.well-known/jwks.json` and
     // advertises that URL via the JWT header `jku`.
     //
-    // This deployment mode no longer persists a fixed private key (no KV/shared key). Each worker
-    // instance generates its own ES256 key material at startup.
-    let der = crypto::generate_ecdsa_pkcs8_der().map_err(|e| Error::RustError(e.to_string()))?;
-    let (encoding_key, decoding_key, jwks_json) =
-        crypto::ecdsa_keypair_from_pkcs8_der(&der, &kid).map_err(|e| Error::RustError(e.to_string()))?;
+    // Use libsql to persist the ES256 keypair so all worker instances share the same JWKS.
+    let db = d1(env).await?;
+    let (encoding_key, decoding_key, jwks_json) = db_get_or_create_jwks(&db, &kid).await?;
 
     let jwks_url = env_string(env, "JWKS_URL").unwrap_or_else(|| {
         format!(

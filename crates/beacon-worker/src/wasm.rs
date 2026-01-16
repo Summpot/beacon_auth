@@ -8,7 +8,6 @@ mod env;
 mod handlers;
 mod http;
 mod jwt;
-mod kv;
 mod state;
 mod util;
 

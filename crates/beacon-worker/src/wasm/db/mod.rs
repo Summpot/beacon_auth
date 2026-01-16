@@ -1,28 +1,61 @@
+use std::sync::OnceLock;
+
+use base64::Engine;
+use serde::{de::DeserializeOwned, Serialize};
 use worker::{Env, Error, Result};
 
-use entity::{identity, passkey, refresh_token, user};
+use beacon_core::crypto;
+use entity::{identity, jwks_key, passkey, passkey_state, refresh_token, user};
 use uuid::Uuid;
 
 use sea_orm::{
-    ColumnTrait, Database, DatabaseConnection, EntityTrait, PaginatorTrait, QueryFilter, QueryOrder,
-    Set,
+    ColumnTrait, ConnectOptions, Database, DatabaseConnection, EntityTrait, PaginatorTrait,
+    QueryFilter, QueryOrder, Set,
 };
 use sea_orm::sea_query::Expr;
 
-use super::util::now_ts;
+use super::{env::env_string, util::now_ts};
 
 pub type UserRow = user::Model;
 pub type RefreshTokenRow = refresh_token::Model;
 pub type PasskeyDbRow = passkey::Model;
 pub type IdentityRow = identity::Model;
+pub type PasskeyStateRow = passkey_state::Model;
+pub type JwksKeyRow = jwks_key::Model;
+
+pub const PASSKEY_STATE_TTL_SECS: i64 = 5 * 60;
+
+static DB_CONN: OnceLock<DatabaseConnection> = OnceLock::new();
+
+pub fn passkey_reg_state_key(user_id: &str) -> String {
+    format!("passkey:reg:{user_id}")
+}
+
+pub fn passkey_auth_state_key(challenge_b64: &str) -> String {
+    format!("passkey:auth:{challenge_b64}")
+}
 
 fn map_db_err(e: sea_orm::DbErr) -> Error {
     Error::RustError(e.to_string())
 }
 
 pub async fn d1(env: &Env) -> Result<DatabaseConnection> {
-    let binding = env.d1("DB")?;
-    Database::connect_d1(binding).await.map_err(map_db_err)
+    if let Some(conn) = DB_CONN.get() {
+        return Ok(conn.clone());
+    }
+
+    let url = env_string(env, "LIBSQL_URL").ok_or_else(|| {
+        Error::RustError("LIBSQL_URL is required for libsql connections".to_string())
+    })?;
+
+    let mut options = ConnectOptions::new(url);
+    if let Some(token) = env_string(env, "LIBSQL_AUTH_TOKEN") {
+        options.libsql_auth_token(token);
+    }
+
+    let conn = Database::connect(options).await.map_err(map_db_err)?;
+    let _ = DB_CONN.set(conn.clone());
+    Ok(conn)
 }
 
 pub async fn d1_user_by_username(db: &DatabaseConnection, username: &str) -> Result<Option<UserRow>> {
@@ -418,4 +451,132 @@ pub async fn d1_count_passkeys_by_user_id(db: &DatabaseConnection, user_id: &str
         .map_err(map_db_err)?;
 
     Ok(count as i64)
+}
+
+pub async fn db_put_passkey_state<T: Serialize>(
+    db: &DatabaseConnection,
+    key: &str,
+    state: &T,
+    ttl_secs: i64,
+) -> Result<()> {
+    let now = now_ts();
+    let expires_at = now + ttl_secs;
+    let state_json = serde_json::to_string(state)
+        .map_err(|e| Error::RustError(e.to_string()))?;
+
+    if let Some(existing) = passkey_state::Entity::find_by_id(key.to_string())
+        .one(db)
+        .await
+        .map_err(map_db_err)?
+    {
+        let mut model: passkey_state::ActiveModel = existing.into();
+        model.state_json = Set(state_json);
+        model.expires_at = Set(expires_at);
+        model.created_at = Set(now);
+        passkey_state::Entity::update(model)
+            .exec(db)
+            .await
+            .map_err(map_db_err)?;
+        return Ok(());
+    }
+
+    let model = passkey_state::ActiveModel {
+        key: Set(key.to_string()),
+        state_json: Set(state_json),
+        expires_at: Set(expires_at),
+        created_at: Set(now),
+        ..Default::default()
+    };
+
+    passkey_state::Entity::insert(model)
+        .exec(db)
+        .await
+        .map_err(map_db_err)?;
+
+    Ok(())
+}
+
+pub async fn db_take_passkey_state<T: DeserializeOwned>(
+    db: &DatabaseConnection,
+    key: &str,
+) -> Result<Option<T>> {
+    let Some(row) = passkey_state::Entity::find_by_id(key.to_string())
+        .one(db)
+        .await
+        .map_err(map_db_err)?
+    else {
+        return Ok(None);
+    };
+
+    // Delete regardless to prevent replays.
+    let _ = passkey_state::Entity::delete_by_id(key.to_string())
+        .exec(db)
+        .await;
+
+    if row.expires_at <= now_ts() {
+        return Ok(None);
+    }
+
+    let parsed = serde_json::from_str(&row.state_json)
+        .map_err(|e| Error::RustError(e.to_string()))?;
+    Ok(Some(parsed))
+}
+
+pub async fn db_get_or_create_jwks(
+    db: &DatabaseConnection,
+    kid: &str,
+) -> Result<(jsonwebtoken::EncodingKey, jsonwebtoken::DecodingKey, String)> {
+    if let Some(row) = jwks_key::Entity::find_by_id(kid.to_string())
+        .one(db)
+        .await
+        .map_err(map_db_err)?
+    {
+        let pkcs8 = crypto::decode_pkcs8_der_b64(&row.pkcs8_der_b64)
+            .map_err(|e| Error::RustError(e.to_string()))?;
+        let (encoding, decoding, jwks_json) =
+            crypto::ecdsa_keypair_from_pkcs8_der(&pkcs8, &row.kid)
+                .map_err(|e| Error::RustError(e.to_string()))?;
+        return Ok((encoding, decoding, jwks_json));
+    }
+
+    let pkcs8 = crypto::generate_ecdsa_pkcs8_der()
+        .map_err(|e| Error::RustError(e.to_string()))?;
+    let (encoding, decoding, jwks_json) =
+        crypto::ecdsa_keypair_from_pkcs8_der(&pkcs8, kid)
+            .map_err(|e| Error::RustError(e.to_string()))?;
+    let pkcs8_b64 = base64::engine::general_purpose::URL_SAFE_NO_PAD.encode(&pkcs8);
+    let now = now_ts();
+
+    let model = jwks_key::ActiveModel {
+        kid: Set(kid.to_string()),
+        pkcs8_der_b64: Set(pkcs8_b64),
+        jwks_json: Set(jwks_json.clone()),
+        created_at: Set(now),
+        updated_at: Set(now),
+        ..Default::default()
+    };
+
+    if let Err(e) = jwks_key::Entity::insert(model)
+        .exec_without_returning(db)
+        .await
+    {
+        let msg = e.to_string();
+        if msg.to_ascii_lowercase().contains("unique") {
+            if let Some(row) = jwks_key::Entity::find_by_id(kid.to_string())
+                .one(db)
+                .await
+                .map_err(map_db_err)?
+            {
+                let pkcs8 = crypto::decode_pkcs8_der_b64(&row.pkcs8_der_b64)
+                    .map_err(|e| Error::RustError(e.to_string()))?;
+                let (encoding, decoding, jwks_json) =
+                    crypto::ecdsa_keypair_from_pkcs8_der(&pkcs8, &row.kid)
+                        .map_err(|e| Error::RustError(e.to_string()))?;
+                return Ok((encoding, decoding, jwks_json));
+            }
+        }
+        return Err(map_db_err(e));
+    }
+
+    Ok((encoding, decoding, jwks_json))
 }

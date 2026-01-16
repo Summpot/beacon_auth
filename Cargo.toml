@@ -18,9 +18,9 @@ actix-cors = "0.7"
 actix-files = "0.6"
 
 # Database
-# Use Summpot fork (includes Cloudflare D1 support in SeaORM 2.0 RC).
-sea-orm = { git = "https://github.com/Summpot/sea-orm.git", branch = "cloudflare-d1", features = ["sqlx-sqlite", "sqlx-postgres", "runtime-tokio-rustls", "macros"] }
-sea-orm-migration = { git = "https://github.com/Summpot/sea-orm.git", branch = "cloudflare-d1", features = ["sqlx-sqlite", "sqlx-postgres", "runtime-tokio-rustls"] }
+# Use Summpot fork with libsql support.
+sea-orm = { git = "https://github.com/Summpot/sea-orm.git", branch = "libsql", features = ["sqlx-sqlite", "sqlx-postgres", "runtime-tokio-rustls", "macros"] }
+sea-orm-migration = { git = "https://github.com/Summpot/sea-orm.git", branch = "libsql", features = ["sqlx-sqlite", "sqlx-postgres", "runtime-tokio-rustls"] }
 
 # JWT & Crypto
 jsonwebtoken = { version = "10.2", default-features = false, features = ["rust_crypto"] }
@@ -72,7 +72,7 @@ redis = { version = "1.0", features = ["tokio-comp", "connection-manager"] }
 lambda-web = "0.2.1"
 
 # Cloudflare Workers (wasm)
-worker = { version = "0.7", features = ["d1"] }
+worker = { version = "0.7" }
 console_error_panic_hook = "0.1"
 
 # Help rand/getrandom work reliably on wasm.
@@ -82,8 +82,3 @@ getrandom02 = { package = "getrandom", version = "0.2", features = ["js"] }
 # Build Tools
 which = "8.0"
 
-[patch.crates-io]
-# Needed for SeaORM Cloudflare D1 support (sqlx-d1 binder lives on this fork).
-sea-query = { git = "https://github.com/Summpot/sea-query.git", branch = "cloudflare-d1" }
-sea-query-derive = { git = "https://github.com/Summpot/sea-query.git", branch = "cloudflare-d1" }
-sea-query-sqlx = { git = "https://github.com/Summpot/sea-query.git", branch = "cloudflare-d1" }

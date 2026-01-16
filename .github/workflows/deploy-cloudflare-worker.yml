@@ -77,6 +77,7 @@ jobs:
         env:
           BASE_URL: ${{ secrets.CLOUDFLARE_WORKER_BASE_URL }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          LIBSQL_URL: ${{ secrets.CLOUDFLARE_WORKER_LIBSQL_URL }}
         shell: bash
         run: |
           set -euo pipefail
@@ -122,12 +123,18 @@ jobs:
           const baseUrlFromEnv = String(process.env.BASE_URL ?? '').trim();
           const resolvedBaseUrl = baseUrlFromEnv || pagesBaseUrl;
 
+          const libsqlUrl = String(process.env.LIBSQL_URL ?? '').trim();
+          if (!libsqlUrl) {
+            throw new Error('Missing LIBSQL_URL (set CLOUDFLARE_WORKER_LIBSQL_URL).');
+          }
+
           fs.appendFileSync(
             process.env.GITHUB_OUTPUT,
             [
               `worker_name=${pagesName}`,
               `pages_base_url=${pagesBaseUrl}`,
               `resolved_base_url=${resolvedBaseUrl}`,
+              `libsql_url=${libsqlUrl}`,
               `wrangler_workers_config=${ciWorkersConfigPath}`,
               '',
             ].join('\n'),
@@ -135,6 +142,7 @@ jobs:
 
           console.log(`Project name: ${pagesName}`);
           console.log(`BASE_URL: ${resolvedBaseUrl}`);
+          console.log(`LIBSQL_URL: ${libsqlUrl}`);
           console.log(`Wrangler Worker config: ${ciWorkersConfigPath}`);
           NODE
 
@@ -143,12 +151,13 @@ jobs:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           BASE_URL: ${{ steps.cfg.outputs.resolved_base_url }}
+          LIBSQL_URL: ${{ steps.cfg.outputs.libsql_url }}
           WRANGLER_WORKERS_CONFIG: ${{ steps.cfg.outputs.wrangler_workers_config }}
         shell: bash
         run: |
           set -euo pipefail
 
-          wrangler deploy --config "${WRANGLER_WORKERS_CONFIG}" --var "BASE_URL:${BASE_URL}" --var "CLOUDFLARE_ACCOUNT_ID:${CLOUDFLARE_ACCOUNT_ID}"
+          wrangler deploy --config "${WRANGLER_WORKERS_CONFIG}" --var "BASE_URL:${BASE_URL}" --var "LIBSQL_URL:${LIBSQL_URL}" --var "CLOUDFLARE_ACCOUNT_ID:${CLOUDFLARE_ACCOUNT_ID}"
 
       - name: Apply SeaORM migrations (Migrator::up)
         env:
@@ -204,6 +213,7 @@ jobs:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           WRANGLER_WORKERS_CONFIG: ${{ steps.cfg.outputs.wrangler_workers_config }}
+          LIBSQL_AUTH_TOKEN: ${{ secrets.CLOUDFLARE_WORKER_LIBSQL_AUTH_TOKEN }}
           GITHUB_CLIENT_ID: ${{ secrets.CLOUDFLARE_WORKER_GITHUB_CLIENT_ID }}
           GITHUB_CLIENT_SECRET: ${{ secrets.CLOUDFLARE_WORKER_GITHUB_CLIENT_SECRET }}
           GOOGLE_CLIENT_ID: ${{ secrets.CLOUDFLARE_WORKER_GOOGLE_CLIENT_ID }}
@@ -233,3 +243,4 @@ jobs:
           put_secret MICROSOFT_CLIENT_ID "${MICROSOFT_CLIENT_ID:-}"
           put_secret MICROSOFT_CLIENT_SECRET "${MICROSOFT_CLIENT_SECRET:-}"
           put_secret MICROSOFT_TENANT "${MICROSOFT_TENANT:-}"
+          put_secret LIBSQL_AUTH_TOKEN "${LIBSQL_AUTH_TOKEN:-}"

@@ -13,16 +13,13 @@ use worker::{Env, Error, Request, Response, Result};
 use crate::wasm::{
     cookies::{append_set_cookie, cookie_kv, get_cookie},
     db::{
-        d1, d1_delete_passkey_by_id, d1_insert_passkey, d1_passkey_by_credential_id,
-        d1_insert_refresh_token, d1_passkey_by_id, d1_passkeys_all, d1_passkeys_by_user_id,
-        d1_update_passkey_usage, d1_user_by_id,
+        d1, db_put_passkey_state, db_take_passkey_state, d1_delete_passkey_by_id,
+        d1_insert_passkey, d1_passkey_by_credential_id, d1_insert_refresh_token,
+        d1_passkey_by_id, d1_passkeys_all, d1_passkeys_by_user_id, d1_update_passkey_usage,
+        d1_user_by_id, passkey_auth_state_key, passkey_reg_state_key, PASSKEY_STATE_TTL_SECS,
     },
     http::{error_response, internal_error_response, json_with_cors},
     jwt::{sign_jwt, verify_access_token},
-    kv::{
-        kv, kv_delete, kv_get_json, kv_put_json, passkey_auth_state_key, passkey_reg_state_key,
-        PASSKEY_STATE_TTL_SECS,
-    },
     state::{get_jwt_state, get_passkey_rp},
     util::{new_family_id, new_refresh_token, now_ts, sha256_hex, ts_to_rfc3339},
 };
@@ -75,17 +72,6 @@ pub async fn handle_passkey_register_start(mut req: Request, env: &Env) -> Resul
     let db = d1(env).await?;
     let jwt = get_jwt_state(env).await?;
     let rp = get_passkey_rp(env)?;
-    let kv = match kv(env) {
-        Ok(kv) => kv,
-        Err(_) => {
-            return error_response(
-                &req,
-                501,
-                "not_configured",
-                "KV binding is required for passkey endpoints",
-            );
-        }
-    };
 
     let _body: PasskeyRegisterStartRequest = match req.json().await {
         Ok(b) => b,
@@ -131,8 +117,8 @@ pub async fn handle_passkey_register_start(mut req: Request, env: &Env) -> Resul
         },
     );
 
-    kv_put_json(
-        &kv,
+    db_put_passkey_state(
+        &db,
         &passkey_reg_state_key(&user_id),
         &reg_state,
         PASSKEY_STATE_TTL_SECS,
@@ -149,17 +135,6 @@ pub async fn handle_passkey_register_finish(mut req: Request, env: &Env) -> Resu
     let db = d1(env).await?;
     let jwt = get_jwt_state(env).await?;
     let rp = get_passkey_rp(env)?;
-    let kv = match kv(env) {
-        Ok(kv) => kv,
-        Err(_) => {
-            return error_response(
-                &req,
-                501,
-                "not_configured",
-                "KV binding is required for passkey endpoints",
-            );
-        }
-    };
 
     let body: PasskeyRegisterFinishRequest = match req.json().await {
         Ok(b) => b,
@@ -179,12 +154,10 @@ pub async fn handle_passkey_register_finish(mut req: Request, env: &Env) -> Resu
     };
 
     let state_key = passkey_reg_state_key(&user_id);
-    let reg_state: RegistrationState = match kv_get_json(&kv, &state_key).await? {
+    let reg_state: RegistrationState = match db_take_passkey_state(&db, &state_key).await? {
         Some(s) => s,
         None => return error_response(&req, 400, "no_registration", "No registration in progress"),
     };
-    // Remove after retrieval to prevent replays.
-    let _ = kv_delete(&kv, &state_key).await;
 
     let stored = beacon_passkey::finish_passkey_registration(rp, &body.credential, &reg_state)
         .map_err(|e| Error::RustError(format!("Passkey registration failed: {} ({})", e.message, e.code)))?;
@@ -220,17 +193,6 @@ pub async fn handle_passkey_register_finish(mut req: Request, env: &Env) -> Resu
 pub async fn handle_passkey_auth_start(mut req: Request, env: &Env) -> Result<Response> {
     let db = d1(env).await?;
     let rp = get_passkey_rp(env)?;
-    let kv = match kv(env) {
-        Ok(kv) => kv,
-        Err(_) => {
-            return error_response(
-                &req,
-                501,
-                "not_configured",
-                "KV binding is required for passkey endpoints",
-            );
-        }
-    };
 
     // Body is optional in the web UI; treat missing/invalid JSON as empty.
     let body: serde_json::Value = req.json().await.unwrap_or_else(|_| json!({}));
@@ -265,8 +227,8 @@ pub async fn handle_passkey_auth_start(mut req: Request, env: &Env) -> Result<Re
     let (rcr, auth_state) = beacon_passkey::start_passkey_authentication(rp, allow_credential_ids);
 
     let challenge_str = rcr.public_key.challenge.clone();
-    kv_put_json(
-        &kv,
+    db_put_passkey_state(
+        &db,
         &passkey_auth_state_key(&challenge_str),
         &auth_state,
         PASSKEY_STATE_TTL_SECS,
@@ -281,17 +243,6 @@ pub async fn handle_passkey_auth_finish(mut req: Request, env: &Env) -> Result<R
     let db = d1(env).await?;
     let jwt = get_jwt_state(env).await?;
     let rp = get_passkey_rp(env)?;
-    let kv = match kv(env) {
-        Ok(kv) => kv,
-        Err(_) => {
-            return error_response(
-                &req,
-                501,
-                "not_configured",
-                "KV binding is required for passkey endpoints",
-            );
-        }
-    };
 
     let body: PasskeyAuthFinishRequest = match req.json().await {
         Ok(b) => b,
@@ -305,12 +256,10 @@ pub async fn handle_passkey_auth_finish(mut req: Request, env: &Env) -> Result<R
         .map_err(|e| Error::RustError(format!("Invalid clientDataJSON: {} ({})", e.message, e.code)))?;
 
     let state_key = passkey_auth_state_key(&challenge_b64);
-    let auth_state: AuthenticationState = match kv_get_json(&kv, &state_key).await? {
+    let auth_state: AuthenticationState = match db_take_passkey_state(&db, &state_key).await? {
         Some(s) => s,
         None => return error_response(&req, 400, "no_auth", "No authentication in progress"),
     };
-    // Remove after retrieval to prevent replays.
-    let _ = kv_delete(&kv, &state_key).await;
 
     // Determine credential ID and load stored passkey.
     let raw_id_bytes = base64::engine::general_purpose::URL_SAFE_NO_PAD

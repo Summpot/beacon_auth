@@ -213,11 +213,78 @@ impl MigrationTrait for Migration {
             )
             .await?;
 
+        // Create passkey_states table (transient registration/auth state)
+        manager
+            .create_table(
+                Table::create()
+                    .table(PasskeyStates::Table)
+                    .if_not_exists()
+                    .col(
+                        ColumnDef::new(PasskeyStates::Key)
+                            .string()
+                            .not_null()
+                            .primary_key(),
+                    )
+                    .col(ColumnDef::new(PasskeyStates::StateJson).text().not_null())
+                    .col(
+                        ColumnDef::new(PasskeyStates::ExpiresAt)
+                            .big_integer()
+                            .not_null(),
+                    )
+                    .col(
+                        ColumnDef::new(PasskeyStates::CreatedAt)
+                            .big_integer()
+                            .not_null(),
+                    )
+                    .to_owned(),
+            )
+            .await?;
+
+        // Create jwks_keys table (persisted ES256 key material)
+        manager
+            .create_table(
+                Table::create()
+                    .table(JwksKeys::Table)
+                    .if_not_exists()
+                    .col(
+                        ColumnDef::new(JwksKeys::Kid)
+                            .string()
+                            .not_null()
+                            .primary_key(),
+                    )
+                    .col(
+                        ColumnDef::new(JwksKeys::Pkcs8DerB64)
+                            .text()
+                            .not_null(),
+                    )
+                    .col(ColumnDef::new(JwksKeys::JwksJson).text().not_null())
+                    .col(
+                        ColumnDef::new(JwksKeys::CreatedAt)
+                            .big_integer()
+                            .not_null(),
+                    )
+                    .col(
+                        ColumnDef::new(JwksKeys::UpdatedAt)
+                            .big_integer()
+                            .not_null(),
+                    )
+                    .to_owned(),
+            )
+            .await?;
+
         Ok(())
     }
 
     async fn down(&self, manager: &SchemaManager) -> Result<(), DbErr> {
         // Drop tables in reverse order (due to foreign keys)
+        manager
+            .drop_table(Table::drop().table(JwksKeys::Table).to_owned())
+            .await?;
+
+        manager
+            .drop_table(Table::drop().table(PasskeyStates::Table).to_owned())
+            .await?;
+
         manager
             .drop_table(Table::drop().table(RefreshTokens::Table).to_owned())
             .await?;
@@ -282,4 +349,23 @@ enum RefreshTokens {
     ExpiresAt,
     Revoked,
     CreatedAt,
+}
+
+#[derive(DeriveIden)]
+enum PasskeyStates {
+    Table,
+    Key,
+    StateJson,
+    ExpiresAt,
+    CreatedAt,
+}
+
+#[derive(DeriveIden)]
+enum JwksKeys {
+    Table,
+    Kid,
+    Pkcs8DerB64,
+    JwksJson,
+    CreatedAt,
+    UpdatedAt,
 }

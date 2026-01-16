@@ -20,19 +20,8 @@
       "fallthrough": false
     }
   ],
-  "d1_databases": [
-    {
-      "binding": "DB",
-      "database_name": "beaconauth-db",
-      "migrations_dir": "crates/beacon-worker/migrations"
-    }
-  ],
-  "kv_namespaces": [
-    {
-      "binding": "KV"
-    }
-  ],
   "vars": {
+    "LIBSQL_URL": "",
     "BASE_URL": "",
     "JWKS_URL": "",
     "JKU_ALLOWED_HOST_PATTERNS": "",
