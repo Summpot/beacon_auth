@@ -42,6 +42,131 @@ jobs:
       - name: Install wrangler
         run: pnpm install wrangler -g
 
+      - name: Ensure Turso database exists (Platform API)
+        id: turso
+        env:
+          TURSO_PLATFORM_API_TOKEN: ${{ secrets['TURSO_PLATFORM_API_TOKEN'] }}
+          TURSO_ORG_SLUG: ${{ secrets['TURSO_ORG_SLUG'] }}
+          TURSO_DB_NAME: ${{ secrets['TURSO_DB_NAME'] }}
+          TURSO_GROUP: ${{ secrets['TURSO_GROUP'] }}
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          node --input-type=module <<'NODE'
+          import fs from 'node:fs';
+
+          const org = String(process.env.TURSO_ORG_SLUG ?? '').trim();
+          const name = String(process.env.TURSO_DB_NAME ?? '').trim();
+          const group = String(process.env.TURSO_GROUP ?? 'default').trim() || 'default';
+          const token = String(process.env.TURSO_PLATFORM_API_TOKEN ?? '').trim();
+
+          if (!org) throw new Error('Missing TURSO_ORG_SLUG');
+          if (!name) throw new Error('Missing TURSO_DB_NAME');
+          if (!token) throw new Error('Missing TURSO_PLATFORM_API_TOKEN');
+
+          async function api(path, init = {}) {
+            const res = await fetch(`https://api.turso.tech${path}`, {
+              ...init,
+              headers: {
+                Authorization: `Bearer ${token}`,
+                ...(init.headers ?? {}),
+              },
+            });
+            const text = await res.text();
+            const json = text ? JSON.parse(text) : null;
+            if (!res.ok) {
+              const err = new Error(`Turso API ${res.status} ${res.statusText} on ${path}`);
+              err.details = json;
+              throw err;
+            }
+            return json;
+          }
+
+          function normalizeGroupName(value) {
+            return String(value ?? '').trim();
+          }
+
+          // Ensure group exists (create if missing).
+          let groupExists = false;
+          try {
+            const listGroups = await api(`/v1/organizations/${encodeURIComponent(org)}/groups`);
+            const groups = Array.isArray(listGroups?.groups)
+              ? listGroups.groups
+              : Array.isArray(listGroups?.Groups)
+                ? listGroups.Groups
+                : Array.isArray(listGroups)
+                  ? listGroups
+                  : [];
+            groupExists = groups.some((g) => {
+              const name = normalizeGroupName(g?.Name ?? g?.name ?? g?.slug ?? g?.Group ?? g?.group);
+              return name === group;
+            });
+          } catch (err) {
+            throw err;
+          }
+
+          if (!groupExists) {
+            try {
+              await api(`/v1/organizations/${encodeURIComponent(org)}/groups`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ name: group }),
+              });
+            } catch (err) {
+              const status = String(err?.details?.error ?? '');
+              if (!String(err.message ?? '').includes('409') && !status.toLowerCase().includes('already')) {
+                throw err;
+              }
+            }
+          }
+
+          // Create DB if missing.
+          const list = await api(`/v1/organizations/${encodeURIComponent(org)}/databases`);
+          const databases = Array.isArray(list?.databases) ? list.databases : [];
+          const exists = databases.some((db) => String(db?.Name ?? '').trim() === name);
+
+          if (!exists) {
+            try {
+              await api(`/v1/organizations/${encodeURIComponent(org)}/databases`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ name, group }),
+              });
+            } catch (err) {
+              // Concurrent create can happen; allow it to proceed.
+              const status = String(err?.details?.error ?? '');
+              if (!String(err.message ?? '').includes('409') && !status.toLowerCase().includes('already')) {
+                throw err;
+              }
+            }
+          }
+
+          // Retrieve Hostname.
+          const db = await api(`/v1/organizations/${encodeURIComponent(org)}/databases/${encodeURIComponent(name)}`);
+          const hostname = String(db?.database?.Hostname ?? '').trim();
+          if (!hostname) throw new Error('Turso API: missing database.Hostname');
+          const databaseUrl = `https://${hostname}`;
+
+          // Create a database auth token.
+          const tok = await api(`/v1/organizations/${encodeURIComponent(org)}/databases/${encodeURIComponent(name)}/auth/tokens?authorization=full-access`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({}),
+          });
+          const jwt = String(tok?.jwt ?? '').trim();
+          if (!jwt) throw new Error('Turso API: missing jwt');
+
+          console.log(`::add-mask::${jwt}`);
+
+          fs.appendFileSync(
+            process.env.GITHUB_OUTPUT,
+            [`turso_database_url=${databaseUrl}`, `turso_auth_token=${jwt}`, ''].join('\n'),
+          );
+
+          console.log(`Turso database ensured: ${name} (${databaseUrl})`);
+          NODE
+
       - name: Setup Rust
         uses: dtolnay/rust-toolchain@stable
         with:
@@ -77,7 +202,7 @@ jobs:
         env:
           BASE_URL: ${{ secrets.CLOUDFLARE_WORKER_BASE_URL }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          LIBSQL_URL: ${{ secrets.CLOUDFLARE_WORKER_LIBSQL_URL }}
+          LIBSQL_URL: ${{ steps.turso.outputs.turso_database_url || secrets.CLOUDFLARE_WORKER_LIBSQL_URL }}
         shell: bash
         run: |
           set -euo pipefail
@@ -213,7 +338,7 @@ jobs:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           WRANGLER_WORKERS_CONFIG: ${{ steps.cfg.outputs.wrangler_workers_config }}
-          LIBSQL_AUTH_TOKEN: ${{ secrets.CLOUDFLARE_WORKER_LIBSQL_AUTH_TOKEN }}
+          LIBSQL_AUTH_TOKEN: ${{ steps.turso.outputs.turso_auth_token || secrets.CLOUDFLARE_WORKER_LIBSQL_AUTH_TOKEN }}
           GITHUB_CLIENT_ID: ${{ secrets.CLOUDFLARE_WORKER_GITHUB_CLIENT_ID }}
           GITHUB_CLIENT_SECRET: ${{ secrets.CLOUDFLARE_WORKER_GITHUB_CLIENT_SECRET }}
           GOOGLE_CLIENT_ID: ${{ secrets.CLOUDFLARE_WORKER_GOOGLE_CLIENT_ID }}
