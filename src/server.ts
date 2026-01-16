@@ -40,11 +40,15 @@ async function proxyToBackend(request: Request, env: Env): Promise<Response> {
   const url = new URL(request.url);
   const upstreamUrl = new URL(request.url);
 
+  console.log(`Proxying request to backend URL: ${upstreamUrl.toString()}`);
+
   const headers = new Headers(request.headers);
   headers.delete('host');
   headers.delete('Host');
   headers.set('X-Forwarded-Host', url.host);
   headers.set('X-Forwarded-Proto', url.protocol.replace(':', ''));
+
+  console.log('Request Headers:', headers);
 
   const init: RequestInit = {
     method: request.method,
