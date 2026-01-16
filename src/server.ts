@@ -13,6 +13,14 @@ interface Env {
   BACKEND: Fetcher;
 }
 
+declare module '@tanstack/react-start' {
+  interface Register {
+    server: {
+      requestContext: Env;
+    };
+  }
+}
+
 const PROXY_PREFIXES = ['/api', '/v1', '/.well-known'] as const;
 
 function shouldProxy(pathname: string): boolean {
@@ -55,8 +63,9 @@ export default createServerEntry({
   fetch(request, env) {
     const url = new URL(request.url);
     if (shouldProxy(url.pathname)) {
-      return proxyToBackend(request, env);
+      console.log(`Proxying request to backend: ${url.pathname}`);
+      return proxyToBackend(request, env.context);
     }
-    return handler.fetch(request);
+    return handler.fetch(request, env);
   },
 });
