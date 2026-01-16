@@ -9,7 +9,7 @@ publish = false
 crate-type = ["cdylib", "rlib"]
 
 [dependencies]
-beacon-core = { workspace = true }
+beacon-core = { workspace = true, default-features = false }
 beacon-passkey = { workspace = true }
 entity = { workspace = true }
 migration = { workspace = true }

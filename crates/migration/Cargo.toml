@@ -19,6 +19,6 @@ sea-orm-migration = { git = "https://github.com/Summpot/sea-orm.git", branch = "
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 sea-orm-migration = { git = "https://github.com/Summpot/sea-orm.git", branch = "libsql", default-features = false }
 
-# Native-only tooling (e.g. generate_d1_sql) uses Tokio + direct sea-orm connections.
+# Native-only tooling uses Tokio + direct sea-orm connections.
 tokio = { workspace = true }
 sea-orm = { workspace = true }
