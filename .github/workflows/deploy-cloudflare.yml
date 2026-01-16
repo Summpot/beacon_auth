@@ -48,7 +48,9 @@ jobs:
           cache: 'pnpm'
 
       - name: Install dependencies
-        run: pnpm install && pnpm build
+        run: pnpm install && pnpm build\
+        env:
+          NIRTO_PRESET: cloudflare_pages
 
       - name: Setup Rust
         uses: dtolnay/rust-toolchain@stable
