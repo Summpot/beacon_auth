@@ -32,7 +32,6 @@ function shouldProxy(pathname: string): boolean {
 
 async function proxyToBackend(request: Request, env: Env): Promise<Response> {
   if (!env.BACKEND || typeof env.BACKEND.fetch !== 'function') {
-    console.log('Missing Pages service binding: BACKEND');
     return new Response('Missing Pages service binding: BACKEND', {
       status: 500,
     });
@@ -57,7 +56,12 @@ async function proxyToBackend(request: Request, env: Env): Promise<Response> {
         : request.body,
   };
 
-  return env.BACKEND.fetch(new Request(upstreamUrl.toString(), init));
+  return env.BACKEND.fetch(new Request(upstreamUrl.toString(), init)).catch((err) => {
+    console.error('Error proxying request to backend:', err);
+    return new Response('Error connecting to backend service', {
+      status: 502,
+    });
+  });
 }
 
 export default createServerEntry({
