@@ -1,3 +1,4 @@
+/// <reference types="vite/client" />
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import {
   createRootRoute,
