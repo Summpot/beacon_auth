@@ -1,4 +1,4 @@
-use std::sync::OnceLock;
+use std::time::Duration;
 
 use base64::Engine;
 use serde::{de::DeserializeOwned, Serialize};
@@ -25,8 +25,6 @@ pub type JwksKeyRow = jwks_key::Model;
 
 pub const PASSKEY_STATE_TTL_SECS: i64 = 5 * 60;
 
-static DB_CONN: OnceLock<DatabaseConnection> = OnceLock::new();
-
 pub fn passkey_reg_state_key(user_id: &str) -> String {
     format!("passkey:reg:{user_id}")
 }
@@ -40,10 +38,6 @@ fn map_db_err(e: sea_orm::DbErr) -> Error {
 }
 
 pub async fn d1(env: &Env) -> Result<DatabaseConnection> {
-    if let Some(conn) = DB_CONN.get() {
-        return Ok(conn.clone());
-    }
-
     let url = env_string(env, "LIBSQL_URL").ok_or_else(|| {
         Error::RustError("LIBSQL_URL is required for libsql connections".to_string())
     })?;
@@ -53,9 +47,18 @@ pub async fn d1(env: &Env) -> Result<DatabaseConnection> {
         options.libsql_auth_token(token);
     }
 
-    let conn = Database::connect(options).await.map_err(map_db_err)?;
-    let _ = DB_CONN.set(conn.clone());
-    Ok(conn)
+    // Worker runtime note:
+    // - Cloudflare may suspend/resume isolates and aggressively limit background activity.
+    // - Some connection pool defaults can lead to "never resolves" behavior in edge runtimes.
+    // Keep the pool tiny and prefer short timeouts so requests fail fast instead of hanging.
+    options.max_connections(1);
+    options.min_connections(0);
+    options.connect_timeout(Duration::from_secs(5));
+    options.acquire_timeout(Duration::from_secs(5));
+    options.idle_timeout(Duration::from_secs(30));
+    options.sqlx_logging(false);
+
+    Database::connect(options).await.map_err(map_db_err)
 }
 
 pub async fn d1_user_by_username(db: &DatabaseConnection, username: &str) -> Result<Option<UserRow>> {

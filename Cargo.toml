@@ -81,3 +81,16 @@ getrandom02 = { package = "getrandom", version = "0.2", features = ["js"] }
 
 # Build Tools
 which = "8.0"
+
+# # Local development override:
+# # This workspace is often opened alongside a sibling checkout of `SeaQL/sea-orm` (branch `libsql`).
+# # The `libsql` branch is required for the Cloudflare Worker (wasm) build, and already exists in the
+# # adjacent `../sea-orm` folder in this multi-root workspace.
+# #
+# # Using a local patch here allows us to iterate on libsql + wasm fixes without waiting for crates.io
+# # or remote git updates.
+# [patch."https://github.com/Summpot/sea-orm.git"]
+# sea-orm = { path = "../sea-orm" }
+# sea-orm-migration = { path = "../sea-orm/sea-orm-migration" }
+# sea-orm-macros = { path = "../sea-orm/sea-orm-macros" }
+# sea-orm-codegen = { path = "../sea-orm/sea-orm-codegen" }

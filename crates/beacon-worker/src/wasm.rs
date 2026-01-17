@@ -100,7 +100,7 @@ pub async fn fetch(req: Request, env: Env, _ctx: Context) -> Result<Response> {
         return handlers::oauth::handle_oauth_link_start(req, &env).await;
     }
 
-    match (method, path) {
+    let result = match (method, path) {
         (Method::Get, "/v1/config") => handlers::config::handle_get_config(&req, &env).await,
         (Method::Post, "/v1/admin/migrations/up") => {
             handlers::migrations::handle_migrations_up(&req, &env).await
@@ -139,5 +139,12 @@ pub async fn fetch(req: Request, env: Env, _ctx: Context) -> Result<Response> {
 
         (Method::Get, _) | (Method::Post, _) | (Method::Delete, _) => not_found(&req),
         _ => method_not_allowed(&req),
+    };
+
+    // Never let a handler error bubble up to the runtime unhandled.
+    // In production this can manifest as "script will never generate a response".
+    match result {
+        Ok(resp) => Ok(resp),
+        Err(e) => http::internal_error_response(&req, "Unhandled worker error", &e),
     }
 }
