@@ -29,6 +29,7 @@ import {
   Card,
   CardContent,
   CardDescription,
+  CardFooter,
   CardTitle,
 } from '@/components/ui/card';
 import {
@@ -457,15 +458,13 @@ function SettingsPage() {
               </h2>
             </div>
             <Card className="border-0 shadow-md">
-              <CardContent className="p-6">
-                <p className="text-muted-foreground mb-6 text-sm">
-                  {m.settings_change_username_desc()}
-                </p>
-                <form
-                  onSubmit={changeUsernameForm.handleSubmit(onUsernameChange)}
-                  className="flex flex-col sm:flex-row gap-4"
-                >
-                  <div className="flex-1 space-y-2">
+              <form onSubmit={changeUsernameForm.handleSubmit(onUsernameChange)}>
+                <CardContent className="p-6">
+                  <p className="text-muted-foreground mb-6 text-sm">
+                    {m.settings_change_username_desc()}
+                  </p>
+
+                  <div className="space-y-2">
                     <Label htmlFor="username" className="sr-only">
                       {m.settings_username_label()}
                     </Label>
@@ -482,10 +481,13 @@ function SettingsPage() {
                       </p>
                     )}
                   </div>
+                </CardContent>
+
+                <CardFooter className="border-t justify-end px-6 pb-6">
                   <Button
                     type="submit"
                     disabled={changeUsernameForm.formState.isSubmitting}
-                    className="shrink-0 self-start mt-8" // Added mt-8 to align with input since label is sr-only or similar
+                    className="w-full sm:w-auto"
                   >
                     {changeUsernameForm.formState.isSubmitting ? (
                       <Loader2 className="h-4 w-4 animate-spin" />
@@ -493,8 +495,8 @@ function SettingsPage() {
                       m.settings_update_username()
                     )}
                   </Button>
-                </form>
-              </CardContent>
+                </CardFooter>
+              </form>
             </Card>
           </section>
 

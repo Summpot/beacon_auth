@@ -16,7 +16,7 @@ pub struct Model {
     /// Provider-scoped stable user identifier (e.g. GitHub numeric id as string)
     pub provider_user_id: String,
 
-    /// When provider == "password", this stores the bcrypt password hash.
+    /// When provider == "password", this stores the Argon2id password hash (PHC string format).
     /// For OAuth/passkey providers this is NULL.
     pub password_hash: Option<String>,
 

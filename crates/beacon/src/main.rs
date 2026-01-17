@@ -1,5 +1,5 @@
-use bcrypt::hash;
 use beacon_core::username;
+use beacon_core::password;
 use beacon_lib::{
     config::{Command, Config},
     server::run_server,
@@ -85,7 +85,7 @@ async fn create_user(username: &str, password: &str) -> anyhow::Result<()> {
 
     // Hash password
     log::info!("Hashing password...");
-    let password_hash = hash(password, bcrypt::DEFAULT_COST)?;
+    let password_hash = password::hash_password(password)?;
 
     // Create user
     let now = Utc::now().timestamp();

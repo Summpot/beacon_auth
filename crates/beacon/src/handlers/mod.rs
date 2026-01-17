@@ -10,6 +10,7 @@ pub use auth::{get_minecraft_jwt, refresh_token};
 // Keep original handlers here
 use actix_web::{web, HttpRequest, HttpResponse, Responder};
 use chrono::Utc;
+use beacon_core::password;
 use beacon_core::username;
 use entity::identity as identity_entity;
 use entity::user as user_entity;
@@ -111,8 +112,17 @@ pub async fn login(
         }
     };
 
-    // 2. Verify password using bcrypt
-    let password_valid = bcrypt::verify(&payload.password, password_hash).unwrap_or(false);
+    // 2. Verify password using Argon2
+    let password_valid = match password::verify_password(&payload.password, password_hash) {
+        Ok(v) => v,
+        Err(e) => {
+            log::error!("Failed to verify password hash for identity_id={}: {e}", identity.id);
+            return HttpResponse::InternalServerError().json(ErrorResponse {
+                error: "internal_error".to_string(),
+                message: "Failed to verify password".to_string(),
+            });
+        }
+    };
 
     if !password_valid {
         log::warn!("Invalid password for user: {}", payload.username);
@@ -199,8 +209,8 @@ pub async fn register(
         }
     }
 
-    // 4. Hash password
-    let password_hash = match bcrypt::hash(&payload.password, bcrypt::DEFAULT_COST) {
+    // 4. Hash password (Argon2id)
+    let password_hash = match password::hash_password(&payload.password) {
         Ok(hash) => hash,
         Err(e) => {
             log::error!("Failed to hash password: {}", e);

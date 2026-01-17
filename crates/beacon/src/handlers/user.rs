@@ -3,6 +3,7 @@ use entity::{identity, user};
 use sea_orm::{ActiveModelTrait, ColumnTrait, EntityTrait, QueryFilter, Set, TransactionTrait};
 use chrono::Utc;
 
+use beacon_core::password;
 use beacon_core::username;
 
 use crate::{
@@ -296,8 +297,16 @@ pub async fn change_password(
         };
 
         // Verify current password.
-        let password_valid =
-            bcrypt::verify(&payload.current_password, existing_hash).unwrap_or(false);
+        let password_valid = match password::verify_password(&payload.current_password, existing_hash) {
+            Ok(v) => v,
+            Err(e) => {
+                log::error!("Failed to verify stored password hash for identity_id={}: {e}", identity_model.id);
+                return HttpResponse::InternalServerError().json(ErrorResponse {
+                    error: "internal_error".to_string(),
+                    message: "Failed to verify password".to_string(),
+                });
+            }
+        };
 
         if !password_valid {
             return HttpResponse::Unauthorized().json(ErrorResponse {
@@ -315,8 +324,8 @@ pub async fn change_password(
         });
     }
 
-    // Hash new password
-    let new_password_hash = match bcrypt::hash(&payload.new_password, bcrypt::DEFAULT_COST) {
+    // Hash new password (Argon2id)
+    let new_password_hash = match password::hash_password(&payload.new_password) {
         Ok(hash) => hash,
         Err(e) => {
             log::error!("Failed to hash password: {}", e);

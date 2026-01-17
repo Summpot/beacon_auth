@@ -20,36 +20,6 @@ use tokio::net::UnixListener;
 #[cfg(windows)]
 use tokio::net::windows::named_pipe::{NamedPipeServer, ServerOptions};
 
-// For embedding static files (Release mode)
-#[cfg(not(debug_assertions))]
-use beacon_frontend_embed as frontend_embed;
-
-#[cfg(debug_assertions)]
-async fn serve_index_html() -> std::io::Result<actix_files::NamedFile> {
-    actix_files::NamedFile::open_async("./dist/index.html").await
-}
-
-#[cfg(not(debug_assertions))]
-async fn serve_embedded_assets(req: actix_web::HttpRequest) -> actix_web::HttpResponse {
-    let path = req.path().trim_start_matches('/');
-    let path = if path.is_empty() { "index.html" } else { path };
-
-    if let Some(content) = frontend_embed::get(path) {
-        let mime_type = mime_guess::from_path(path).first_or_octet_stream();
-        actix_web::HttpResponse::Ok()
-            .content_type(mime_type.as_ref())
-            .body(content.into_owned())
-    } else {
-        if let Some(content) = frontend_embed::get("index.html") {
-            actix_web::HttpResponse::Ok()
-                .content_type("text/html")
-                .body(content.into_owned())
-        } else {
-            actix_web::HttpResponse::NotFound().body("404 Not Found")
-        }
-    }
-}
-
 pub fn build_api_routes() -> actix_web::Scope {
     web::scope("/v1")
         .route("/config", web::get().to(handlers::get_config))
@@ -265,63 +235,19 @@ pub async fn run_server(config: ServeConfig) -> anyhow::Result<()> {
     // 6. Start HTTP server
     let bind_address = config.bind_address.clone();
 
-    #[cfg(debug_assertions)]
-    log::info!(
-        "Starting server in DEBUG mode on {} (serving from filesystem)",
-        bind_address
-    );
-
-    #[cfg(not(debug_assertions))]
-    log::info!(
-        "Starting server in RELEASE mode on {} (serving from embedded assets)",
-        bind_address
-    );
-
     let cors_origins = config.cors_origin_list();
 
     HttpServer::new(move || {
         let cors = build_cors(&cors_origins);
         let api_routes = build_api_context_routes();
         let legacy_jwks_route = build_jwks_routes();
-
-        #[cfg(debug_assertions)]
-        {
-            // ***** DEBUG MODE *****
-            // Serve from filesystem, allows hot-reloading
-
-            App::new()
-                .app_data(app_state.clone())
-                .wrap(middleware::Logger::default())
-                .wrap(cors)
-                .service(api_routes)
-                // Back-compat for deployments that still expose JWKS at `/.well-known/jwks.json`.
-                .service(legacy_jwks_route)
-                // Serve static assets from build output
-                .service(actix_files::Files::new("/static", "./dist/static"))
-                // favicon
-                .service(actix_files::Files::new(
-                    "/favicon.png",
-                    "./dist/favicon.png",
-                ))
-                // Fallback all other GET requests to index.html (SPA)
-                .default_service(web::get().to(serve_index_html))
-        }
-
-        #[cfg(not(debug_assertions))]
-        {
-            // ***** RELEASE MODE *****
-            // Serve from embedded memory
-
-            App::new()
-                .app_data(app_state.clone())
-                .wrap(middleware::Logger::default())
-                .wrap(cors)
-                .service(api_routes)
-                // Back-compat for deployments that still expose JWKS at `/.well-known/jwks.json`.
-                .service(legacy_jwks_route)
-                // All other requests handled by embedded assets with SPA fallback
-                .default_service(web::to(serve_embedded_assets))
-        }
+        App::new()
+            .app_data(app_state.clone())
+            .wrap(middleware::Logger::default())
+            .wrap(cors)
+            .service(api_routes)
+            // Back-compat for deployments that still expose JWKS at `/.well-known/jwks.json`.
+            .service(legacy_jwks_route)
     })
     .bind(&bind_address)?
     .run()

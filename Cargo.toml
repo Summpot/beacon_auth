@@ -7,7 +7,6 @@ members = [
 [workspace.dependencies]
 # Workspace crates
 beacon-core = { path = "crates/beacon-core", default-features = false }
-beacon-frontend-embed = { path = "crates/beacon-frontend-embed" }
 beacon-passkey = { path = "crates/beacon-passkey", default-features = false }
 entity = { path = "crates/entity" }
 migration = { path = "crates/migration" }
@@ -27,7 +26,7 @@ jsonwebtoken = { version = "10.2", default-features = false, features = ["rust_c
 p256 = { version = "0.13", features = ["ecdsa", "pkcs8"] }
 ecdsa = { version = "0.16", features = ["signing"] }
 sha2 = "0.10"
-bcrypt = "0.17"
+argon2 = "0.5"
 rand = "0.9"
 openssl = { version = "0.10", features = ["vendored"] }
 openssl-sys = { version = "0.9", features = ["vendored"] }
@@ -49,7 +48,6 @@ dotenvy = "0.15"
 env_logger = "0.11"
 log = "0.4"
 anyhow = "1.0"
-rust-embed = { version = "8.11", features = ["interpolate-folder-path"] }
 mime_guess = "2.0"
 url = "2.5"
 uuid = { version = "1.19", features = ["v4", "v7", "serde"] }

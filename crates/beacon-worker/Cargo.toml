@@ -16,7 +16,6 @@ migration = { workspace = true }
 
 anyhow = { workspace = true }
 base64 = { workspace = true }
-bcrypt = { workspace = true }
 chrono = { workspace = true }
 jsonwebtoken = { workspace = true }
 rand = { workspace = true }
