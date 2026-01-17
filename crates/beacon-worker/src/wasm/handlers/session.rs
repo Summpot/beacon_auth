@@ -1,4 +1,5 @@
 use beacon_core::models;
+use beacon_core::password;
 use beacon_core::username;
 use chrono::Utc;
 use serde_json::json;
@@ -58,7 +59,7 @@ pub async fn handle_register(mut req: Request, env: &Env) -> Result<Response> {
         Err(e) => return internal_error_response(&req, "Failed to check existing username", &e),
     };
 
-    let password_hash = match bcrypt::hash(&payload.password, bcrypt::DEFAULT_COST) {
+    let password_hash = match password::hash_password(&payload.password) {
         Ok(h) => h,
         Err(e) => return internal_error_response(&req, "Failed to hash password", &e),
     };
@@ -149,7 +150,12 @@ pub async fn handle_login(mut req: Request, env: &Env) -> Result<Response> {
         return internal_error_response(&req, "Identity references missing user", &"user missing");
     };
 
-    let password_valid = bcrypt::verify(&payload.password, password_hash).unwrap_or(false);
+    let password_valid = match password::verify_password(&payload.password, password_hash) {
+        Ok(v) => v,
+        Err(e) => {
+            return internal_error_response(&req, "Failed to verify password", &e);
+        }
+    };
     if !password_valid {
         let resp = Response::from_json(&models::ErrorResponse {
             error: "unauthorized".to_string(),
@@ -349,7 +355,12 @@ pub async fn handle_change_password(mut req: Request, env: &Env) -> Result<Respo
             return internal_error_response(&req, "Password identity is missing password_hash", &"invalid row");
         };
 
-        let password_valid = bcrypt::verify(&payload.current_password, existing_hash).unwrap_or(false);
+        let password_valid = match password::verify_password(&payload.current_password, existing_hash) {
+            Ok(v) => v,
+            Err(e) => {
+                return internal_error_response(&req, "Failed to verify password", &e);
+            }
+        };
         if !password_valid {
             let resp = Response::from_json(&models::ErrorResponse {
                 error: "invalid_password".to_string(),
@@ -360,7 +371,7 @@ pub async fn handle_change_password(mut req: Request, env: &Env) -> Result<Respo
         }
     }
 
-    let new_hash = bcrypt::hash(&payload.new_password, bcrypt::DEFAULT_COST)
+    let new_hash = password::hash_password(&payload.new_password)
         .map_err(|e| Error::RustError(e.to_string()))?;
 
     if existing.is_some() {

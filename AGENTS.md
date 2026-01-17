@@ -55,6 +55,7 @@ Requirements:
 Do not consider a change complete until it is verified.
 
 * Rust: after any Rust change, run `cargo check --all-targets`.
+* Rust (Workers/wasm): also run `cargo build -p beacon-worker --target wasm32-unknown-unknown` (or an equivalent command required by the change) to ensure Cloudflare Worker builds stay green.
 * Avoid local `--release` builds.
 * Use debug-mode builds only when needed for additional validation (e.g., `cargo build --all-targets`).
 
