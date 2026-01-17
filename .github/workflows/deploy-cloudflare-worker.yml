@@ -277,12 +277,13 @@ jobs:
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           BASE_URL: ${{ steps.cfg.outputs.resolved_base_url }}
           LIBSQL_URL: ${{ steps.cfg.outputs.libsql_url }}
+          LIBSQL_AUTH_TOKEN: ${{ steps.turso.outputs.turso_auth_token || secrets.CLOUDFLARE_WORKER_LIBSQL_AUTH_TOKEN }}
           WRANGLER_WORKERS_CONFIG: ${{ steps.cfg.outputs.wrangler_workers_config }}
         shell: bash
         run: |
           set -euo pipefail
 
-          wrangler deploy --config "${WRANGLER_WORKERS_CONFIG}" --var "BASE_URL:${BASE_URL}" --var "LIBSQL_URL:${LIBSQL_URL}" --var "CLOUDFLARE_ACCOUNT_ID:${CLOUDFLARE_ACCOUNT_ID}"
+          wrangler deploy --config "${WRANGLER_WORKERS_CONFIG}" --var "BASE_URL:${BASE_URL}" --var "LIBSQL_URL:${LIBSQL_URL}" --var "LIBSQL_AUTH_TOKEN:${LIBSQL_AUTH_TOKEN}" --var "CLOUDFLARE_ACCOUNT_ID:${CLOUDFLARE_ACCOUNT_ID}"
 
       - name: Sync Worker secrets (optional)
         env:

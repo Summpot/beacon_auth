@@ -1,4 +1,5 @@
 import { paraglideVitePlugin } from '@inlang/paraglide-js';
+import { sentryVitePlugin } from '@sentry/vite-plugin';
 import tailwindcss from '@tailwindcss/vite';
 import { tanstackStart } from '@tanstack/react-start/plugin/vite';
 import viteReact from '@vitejs/plugin-react';
@@ -10,6 +11,7 @@ export default defineConfig({
   server: {
     port: 3000,
   },
+
   plugins: [
     paraglideVitePlugin({
       project: './project.inlang',
@@ -31,7 +33,12 @@ export default defineConfig({
     tanstackStart(),
     viteReact(),
     nitro(),
+    sentryVitePlugin({
+      org: 'summpot',
+      project: 'beaconauth',
+    }),
   ],
+
   nitro: {
     debug: true,
     serverDir: './',
@@ -39,5 +46,9 @@ export default defineConfig({
       deployConfig: true,
       nodeCompat: true,
     },
+  },
+
+  build: {
+    sourcemap: true,
   },
 });

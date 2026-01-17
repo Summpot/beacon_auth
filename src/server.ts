@@ -9,8 +9,9 @@ type ExecutionContextLike = {
   passThroughOnException?: () => void;
 };
 
-interface Env {
+export interface Env {
   BACKEND: Fetcher;
+  CF_VERSION_METADATA: WorkerVersionMetadata;
 }
 
 declare global {
