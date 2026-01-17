@@ -45,7 +45,8 @@ jobs:
         run: pnpm install && pnpm build
         env:
           NITRO_PRESET: cloudflare_pages
-
+          SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
+          
       - name: Resolve deploy settings
         id: cfg
         env:
