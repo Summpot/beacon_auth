@@ -21,8 +21,11 @@ export default defineConfig({
       strategy: ['url', 'cookie', 'preferredLanguage', 'baseLocale'],
       urlPatterns: [
         {
-          pattern: '/:path(.*)?',
-          localized: [['en', '/en/:path(.*)?']],
+          pattern: '/',
+          localized: [
+            ['en', '/en'],
+            ['zh-CN', '/zh-CN'],
+          ],
         },
       ],
     }),
