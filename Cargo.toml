@@ -81,6 +81,3 @@ getrandom02 = { package = "getrandom", version = "0.2", features = ["js"] }
 
 # Build Tools
 which = "8.0"
-
-# observability
-sentry = { version = "0.46.1", features = ["panic", "tracing"] }
