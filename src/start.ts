@@ -1,7 +1,7 @@
 import * as Sentry from '@sentry/cloudflare';
 import { createMiddleware, createStart } from '@tanstack/react-start';
 
-const sentryMiddleware = createMiddleware().server(({ next, request }) => {
+const sentry = createMiddleware().server(({ next, request }) => {
   if (request.runtime?.cloudflare) {
     const env = request.runtime.cloudflare?.env;
     Sentry.sentryPagesPlugin(() => {
@@ -20,6 +20,6 @@ const sentryMiddleware = createMiddleware().server(({ next, request }) => {
 
 export const startInstance = createStart(() => {
   return {
-    requestMiddleware: [sentryMiddleware],
+    requestMiddleware: [sentry],
   };
 });

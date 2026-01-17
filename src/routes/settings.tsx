@@ -458,7 +458,9 @@ function SettingsPage() {
               </h2>
             </div>
             <Card className="border-0 shadow-md">
-              <form onSubmit={changeUsernameForm.handleSubmit(onUsernameChange)}>
+              <form
+                onSubmit={changeUsernameForm.handleSubmit(onUsernameChange)}
+              >
                 <CardContent className="p-6">
                   <p className="text-muted-foreground mb-6 text-sm">
                     {m.settings_change_username_desc()}

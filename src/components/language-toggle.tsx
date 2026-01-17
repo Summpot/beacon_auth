@@ -1,4 +1,3 @@
-import { useLocation } from '@tanstack/react-router';
 import { Languages } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
@@ -7,34 +6,9 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import { setLocaleCookie } from '@/lib/i18n';
 import { setLocale } from '@/paraglide/runtime';
 
 export function LanguageToggle() {
-  const location = useLocation();
-
-  const handleLanguageChange = (newLocale: 'en' | 'zh-CN') => {
-    // Set cookie first
-    setLocaleCookie(newLocale);
-
-    // If we are on the homepage (root / or /$lang)
-    // We should strictly navigate to the localized path to ensure the "path strategy" is respected visually
-    // However, for other pages, we just reload/set state because they are cookie-based.
-
-    // Check if we are on homepage path (either "/" or "/en" or "/zh-CN")
-    const isHomepage = /^\/($|en\/?$|zh-CN\/?$)/.test(location.pathname);
-
-    if (isHomepage) {
-      // Force hard navigation to prevent routing instability and ensure clean state
-      // This fixes the issue where switching language might redirect back to root path momentarily
-      window.location.href = `/${newLocale}${window.location.search}`;
-    } else {
-      // For other pages, just use the runtime setLocale which handles reload if configured,
-      // or we manually reload if needed to pick up the new cookie.
-      setLocale(newLocale);
-    }
-  };
-
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
@@ -44,10 +18,10 @@ export function LanguageToggle() {
         </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end">
-        <DropdownMenuItem onClick={() => handleLanguageChange('en')}>
+        <DropdownMenuItem onClick={() => setLocale('en')}>
           English
         </DropdownMenuItem>
-        <DropdownMenuItem onClick={() => handleLanguageChange('zh-CN')}>
+        <DropdownMenuItem onClick={() => setLocale('zh-CN')}>
           中文 (简体)
         </DropdownMenuItem>
       </DropdownMenuContent>

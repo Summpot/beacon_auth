@@ -1,4 +1,5 @@
 import handler, { createServerEntry } from '@tanstack/react-start/server-entry';
+import { paraglideMiddleware } from './paraglide/server.js';
 
 type Fetcher = {
   fetch(request: Request): Promise<Response>;
@@ -81,6 +82,6 @@ export default createServerEntry({
     ) {
       return proxyToBackend(request, request.runtime.cloudflare.env);
     }
-    return handler.fetch(request, opts);
+    return paraglideMiddleware(request, () => handler.fetch(request, opts));
   },
 });

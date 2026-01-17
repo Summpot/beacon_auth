@@ -12,6 +12,7 @@ import { ThemeProvider } from '@/components/theme-provider';
 import { AnimatePresence, MotionConfig, motion } from '@/lib/motion';
 
 import appCss from '../styles.css?url';
+import { getLocale } from '@/paraglide/runtime';
 
 function RootComponent() {
   const [queryClient] = useState(
@@ -64,7 +65,7 @@ function RootComponent() {
 
 function RootDocument({ children }: Readonly<{ children: ReactNode }>) {
   return (
-    <html lang="en">
+    <html lang={getLocale()}>
       <head>
         <HeadContent />
       </head>
