@@ -574,6 +574,7 @@ function SettingsPage() {
                                     <Chrome className="h-5 w-5" />
                                   ) : i.provider === 'microsoft' ? (
                                     <svg
+                                      role="img"
                                       className="h-5 w-5"
                                       viewBox="0 0 24 24"
                                       aria-label="Microsoft"
@@ -642,6 +643,7 @@ function SettingsPage() {
                             className="gap-2"
                           >
                             <svg
+                              role="img"
                               className="h-4 w-4"
                               viewBox="0 0 24 24"
                               aria-label="Microsoft"

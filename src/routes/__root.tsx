@@ -7,12 +7,11 @@ import {
   Scripts,
   useRouterState,
 } from '@tanstack/react-router';
-import { type ReactNode, useEffect, useState } from 'react';
+import { type ReactNode, useState } from 'react';
 import { ThemeProvider } from '@/components/theme-provider';
 import { AnimatePresence, MotionConfig, motion } from '@/lib/motion';
-
-import appCss from '../styles.css?url';
 import { getLocale } from '@/paraglide/runtime';
+import appCss from '../styles.css?url';
 
 function RootComponent() {
   const [queryClient] = useState(
@@ -30,13 +29,6 @@ function RootComponent() {
 
   const pathname = useRouterState({ select: (s) => s.location.pathname });
 
-  // UseEffect for i18n initialization only, title is handled by router meta
-  useEffect(() => {
-    // Initialize i18n from cookie/navigator on mount
-    import('@/lib/i18n').then(({ initializeI18n }) => {
-      initializeI18n();
-    });
-  }, []);
   return (
     <RootDocument>
       <ThemeProvider defaultTheme="system" storageKey="beaconauth-ui-theme">
