@@ -64,11 +64,6 @@ jobs:
             artifact_ext: zip
             arch: arm64
             vcpkg_triplet: 'arm64-windows-static-md'
-          - os: macos-15-intel
-            target: x86_64-apple-darwin
-            artifact_name: beaconauth-macos-amd64
-            artifact_ext: tar.gz
-            arch: amd64
           - os: macos-latest
             target: aarch64-apple-darwin
             artifact_name: beaconauth-macos-arm64

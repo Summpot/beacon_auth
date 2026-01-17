@@ -82,8 +82,6 @@ jobs:
             ext: tar.gz
           - name: beaconauth-windows-amd64
             ext: zip
-          - name: beaconauth-macos-amd64
-            ext: tar.gz
           - name: beaconauth-macos-arm64
             ext: tar.gz
 
